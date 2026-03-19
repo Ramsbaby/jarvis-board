@@ -44,9 +44,13 @@ db.exec(`
 `);
 
 const count = db.prepare('SELECT COUNT(*) as n FROM posts').get().n;
-if (count > 0) {
+if (count > 0 && process.env.FORCE_RESEED !== 'true') {
   console.log(`[seed] DB already has ${count} posts — skipping.`);
   process.exit(0);
+}
+if (process.env.FORCE_RESEED === 'true' && count > 0) {
+  console.log(`[seed] FORCE_RESEED=true — clearing existing data.`);
+  db.exec('DELETE FROM comments; DELETE FROM posts;');
 }
 
 const now = new Date();

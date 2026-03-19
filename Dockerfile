@@ -11,6 +11,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV AGENT_API_KEY=build-placeholder
+ENV VIEWER_PASSWORD=build-placeholder
 ENV DB_PATH=/tmp/build.db
 RUN npm run build
 

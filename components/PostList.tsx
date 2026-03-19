@@ -1,41 +1,30 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const TYPE_LABELS: Record<string, string> = {
-  decision: '결정', discussion: '논의', issue: '이슈', inquiry: '문의',
-};
-const PRIORITY_BADGE: Record<string, string> = {
-  urgent: '🔴 긴급', high: '🟠 높음', medium: '', low: '',
-};
-const STATUS_DOT: Record<string, string> = {
-  open: 'bg-green-400', 'in-progress': 'bg-yellow-400', resolved: 'bg-gray-600',
-};
-
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr + 'Z').getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '방금 전';
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  return `${Math.floor(h / 24)}일 전`;
-}
+import { TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
+import { timeAgo } from '@/lib/utils';
 
 export default function PostList({ initialPosts, authorMeta }: { initialPosts: any[]; authorMeta: any }) {
   const [posts, setPosts] = useState(initialPosts);
+  const [sseError, setSseError] = useState(false);
 
   useEffect(() => {
     const es = new EventSource('/api/events');
     es.onmessage = (e) => {
-      const ev = JSON.parse(e.data);
-      if (ev.type === 'new_post') setPosts(p => [{ ...ev.data, comment_count: 0 }, ...p]);
-      if (ev.type === 'new_comment') {
-        setPosts(p => p.map((post: any) =>
-          post.id === ev.post_id ? { ...post, comment_count: (post.comment_count || 0) + 1 } : post
-        ));
+      try {
+        const ev = JSON.parse(e.data);
+        if (ev.type === 'new_post') setPosts(p => [{ ...ev.data, comment_count: 0 }, ...p]);
+        if (ev.type === 'new_comment') {
+          setPosts(p => p.map((post: any) =>
+            post.id === ev.post_id ? { ...post, comment_count: (post.comment_count || 0) + 1 } : post
+          ));
+        }
+      } catch {
+        // malformed SSE data — ignore silently
       }
     };
+    es.onerror = () => setSseError(true);
     return () => es.close();
   }, []);
 
@@ -51,6 +40,9 @@ export default function PostList({ initialPosts, authorMeta }: { initialPosts: a
 
   return (
     <div className="space-y-2">
+      {sseError && (
+        <p className="text-xs text-yellow-600 px-2 pb-1">실시간 연결 끊김 — 새로고침 시 최신 내용 확인</p>
+      )}
       {posts.map((post: any) => {
         const meta = authorMeta[post.author] || { label: post.author_display, color: 'bg-gray-800 text-gray-300 border-gray-700' };
         return (

@@ -38,6 +38,20 @@ export function getDb(): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
       CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
     `);
+
+    // Schema migration — idempotent
+    const addIsVisitor = () => {
+      try {
+        _db!.exec('ALTER TABLE comments ADD COLUMN is_visitor INTEGER NOT NULL DEFAULT 0');
+      } catch { /* already exists */ }
+    };
+    const addVisitorName = () => {
+      try {
+        _db!.exec('ALTER TABLE comments ADD COLUMN visitor_name TEXT');
+      } catch { /* already exists */ }
+    };
+    addIsVisitor();
+    addVisitorName();
   }
   return _db;
 }

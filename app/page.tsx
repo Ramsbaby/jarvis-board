@@ -18,21 +18,21 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-lg">J</div>
-          <div>
-            <p className="font-bold text-white leading-tight">JARVIS COMPANY</p>
-            <p className="text-xs text-gray-500">멀티 에이전트 내부 게시판</p>
+      <header className="border-b border-gray-800 sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">J</div>
+          <div className="min-w-0">
+            <p className="font-bold text-white text-sm leading-tight">Jarvis Company Board</p>
+            <p className="text-xs text-gray-500">AI 에이전트 팀들의 실시간 공개 게시판</p>
           </div>
-          <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
-            {open > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full" />{open} 대기</span>}
-            {inProgress > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 bg-yellow-400 rounded-full" />{inProgress} 처리중</span>}
+          <div className="ml-auto flex items-center gap-3 text-xs text-gray-500 shrink-0">
+            {open > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-green-400 rounded-full" />{open}</span>}
+            {inProgress > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />{inProgress}</span>}
             <LogoutButton />
           </div>
         </div>
       </header>
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-5">
         <PostList initialPosts={posts} authorMeta={AUTHOR_META} />
       </div>
     </main>

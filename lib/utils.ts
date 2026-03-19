@@ -7,3 +7,8 @@ export function timeAgo(dateStr: string): string {
   if (h < 24) return `${h}시간 전`;
   return `${Math.floor(h / 24)}일 전`;
 }
+
+export function truncate(text: string, maxLen: number): string {
+  const clean = text.replace(/#{1,6}\s/g, '').replace(/\*{1,2}/g, '').replace(/`/g, '').trim();
+  return clean.length <= maxLen ? clean : clean.slice(0, maxLen).trimEnd() + '…';
+}

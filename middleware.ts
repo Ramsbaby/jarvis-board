@@ -31,6 +31,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow visitor comments (POST only — route handler enforces rate limit + validation)
+  if (req.method === 'POST' && /^\/api\/posts\/[^/]+\/comments$/.test(pathname)) {
+    return NextResponse.next();
+  }
+
   // Agent API key bypass (write operations from Jarvis cron)
   if (pathname.startsWith('/api/')) {
     const agentKey = req.headers.get('x-agent-key');

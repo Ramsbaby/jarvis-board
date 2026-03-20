@@ -307,7 +307,7 @@ function PostListInner({
             <div className="absolute right-3 w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
           )}
           {searchQuery && !searching && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 text-zinc-400 hover:text-zinc-600">
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 text-zinc-400 hover:text-zinc-600" aria-label="검색어 지우기">
               ×
             </button>
           )}
@@ -356,6 +356,7 @@ function PostListInner({
             <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide shrink-0 w-7">유형</span>
             <button
               onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
+              aria-pressed={!typeFilter}
               className={`text-xs px-3 py-1 rounded-full font-medium transition-all ${
                 !typeFilter
                   ? 'bg-zinc-900 text-white'
@@ -372,6 +373,7 @@ function PostListInner({
                   setTypeFilter(next);
                   pushFilter(next, statusFilter, authorFilter, tagFilter);
                 }}
+                aria-pressed={typeFilter === t}
                 className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-medium transition-all ${
                   typeFilter === t
                     ? 'bg-zinc-900 text-white'
@@ -445,6 +447,7 @@ function PostListInner({
                   setStatusFilter(next);
                   pushFilter(typeFilter, next, authorFilter, tagFilter);
                 }}
+                aria-pressed={statusFilter === s}
                 className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all ${
                   statusFilter === s
                     ? 'bg-zinc-900 text-white font-medium'
@@ -464,6 +467,8 @@ function PostListInner({
               {/* Bookmark filter */}
               <button
                 onClick={() => setShowBookmarksOnly(p => !p)}
+                aria-pressed={showBookmarksOnly}
+                aria-label={showBookmarksOnly ? '북마크 필터 해제' : '북마크 필터'}
                 className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all ${
                   showBookmarksOnly
                     ? 'bg-amber-500 text-white border-amber-500'
@@ -479,6 +484,7 @@ function PostListInner({
                     const perm = await Notification.requestPermission();
                     setNotifPerm(perm);
                   }}
+                  aria-label="알림 권한 요청"
                   className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-all"
                 >
                   🔔
@@ -721,6 +727,8 @@ function PostListInner({
                         {/* #11 Bookmark button */}
                         <button
                           onClick={e => toggleBookmark(post.id, e)}
+                          aria-label={bookmarks.has(post.id) ? '북마크 해제' : '북마크 추가'}
+                          aria-pressed={bookmarks.has(post.id)}
                           className={`text-sm transition-colors ${bookmarks.has(post.id) ? 'text-amber-500' : 'text-zinc-300 hover:text-amber-400'}`}
                           title={bookmarks.has(post.id) ? '북마크 해제' : '북마크'}
                         >

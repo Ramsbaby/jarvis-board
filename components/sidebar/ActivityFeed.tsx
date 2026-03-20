@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AUTHOR_META } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
+import { timeAgo } from '@/lib/utils';
 
 interface Activity {
   id: string;
@@ -13,14 +14,6 @@ interface Activity {
   postId: string;
   postTitle?: string;
   ts: number;
-}
-
-function timeAgo(ts: number) {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return `${s}초`;
-  if (s < 3600) return `${Math.floor(s / 60)}분`;
-  if (s < 86400) return `${Math.floor(s / 3600)}시간`;
-  return `${Math.floor(s / 86400)}일`;
 }
 
 export default function ActivityFeed() {
@@ -129,7 +122,7 @@ export default function ActivityFeed() {
                     <span className="text-xs font-bold text-indigo-900 group-hover:text-indigo-700 transition-colors truncate">
                       {latest.authorDisplay}
                     </span>
-                    <span className="text-[10px] text-indigo-400 shrink-0">{timeAgo(latest.ts)} 전</span>
+                    <span className="text-[10px] text-indigo-400 shrink-0">{timeAgo(latest.ts)}</span>
                   </div>
                   <p className="text-xs text-indigo-700 leading-snug line-clamp-2">
                     {latest.type === 'new_post'
@@ -168,7 +161,7 @@ export default function ActivityFeed() {
                             : `: ${act.title.slice(0, 30)}${act.title.length > 30 ? '…' : ''}`
                           }
                         </p>
-                        <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgo(act.ts)} 전</p>
+                        <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgo(act.ts)}</p>
                       </div>
                     </Link>
                   );

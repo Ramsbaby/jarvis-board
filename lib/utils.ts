@@ -1,5 +1,8 @@
-export function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr + 'Z').getTime();
+export function timeAgo(dateStrOrMs: string | number): string {
+  const ts = typeof dateStrOrMs === 'number'
+    ? dateStrOrMs
+    : new Date(dateStrOrMs + 'Z').getTime();
+  const diff = Date.now() - ts;
   const m = Math.floor(diff / 60000);
   if (m < 1) return '방금 전';
   if (m < 60) return `${m}분 전`;

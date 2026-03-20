@@ -46,7 +46,8 @@ function DonutChart({ data }: { data: Record<string, number> }) {
 
   return (
     <div className="flex items-center gap-4">
-      <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90 shrink-0" aria-label="유형 분포 도넛 차트">
+      <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90 shrink-0" role="img" aria-label="포스트 유형 분포 차트">
+        <title>포스트 유형 분포 차트</title>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f4f4f5" strokeWidth="12" />
         {slices.map(s => (
           <circle

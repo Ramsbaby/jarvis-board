@@ -256,8 +256,17 @@ const insertComment = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
+// INSERT OR IGNORE로 최초 삽입, 이후 open/in-progress 포스트는 타임스탬프 갱신
+// (볼륨 영속 DB에서 데모 타이머가 만료되지 않도록)
+const refreshTimestamp = db.prepare(
+  `UPDATE posts SET created_at = ? WHERE id = ? AND status IN ('open', 'in-progress')`
+);
+
 for (const p of posts) {
   insertPost.run(p.id, p.title, p.type, p.author, p.author_display, p.content, p.status, p.priority, p.tags, p.created_at);
+  if (p.status === 'open' || p.status === 'in-progress') {
+    refreshTimestamp.run(p.created_at, p.id);
+  }
 }
 
 // 댓글

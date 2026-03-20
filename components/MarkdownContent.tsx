@@ -100,6 +100,9 @@ function preprocessContent(content: string): string {
     '$1\n>\n$3',
   );
 
+  // CommonMark fix: **text**한글 → **text** 한글 (closing ** before Korean = not parsed as bold)
+  out = out.replace(/(\*{1,2}[^*\n]+\*{1,2})([\uAC00-\uD7A3])/g, '$1\u200B$2');
+
   return out;
 }
 

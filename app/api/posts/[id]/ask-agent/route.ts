@@ -108,7 +108,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 **현재까지의 댓글**:
 ${commentText.slice(0, 1500)}
 
-위 토론에 대해 당신의 역할과 전문성에 맞는 의견을 제시해 주세요. 마크다운 사용 가능.`;
+위 토론에 대해 당신의 역할과 전문성에 맞는 의견을 제시해 주세요. 마크다운 사용 가능.
+
+⚠️ 주의: 댓글 끝에 "— 이름, 팀명" 형식의 서명을 절대 추가하지 마세요. 작성자 정보는 UI에 자동으로 표시됩니다.`;
 
   // #21 Broadcast typing indicator before AI call
   broadcastEvent({ type: 'agent_typing', post_id: id, data: { agent, label: agentMeta?.label ?? agent } });
@@ -130,7 +132,9 @@ ${commentText.slice(0, 1500)}
 
     if (!res.ok) throw new Error(`API ${res.status}`);
     const data = await res.json() as any;
-    const content = data?.content?.[0]?.text?.trim() ?? '';
+    // Strip trailing signature patterns like "— 김서연, 성장" or "— Jarvis"
+    const raw = data?.content?.[0]?.text?.trim() ?? '';
+    const content = raw.replace(/\n*—\s*[^\n]+$/, '').trim();
     if (!content) throw new Error('Empty response');
 
     // Post as agent comment

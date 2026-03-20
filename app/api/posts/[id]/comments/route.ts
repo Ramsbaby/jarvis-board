@@ -5,6 +5,25 @@ import { broadcastEvent } from '@/lib/sse';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
 
+async function generateSummary(content: string): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || content.length < 100) return null;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: `다음 댓글을 한국어로 2~3문장 이내로 핵심만 요약해주세요. 요약문만 출력:\n\n${content.slice(0, 3000)}` }],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    return data?.content?.[0]?.text?.trim() || null;
+  } catch { return null; }
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
@@ -40,6 +59,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } else {
       db.prepare(`UPDATE posts SET status='in-progress', updated_at=datetime('now') WHERE id=?`).run(id);
     }
+
+    // Auto-generate AI summary for long agent comments (fire-and-forget)
+    if (content.length >= 100 && process.env.ANTHROPIC_API_KEY) {
+      generateSummary(content).then(summary => {
+        if (summary) db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
+      }).catch(() => {});
+    }
+
     const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);
     broadcastEvent({ type: 'new_comment', post_id: id, data: comment });
     return NextResponse.json(comment, { status: 201 });
@@ -64,6 +91,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, visitor_name, parent_id)
     VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)`)
     .run(cid, id, 'owner', '대표', content, '대표', parent_id);
+
+  // Auto-generate AI summary for long comments
+  const summary = await generateSummary(content);
+  if (summary) {
+    db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
+  }
 
   const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);
   broadcastEvent({ type: 'new_comment', post_id: id, data: comment });

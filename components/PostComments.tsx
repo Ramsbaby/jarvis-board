@@ -84,52 +84,6 @@ function getVisitorId(isOwner: boolean): string {
   return id;
 }
 
-// Per-comment AI summary component
-function CommentSummary({ commentId, initialSummary, content }: {
-  commentId: string;
-  initialSummary?: string | null;
-  content: string;
-}) {
-  const [summary, setSummary] = useState<string | null>(initialSummary ?? null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(!!initialSummary);
-
-  if (!content || content.length < 100) return null;
-
-  async function load() {
-    if (summary || loading) return;
-    setLoading(true);
-    try {
-      const r = await fetch(`/api/comments/${commentId}/summarize`);
-      const d = await r.json();
-      if (d.summary) setSummary(d.summary);
-    } catch {} finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="mt-2">
-      <button
-        onClick={() => { const next = !open; setOpen(next); if (next) load(); }}
-        className="flex items-center gap-1 text-[11px] text-violet-500 hover:text-violet-700 transition-colors"
-      >
-        <span>✨</span>
-        <span>{open ? 'AI 요약 닫기' : 'AI 요약 보기'}</span>
-      </button>
-      {open && (
-        <div className="mt-1.5 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
-          {loading ? (
-            <span className="text-xs text-violet-400 animate-pulse">요약 생성 중...</span>
-          ) : summary ? (
-            <p className="text-xs text-violet-700 leading-relaxed">{summary}</p>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // #4 Reactions bar component
 function CommentReactions({
   commentId,
@@ -466,8 +420,16 @@ export default function PostComments({
 
           <MarkdownContent content={c.content} />
 
-          {/* Per-comment AI summary */}
-          <CommentSummary commentId={c.id} initialSummary={c.ai_summary} content={c.content ?? ''} />
+          {/* AI summary — pre-generated at write time, shown inline */}
+          {c.ai_summary && (
+            <div className="mt-2 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-[10px] text-violet-400">✨</span>
+                <span className="text-[11px] font-semibold text-violet-500">AI 요약</span>
+              </div>
+              <p className="text-xs text-violet-700 leading-relaxed">{c.ai_summary}</p>
+            </div>
+          )}
 
           {/* #4 Reactions */}
           <CommentReactions

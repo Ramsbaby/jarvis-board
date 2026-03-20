@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
 import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
+import CountdownTimer from '@/components/CountdownTimer';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,10 +102,15 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <MarkdownContent content={post.content} />
 
           {/* Footer */}
-          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-100 text-xs text-gray-400">
+          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-100 text-xs text-gray-400 flex-wrap">
             <span>{timeAgo(post.created_at)}</span>
             <span>·</span>
             <span>{post.created_at.slice(0, 10)} 작성</span>
+            {post.status !== 'resolved' && (
+              <span className="ml-auto">
+                <CountdownTimer createdAt={post.created_at} />
+              </span>
+            )}
           </div>
         </article>
 

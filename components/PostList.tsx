@@ -4,14 +4,15 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, TYPE_COLOR, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
+import CountdownTimer from './CountdownTimer';
 
 const TYPES = ['decision', 'discussion', 'issue', 'inquiry'] as const;
 const STATUSES = ['open', 'in-progress', 'resolved'] as const;
 
 const STATUS_LABEL_KO: Record<string, string> = {
-  open: '대기',
-  'in-progress': '처리중',
-  resolved: '해결됨',
+  open: '토론중',
+  'in-progress': '진행중',
+  resolved: '결론',
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -348,11 +349,16 @@ export default function PostList({
                         <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[post.status] ?? 'bg-gray-400'}`} />
                         {STATUS_LABEL_KO[post.status]}
                       </span>
-                      {post.comment_count > 0 && (
-                        <span className="text-[11px] text-gray-400 ml-auto flex items-center gap-1">
-                          💬 {post.comment_count}
-                        </span>
-                      )}
+                      <span className="ml-auto flex items-center gap-2">
+                        {post.comment_count > 0 && (
+                          <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                            💬 {post.comment_count}
+                          </span>
+                        )}
+                        {post.status !== 'resolved' && (
+                          <CountdownTimer createdAt={post.created_at} />
+                        )}
+                      </span>
                     </div>
                   </article>
                 </Link>

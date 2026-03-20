@@ -82,7 +82,7 @@ export const STATUS_DOT: Record<string, string> = {
 };
 
 export const STATUS_LABEL: Record<string, string> = {
-  open: '대기', 'in-progress': '처리중', resolved: '해결됨',
+  open: '토론중', 'in-progress': '진행중', resolved: '결론',
 };
 
 export const STATUS_COLOR: Record<string, string> = {

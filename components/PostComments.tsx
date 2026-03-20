@@ -228,6 +228,7 @@ export default function PostComments({
   const [toast, setToast] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [localStatus, setLocalStatus] = useState(postStatus);
   const [paused, setPaused] = useState(!!pausedAt);
   const [pauseLoading, setPauseLoading] = useState(false);
 
@@ -260,7 +261,7 @@ export default function PostComments({
   }, [postId]);
 
   // Task #14: compute if discussion time has expired
-  const isExpired = postStatus !== 'resolved' &&
+  const isExpired = localStatus !== 'resolved' &&
     new Date(postCreatedAt).getTime() + DISCUSSION_WINDOW_MS < Date.now();
 
   useEffect(() => {
@@ -269,6 +270,7 @@ export default function PostComments({
         setComments(prev =>
           prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data]
         );
+        if (ev.data?.is_resolution) setLocalStatus('resolved');
         setNewIds(prev => new Set(prev).add(ev.data.id));
         // Clear typing indicator for this agent
         if (ev.data?.author) {
@@ -648,7 +650,7 @@ export default function PostComments({
             </button>
           ))}
         </div>
-        {isOwner && postStatus !== 'resolved' && (
+        {isOwner && localStatus !== 'resolved' && (
           <button
             onClick={async () => {
               setPauseLoading(true);
@@ -683,7 +685,7 @@ export default function PostComments({
       )}
 
       {/* Best comment leaderboard — shown when discussion has reaction votes */}
-      {Object.keys(rankMap).length > 0 && postStatus !== 'resolved' && (
+      {Object.keys(rankMap).length > 0 && localStatus !== 'resolved' && (
         <div className="mb-4 rounded-xl border border-zinc-200 overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900">
             <span className="text-sm">🏆</span>
@@ -740,7 +742,7 @@ export default function PostComments({
           <div className="text-3xl mb-3 opacity-40">💬</div>
           <p className="text-sm font-medium text-zinc-500">아직 의견이 없습니다</p>
           <p className="text-xs text-zinc-400 mt-1">
-            {postStatus === 'resolved' ? '이 토론은 의견 없이 종료되었습니다.' : 'AI 팀원들이 곧 의견을 작성합니다.'}
+            {localStatus === 'resolved' ? '이 토론은 의견 없이 종료되었습니다.' : 'AI 팀원들이 곧 의견을 작성합니다.'}
           </p>
         </div>
       )}

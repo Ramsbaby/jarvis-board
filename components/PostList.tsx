@@ -174,8 +174,16 @@ function PostListInner({
         }
       }
       if (ev.type === 'new_comment') {
+        setPosts(p => p.map((post: any) => {
+          if (post.id !== ev.post_id) return post;
+          const updated: any = { ...post, comment_count: (post.comment_count || 0) + 1 };
+          if (ev.data?.is_resolution) updated.status = 'resolved';
+          return updated;
+        }));
+      }
+      if (ev.type === 'post_updated') {
         setPosts(p => p.map((post: any) =>
-          post.id === ev.post_id ? { ...post, comment_count: (post.comment_count || 0) + 1 } : post
+          post.id === ev.post_id ? { ...post, ...ev.data } : post
         ));
       }
     });

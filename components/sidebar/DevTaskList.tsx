@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useEvent } from '@/contexts/EventContext';
 
 interface DevTask {
   id: string;
@@ -27,6 +29,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
   const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { subscribe } = useEvent();
 
   useEffect(() => {
     fetch('/api/dev-tasks')
@@ -34,6 +37,18 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
       .then(data => { setTasks(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
+
+  useEffect(() => {
+    return subscribe((ev) => {
+      if (ev.type === 'dev_task_updated' && ev.data?.task) {
+        setTasks(prev => {
+          const exists = prev.some(t => t.id === ev.data.task.id);
+          if (exists) return prev.map(t => t.id === ev.data.task.id ? ev.data.task : t);
+          return [ev.data.task, ...prev];
+        });
+      }
+    });
+  }, [subscribe]);
 
   async function handleApproval(taskId: string, status: 'approved' | 'rejected') {
     setActionLoading(taskId);
@@ -59,18 +74,23 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
     <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-zinc-100">
-        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">DEV 태스크</h3>
+        <Link href="/dev-tasks" className="text-xs font-semibold text-zinc-500 uppercase tracking-wider hover:text-indigo-600 transition-colors">
+          ⚙ DEV 태스크
+        </Link>
         <div className="flex items-center gap-1.5">
           {awaiting.length > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+            <Link href="/dev-tasks" className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold hover:bg-amber-600 transition-colors">
               {awaiting.length} 승인대기
-            </span>
+            </Link>
           )}
           {active.length > 0 && (
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
               {active.length}
             </span>
           )}
+          <Link href="/dev-tasks" className="text-[10px] text-zinc-400 hover:text-indigo-500 transition-colors">
+            전체 →
+          </Link>
         </div>
       </div>
 
@@ -104,6 +124,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
                       className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors"
                       onClick={() => setExpanded(isExp ? null : task.id)}
                     >
+
                       <div className="flex items-start gap-3">
                         <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
                         <div className="flex-1 min-w-0">
@@ -128,24 +149,32 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
                         {task.source && (
                           <p className="text-[10px] text-zinc-400">출처: {task.source}</p>
                         )}
-                        {isOwner && (
-                          <div className="flex gap-2 pt-1">
-                            <button
-                              onClick={() => handleApproval(task.id, 'approved')}
-                              disabled={isLoading}
-                              className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                            >
-                              {isLoading ? '처리 중...' : '✓ 승인'}
-                            </button>
-                            <button
-                              onClick={() => handleApproval(task.id, 'rejected')}
-                              disabled={isLoading}
-                              className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
-                            >
-                              ✕ 반려
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex gap-2 pt-1">
+                          {isOwner && (
+                            <>
+                              <button
+                                onClick={() => handleApproval(task.id, 'approved')}
+                                disabled={isLoading}
+                                className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                              >
+                                {isLoading ? '...' : '✓ 승인'}
+                              </button>
+                              <button
+                                onClick={() => handleApproval(task.id, 'rejected')}
+                                disabled={isLoading}
+                                className="py-1.5 px-2.5 text-xs font-semibold rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                              >
+                                ✕
+                              </button>
+                            </>
+                          )}
+                          <Link
+                            href={`/dev-tasks/${task.id}`}
+                            className="py-1.5 px-2.5 text-xs rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 transition-colors"
+                          >
+                            상세 →
+                          </Link>
+                        </div>
                       </div>
                     )}
                   </div>

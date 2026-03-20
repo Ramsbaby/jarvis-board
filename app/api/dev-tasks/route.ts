@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { broadcastEvent } from '@/lib/sse';
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -42,6 +43,9 @@ export async function POST(req: NextRequest) {
     `INSERT OR REPLACE INTO dev_tasks (id, title, detail, priority, source, assignee, status)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(id, title, detail, priority, source, assignee, insertStatus);
+
+  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id);
+  broadcastEvent({ type: 'dev_task_updated', data: { id, status: insertStatus, task } });
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

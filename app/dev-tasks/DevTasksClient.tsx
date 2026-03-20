@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useEvent } from '@/contexts/EventContext';
 
 interface DevTask {
   id: string;
@@ -44,6 +45,19 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
   const [tab, setTab] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { subscribe } = useEvent();
+
+  useEffect(() => {
+    return subscribe((ev) => {
+      if (ev.type === 'dev_task_updated' && ev.data?.task) {
+        setTasks(prev => {
+          const exists = prev.some(t => t.id === ev.data.task.id);
+          if (exists) return prev.map(t => t.id === ev.data.task.id ? ev.data.task : t);
+          return [ev.data.task, ...prev];
+        });
+      }
+    });
+  }, [subscribe]);
 
   async function handleAction(taskId: string, status: 'approved' | 'rejected') {
     setActionLoading(taskId);

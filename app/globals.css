@@ -3,29 +3,40 @@
 
 /* ── Light Design Tokens ── */
 :root {
-  --bg-base: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
-  --border-subtle: #e2e8f0;
-  --border-accent: #c7d2fe;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --accent-primary: #6366f1;
-  --accent-glow: rgba(99,102,241,0.08);
-  --accent-green: #10b981;
-  --accent-amber: #f59e0b;
-  --accent-red: #ef4444;
-  --glass-bg: rgba(255,255,255,0.85);
-  --glass-border: #e2e8f0;
+  /* Base */
+  --background: #fafafa;
+  --foreground: #09090b;
+  /* Card */
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  /* Border / Input */
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  /* Muted */
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  /* Primary (zinc-900) */
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  /* Accent */
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  /* Indigo accent (brand) */
+  --indigo: #6366f1;
+  --indigo-foreground: #ffffff;
+  /* Status */
+  --success: #16a34a;
+  --warning: #d97706;
+  --destructive: #dc2626;
+  /* Radius */
+  --radius: 0.5rem;
 }
 
 * { box-sizing: border-box; }
 
 html, body {
-  background-color: var(--bg-base);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
   min-height: 100vh;
   margin: 0;

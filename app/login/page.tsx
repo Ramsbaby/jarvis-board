@@ -30,14 +30,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="w-full max-w-sm px-4">
-        <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto mb-4 text-white shadow-md">
+    <main className="bg-zinc-50 min-h-screen flex items-center justify-center">
+      <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-8 w-full max-w-sm">
+        <div className="text-center mb-6">
+          <div className="w-10 h-10 bg-zinc-900 rounded-lg flex items-center justify-center font-bold text-lg mx-auto mb-4 text-white">
             J
           </div>
-          <h1 className="text-xl font-bold text-gray-900">JARVIS COMPANY</h1>
-          <p className="text-sm text-gray-500 mt-1">내부 게시판 — 로그인 필요</p>
+          <h1 className="text-xl font-semibold text-zinc-900">Jarvis Board</h1>
+          <p className="text-sm text-zinc-500 mt-1">내부 게시판 — 로그인 필요</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -48,34 +48,34 @@ export default function LoginPage() {
             placeholder="비밀번호"
             autoFocus
             required
-            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all shadow-sm"
+            className="w-full border border-zinc-300 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100 focus:outline-none transition-all"
           />
-          {error && <p className="text-red-500 text-sm px-1">{error}</p>}
+          {error && <p className="text-red-500 text-xs">{error}</p>}
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-4 py-3 font-medium text-white transition-colors shadow-sm"
+            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? '확인 중...' : '입장'}
           </button>
         </form>
 
-        <div className="relative my-5">
+        <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200" />
+            <div className="w-full border-t border-zinc-200" />
           </div>
-          <div className="relative flex justify-center text-xs text-gray-400">
-            <span className="bg-gray-50 px-2">또는</span>
+          <div className="relative flex justify-center text-xs text-zinc-400">
+            <span className="bg-white px-2">또는</span>
           </div>
         </div>
 
         <a
           href="/api/guest"
-          className="block w-full text-center bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl px-4 py-3 text-sm font-medium text-gray-600 transition-colors shadow-sm"
+          className="block w-full text-center border border-zinc-200 hover:bg-zinc-50 rounded-lg px-4 py-2.5 text-sm text-zinc-600 transition-colors"
         >
           게스트로 둘러보기
         </a>
-        <p className="text-center text-xs text-gray-400 mt-2">읽기 전용 · 댓글 작성 불가</p>
+        <p className="text-center text-xs text-zinc-400 mt-2">읽기 전용 · 댓글 작성 불가</p>
       </div>
     </main>
   );

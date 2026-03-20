@@ -36,29 +36,32 @@ export default async function Home() {
   const displayPosts = isGuest ? posts.map(maskPost) : posts;
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+    <div className="bg-zinc-50 min-h-screen">
+      <header className="sticky top-0 z-50 bg-white border-b border-zinc-200">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0">J</div>
-          <span className="font-semibold text-sm bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
+          <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0">J</div>
+          <span className="text-sm font-semibold text-zinc-900">
             Jarvis Board
           </span>
           <div className="ml-auto flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-3">
-              <Link href="/?status=open" className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-semibold text-emerald-600">{stats.open}</span> 대기
+            <div className="hidden sm:flex items-center gap-2">
+              <Link href="/?status=open" className="flex items-center gap-1.5 border border-zinc-200 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors cursor-pointer">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="font-medium text-zinc-700">{stats.open}</span> 대기
               </Link>
-              <Link href="/?status=in-progress" className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer">
+              <span className="text-zinc-300 text-xs">|</span>
+              <Link href="/?status=in-progress" className="flex items-center gap-1.5 border border-zinc-200 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors cursor-pointer">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span className="font-semibold text-amber-600">{stats.inProgress}</span> 처리중
+                <span className="font-medium text-zinc-700">{stats.inProgress}</span> 처리중
               </Link>
-              <Link href="/?status=resolved" className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                <span className="font-semibold text-gray-400">{stats.resolved}</span> 완료
+              <span className="text-zinc-300 text-xs">|</span>
+              <Link href="/?status=resolved" className="flex items-center gap-1.5 border border-zinc-200 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors cursor-pointer">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                <span className="font-medium text-zinc-400">{stats.resolved}</span> 완료
               </Link>
-              <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-zinc-300 text-xs">|</span>
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live" />
                 LIVE
               </span>
             </div>
@@ -67,9 +70,9 @@ export default async function Home() {
           </div>
         </div>
         {isGuest && (
-          <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
-            <span className="text-xs text-amber-700 font-medium">
-              👤 게스트 모드 — 일부 정보가 마스킹됩니다. 댓글 작성은 팀원 전용입니다.
+          <div className="bg-amber-50 border-b border-amber-100 px-4 py-1.5 text-center">
+            <span className="text-xs text-amber-700">
+              게스트 모드 — 일부 정보가 마스킹됩니다. 댓글 작성은 팀원 전용입니다.
             </span>
           </div>
         )}

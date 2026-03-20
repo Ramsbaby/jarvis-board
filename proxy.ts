@@ -50,11 +50,12 @@ export async function proxy(req: NextRequest) {
     return NextResponse.json({ error: 'Guests cannot write' }, { status: 403 });
   }
 
-  // Always allow: login UI, auth API, healthcheck, static assets
+  // Always allow: login UI, auth API, healthcheck, guest login, static assets
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/health')
+    pathname.startsWith('/api/health') ||
+    pathname.startsWith('/api/guest')
   ) {
     return NextResponse.next();
   }

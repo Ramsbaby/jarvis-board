@@ -48,7 +48,7 @@ const TYPE_CONTEXT: Record<string, string> = {
 const STATUS_STYLE: Record<string, string> = {
   open: 'text-emerald-600 bg-emerald-50 border-emerald-200',
   'in-progress': 'text-amber-600 bg-amber-50 border-amber-200',
-  resolved: 'text-gray-500 bg-gray-100 border-gray-200',
+  resolved: 'text-zinc-500 bg-zinc-100 border-zinc-200',
 };
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
@@ -62,8 +62,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   ).all(id) as any[];
 
   const meta = AUTHOR_META[post.author] ?? {
-    label: post.author_display, color: 'bg-slate-800 text-slate-300 border-slate-700',
-    accent: 'border-slate-700', emoji: '💬', description: '',
+    label: post.author_display, color: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+    accent: 'border-zinc-700', emoji: '💬', description: '',
   };
 
   const tags: string[] = JSON.parse(post.tags ?? '[]');
@@ -82,27 +82,25 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const isActive = post.status !== 'resolved';
 
   return (
-    <main className="bg-gray-50 min-h-screen">
+    <main className="bg-zinc-50 min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href="/"
-            className="text-gray-500 hover:text-gray-900 flex items-center gap-1.5 text-sm transition-colors"
+            className="text-sm text-zinc-500 hover:text-zinc-900 flex items-center gap-1 transition-colors"
           >
-            ← <span className="hidden sm:inline">게시판으로</span>
+            ← 목록
           </Link>
           {/* Sticky countdown — only for active posts */}
           {isActive && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs">
-              <CountdownTimer
-                expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
-                variant="badge"
-                className="text-xs"
-              />
-            </div>
+            <CountdownTimer
+              expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
+              variant="badge"
+              className="text-xs"
+            />
           )}
-          <div className="ml-auto w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
+          <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
         {isGuest && (
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
@@ -119,34 +117,34 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           {/* Main content */}
           <div className="min-w-0">
             {/* Post card */}
-            <article className="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm">
+            <article className="bg-white border border-zinc-200 rounded-lg p-6 mb-4">
 
               {/* Type context banner */}
-              <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-4 ${TYPE_COLOR[post.type] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+              <div className="flex items-center gap-2 text-xs text-zinc-500 mb-4 pb-4 border-b border-zinc-100">
                 <span>{TYPE_ICON[post.type]}</span>
-                <span className="font-medium">{TYPE_LABELS[post.type]}</span>
+                <span>{TYPE_LABELS[post.type]}</span>
                 <span className="opacity-40">·</span>
-                <span className="opacity-70">{TYPE_CONTEXT[post.type]}</span>
+                <span>{TYPE_CONTEXT[post.type]}</span>
               </div>
 
               {/* Author + status */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium bg-gray-100 text-gray-700 border-gray-200">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-zinc-700 bg-zinc-100 rounded-md px-2 py-1">
                   {meta.emoji} {meta.label}
                 </span>
                 {meta.description && (
-                  <span className="text-xs text-gray-400">{meta.description}</span>
+                  <span className="text-xs text-zinc-400">{meta.description}</span>
                 )}
-                <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${STATUS_STYLE[post.status] ?? 'text-gray-500 bg-gray-100 border-gray-200'}`}>
+                <span className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border ${STATUS_STYLE[post.status] ?? 'text-zinc-500 bg-zinc-100 border-zinc-200'}`}>
                   {STATUS_LABEL[post.status]}
                 </span>
               </div>
 
               {/* Title */}
-              <h1 className="text-2xl font-bold text-gray-900 mb-3 leading-snug">{renderPost.title}</h1>
+              <h1 className="text-2xl font-bold text-zinc-900 mb-2 leading-tight">{renderPost.title}</h1>
 
               {/* Meta line */}
-              <p className="text-gray-400 text-sm mb-4">
+              <p className="text-xs text-zinc-400 mb-4">
                 {timeAgo(post.created_at)} · {post.created_at.slice(0, 10)} 작성
               </p>
 
@@ -154,7 +152,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {tags.map((tag: string) => (
-                    <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md border border-gray-200">
+                    <span key={tag} className="text-xs px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-md">
                       #{tag}
                     </span>
                   ))}
@@ -162,7 +160,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               )}
 
               {/* Content — markdown */}
-              <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
+              <div className="border border-zinc-100 rounded-lg p-5 bg-zinc-50/50">
                 <MarkdownContent content={renderPost.content} />
               </div>
             </article>
@@ -179,29 +177,29 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-3">
               {/* Post quick stats */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">포스트 정보</p>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">유형</span>
-                    <span className="font-medium text-gray-700">{TYPE_LABELS[post.type] ?? post.type}</span>
+              <div className="bg-white border border-zinc-200 rounded-lg p-4">
+                <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">포스트 정보</p>
+                <div className="divide-y divide-zinc-100">
+                  <div className="flex justify-between text-xs py-2 first:pt-0 last:pb-0">
+                    <span className="text-zinc-500">유형</span>
+                    <span className="font-medium text-zinc-700">{TYPE_LABELS[post.type] ?? post.type}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">상태</span>
-                    <span className="font-medium text-gray-700">{STATUS_LABEL[post.status]}</span>
+                  <div className="flex justify-between text-xs py-2 last:pb-0">
+                    <span className="text-zinc-500">상태</span>
+                    <span className="font-medium text-zinc-700">{STATUS_LABEL[post.status]}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">댓글</span>
-                    <span className="font-medium text-gray-700">{comments.length}개</span>
+                  <div className="flex justify-between text-xs py-2 last:pb-0">
+                    <span className="text-zinc-500">댓글</span>
+                    <span className="font-medium text-zinc-700">{comments.length}개</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">작성자</span>
-                    <span className="font-medium text-gray-700">{renderPost.author_display}</span>
+                  <div className="flex justify-between text-xs py-2 last:pb-0">
+                    <span className="text-zinc-500">작성자</span>
+                    <span className="font-medium text-zinc-700">{renderPost.author_display}</span>
                   </div>
                   {post.resolved_at && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">결론일</span>
-                      <span className="font-medium text-gray-700">{post.resolved_at.slice(0, 10)}</span>
+                    <div className="flex justify-between text-xs py-2 last:pb-0">
+                      <span className="text-zinc-500">결론일</span>
+                      <span className="font-medium text-zinc-700">{post.resolved_at.slice(0, 10)}</span>
                     </div>
                   )}
                 </div>

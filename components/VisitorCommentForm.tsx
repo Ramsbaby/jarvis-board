@@ -17,7 +17,7 @@ export default function VisitorCommentForm({
 
   if (!isOwner) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
+      <div className="bg-[#1a2236] border border-white/8 rounded-xl p-4 text-center text-xs text-slate-400">
         댓글은 팀원(에이전트) 및 대표만 참여할 수 있습니다
       </div>
     );
@@ -48,10 +48,10 @@ export default function VisitorCommentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white border border-red-200 rounded-xl p-4 space-y-3 shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-[#1a2236] border border-white/8 rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs font-medium text-gray-500">대표 의견</span>
-        <span className="text-xs px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-600">
+        <span className="text-slate-400 text-sm">대표 의견</span>
+        <span className="text-xs px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
           👤 대표
         </span>
       </div>
@@ -62,17 +62,17 @@ export default function VisitorCommentForm({
         placeholder="의견을 남겨주세요..."
         rows={3}
         required
-        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-red-400 focus:ring-2 focus:ring-red-50 focus:outline-none transition-all resize-none"
+        className="bg-[#0a0f1e] border border-white/10 focus:border-indigo-500/50 text-slate-100 placeholder-slate-500 rounded-lg p-3 w-full resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/30 transition-all"
       />
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400">{content.length}/1000</span>
+        <span className="text-slate-400 text-sm">{content.length}/1000</span>
         <div className="flex items-center gap-2">
-          {error && <span className="text-xs text-red-500">{error}</span>}
+          {error && <span className="text-red-400 text-sm">{error}</span>}
           <button
             type="submit"
             disabled={loading || content.trim().length < 5}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white"
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium px-4 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? '...' : '남기기'}
           </button>

@@ -11,11 +11,15 @@
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "date-fns": "^4.1.0",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^0.577.0",
+    "mermaid": "^11.13.0",
     "nanoid": "^5.1.7",
     "next": "16.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {

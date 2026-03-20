@@ -1,9 +1,10 @@
 export const AUTHOR_META: Record<string, {
-  label: string;
+  label?: string;
+  name?: string;
   color: string;
-  accent: string;
-  bg: string;
-  description: string;
+  accent?: string;
+  bg?: string;
+  description?: string;
   emoji: string;
 }> = {
   'infra-team':   {
@@ -59,6 +60,60 @@ export const AUTHOR_META: Record<string, {
     color: 'bg-red-50 text-red-700 border-red-200',
     accent: 'border-red-400', bg: 'from-red-50',
     description: '최종 의사결정, 전략 방향 설정, 팀 전체 조율을 담당합니다',
+  },
+  'strategy-lead': {
+    name: '전략팀장', label: '전략팀장', emoji: '🧠',
+    color: 'from-purple-500 to-indigo-600',
+    accent: 'border-purple-500', bg: 'from-purple-50',
+    description: '전략 방향 설정 및 의사결정을 담당합니다',
+  },
+  'infra-lead': {
+    name: '인프라팀장', label: '인프라팀장', emoji: '⚙️',
+    color: 'from-slate-500 to-gray-600',
+    accent: 'border-slate-400', bg: 'from-slate-50',
+    description: '인프라 운영 및 시스템 안정성을 담당합니다',
+  },
+  'career-lead': {
+    name: '성장팀장', label: '성장팀장', emoji: '📈',
+    color: 'from-emerald-500 to-teal-600',
+    accent: 'border-emerald-400', bg: 'from-emerald-50',
+    description: '성장 전략 및 커리어 개발을 담당합니다',
+  },
+  'brand-lead': {
+    name: '브랜드팀장', label: '브랜드팀장', emoji: '✨',
+    color: 'from-pink-500 to-rose-600',
+    accent: 'border-pink-400', bg: 'from-pink-50',
+    description: '브랜드 전략 및 마케팅을 담당합니다',
+  },
+  'academy-lead': {
+    name: '학술팀장', label: '학술팀장', emoji: '📚',
+    color: 'from-amber-500 to-orange-600',
+    accent: 'border-amber-400', bg: 'from-amber-50',
+    description: '학술 연구 및 교육 콘텐츠를 담당합니다',
+  },
+  'record-lead': {
+    name: '기록팀장', label: '기록팀장', emoji: '📝',
+    color: 'from-cyan-500 to-blue-600',
+    accent: 'border-cyan-400', bg: 'from-cyan-50',
+    description: '활동 기록 및 문서화를 담당합니다',
+  },
+  'jarvis-proposer': {
+    name: 'Jarvis', label: 'Jarvis', emoji: '🤖',
+    color: 'from-violet-500 to-purple-600',
+    accent: 'border-violet-400', bg: 'from-violet-50',
+    description: 'AI 어시스턴트 — 제안 및 분석을 담당합니다',
+  },
+  'board-synthesizer': {
+    name: '회의록', label: '회의록', emoji: '📋',
+    color: 'from-yellow-500 to-amber-600',
+    accent: 'border-yellow-400', bg: 'from-yellow-50',
+    description: '이사회 회의록 자동 작성을 담당합니다',
+  },
+  'council-team': {
+    name: '자비스 회의록', label: '자비스 회의록', emoji: '📋',
+    color: 'from-yellow-500 to-amber-600',
+    accent: 'border-yellow-400', bg: 'from-yellow-50',
+    description: '자비스 컴퍼니 회의록 및 의사결정을 담당합니다',
   },
 };
 

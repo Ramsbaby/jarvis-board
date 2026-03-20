@@ -1,51 +1,116 @@
 'use client';
+import React, { useState, useEffect } from 'react';
 
-import { useState, useEffect } from 'react';
-
-const DISCUSSION_MS = 30 * 60 * 1000;
-
-function getRemaining(createdAt: string) {
-  const end = new Date(createdAt).getTime() + DISCUSSION_MS;
-  return Math.max(0, end - Date.now());
+interface CountdownTimerProps {
+  expiresAt: string;
+  variant?: 'badge' | 'bar' | 'ring';
+  className?: string;
 }
 
-export default function CountdownTimer({ createdAt }: { createdAt: string }) {
-  const [remaining, setRemaining] = useState(() => getRemaining(createdAt));
+function getTimeInfo(expiresAt: string) {
+  const now = Date.now();
+  const end = new Date(expiresAt).getTime();
+  const diffMs = end - now;
+  const totalMs = 30 * 60 * 1000; // 30 minutes
+
+  if (diffMs <= 0) return { expired: true, label: '만료', pct: 0, color: 'expired' as const };
+
+  const totalSec = Math.floor(diffMs / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  const label = `${min}분 ${String(sec).padStart(2, '0')}초`;
+  const pct = Math.min(100, (diffMs / totalMs) * 100);
+  const color: 'green' | 'amber' | 'red' =
+    diffMs > 10 * 60 * 1000 ? 'green' :
+    diffMs > 5 * 60 * 1000 ? 'amber' : 'red';
+
+  return { expired: false, label, pct, color, min, sec };
+}
+
+export default function CountdownTimer({ expiresAt, variant = 'badge', className = '' }: CountdownTimerProps) {
+  const [info, setInfo] = useState(() => getTimeInfo(expiresAt));
 
   useEffect(() => {
-    if (remaining === 0) return;
-    const t = setInterval(() => {
-      const r = getRemaining(createdAt);
-      setRemaining(r);
-      if (r === 0) clearInterval(t);
-    }, 1000);
+    const t = setInterval(() => setInfo(getTimeInfo(expiresAt)), 1000);
     return () => clearInterval(t);
-  }, [createdAt, remaining]);
+  }, [expiresAt]);
 
-  const mins = Math.floor(remaining / 60000);
-  const secs = Math.floor((remaining % 60000) / 1000);
-  const expired = remaining === 0;
-
-  if (expired) {
+  /* ── Badge variant (default, for post detail) ── */
+  if (variant === 'badge') {
+    if (info.expired) {
+      return (
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 ${className}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+          토론 종료
+        </span>
+      );
+    }
+    const dotColor = info.color === 'green' ? 'bg-emerald-400' : info.color === 'amber' ? 'bg-amber-400' : 'bg-red-400';
+    const textColor = info.color === 'green' ? 'text-emerald-300' : info.color === 'amber' ? 'text-amber-300' : 'text-red-300';
+    const bgColor = info.color === 'green' ? 'bg-emerald-900/30 border-emerald-700/40' : info.color === 'amber' ? 'bg-amber-900/30 border-amber-700/40' : 'bg-red-900/30 border-red-700/40';
+    const pulse = info.color === 'red' ? 'animate-countdown-pulse' : '';
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-        ⏹ 토론 마감
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${bgColor} ${textColor} ${pulse} ${className}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${info.color === 'red' ? 'animate-pulse' : ''}`} />
+        ⏱ {info.label} 남음
       </span>
     );
   }
 
-  const urgent = remaining < 5 * 60 * 1000;   // 5분 미만
-  const warning = remaining < 10 * 60 * 1000; // 10분 미만
+  /* ── Bar variant (for post cards — 3px bar at card bottom) ── */
+  if (variant === 'bar') {
+    const barClass = info.expired ? 'countdown-bar countdown-bar-expired' :
+      info.color === 'green' ? 'countdown-bar countdown-bar-green' :
+      info.color === 'amber' ? 'countdown-bar countdown-bar-amber' :
+      'countdown-bar countdown-bar-red';
+    return (
+      <div className={`w-full bg-slate-800/50 rounded-b-xl overflow-hidden ${className}`} style={{ height: '3px' }}>
+        <div
+          className={barClass}
+          style={{ width: info.expired ? '100%' : `${info.pct}%`, height: '100%', transition: 'width 1s linear' }}
+        />
+      </div>
+    );
+  }
+
+  /* ── Ring variant (for post detail header) ── */
+  const radius = 36;
+  const circ = 2 * Math.PI * radius;
+  const strokeDash = info.expired ? circ : (info.pct / 100) * circ;
+  const strokeColor = info.expired ? '#374151' :
+    info.color === 'green' ? '#10b981' :
+    info.color === 'amber' ? '#f59e0b' : '#ef4444';
+  const glow = !info.expired && info.color === 'red' ? `drop-shadow(0 0 6px #ef4444)` : 'none';
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border tabular-nums ${
-      urgent
-        ? 'bg-red-50 text-red-600 border-red-200 animate-pulse'
-        : warning
-        ? 'bg-amber-50 text-amber-600 border-amber-200'
-        : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-    }`}>
-      ⏱ {mins}:{secs.toString().padStart(2, '0')} 남음
-    </span>
+    <div className={`flex flex-col items-center gap-1 ${className}`}>
+      <div className="relative w-24 h-24">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
+          <circle cx="44" cy="44" r={radius} fill="none" stroke="#1e293b" strokeWidth="6" />
+          <circle
+            cx="44" cy="44" r={radius}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={`${strokeDash} ${circ}`}
+            style={{ transition: 'stroke-dasharray 1s linear', filter: glow }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {info.expired ? (
+            <span className="text-slate-400 text-xs font-medium">만료</span>
+          ) : (
+            <>
+              <span className="text-white font-bold text-lg leading-none">{info.min}</span>
+              <span className="text-slate-400 text-[10px]">분</span>
+            </>
+          )}
+        </div>
+      </div>
+      {!info.expired && (
+        <span className="text-xs text-slate-400">{info.label}</span>
+      )}
+    </div>
   );
 }

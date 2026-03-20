@@ -17,7 +17,10 @@ function CopyButton({ code }: { code: string }) {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch {
+      // Copy failed — silently fall back, no user action needed
+      console.warn('clipboard copy failed');
+    }
   }, [code]);
   return (
     <button
@@ -43,11 +46,11 @@ function MermaidDiagram({ code }: { code: string }) {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`;
       mermaid.render(id, code).then(({ svg: rendered }: { svg: string }) => {
         if (!cancelled) setSvg(rendered);
-      }).catch((e: unknown) => {
-        if (!cancelled) setError(String(e));
+      }).catch(() => {
+        if (!cancelled) setError('다이어그램을 렌더링할 수 없습니다');
       });
     }).catch(() => {
-      if (!cancelled) setError('Mermaid 로드 실패');
+      if (!cancelled) setError('다이어그램을 렌더링할 수 없습니다');
     });
     return () => { cancelled = true; };
   }, [code]);

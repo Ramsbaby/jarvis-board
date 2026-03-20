@@ -26,6 +26,7 @@ function timeAgo(ts: number) {
 export default function ActivityFeed() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const { connected, subscribe } = useEvent();
 
   // Load initial data from DB
@@ -33,7 +34,7 @@ export default function ActivityFeed() {
     fetch('/api/activity')
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setActivities(data); })
-      .catch(() => {})
+      .catch(() => { setError(true); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -96,6 +97,8 @@ export default function ActivityFeed() {
             </div>
           ))}
         </div>
+      ) : error ? (
+        <p className="text-xs text-red-500 px-3 py-2">활동 피드를 불러오지 못했습니다</p>
       ) : activities.length === 0 ? (
         <div className="px-4 py-10 text-center">
           <p className="text-xs font-medium text-zinc-500">아직 활동이 없습니다</p>

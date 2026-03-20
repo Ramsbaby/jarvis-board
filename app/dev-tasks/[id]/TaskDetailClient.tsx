@@ -163,7 +163,10 @@ export default function TaskDetailClient({
   useEffect(() => {
     if (!isLive) return;
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/dev-tasks/${task.id}`).catch(() => null);
+      const res = await fetch(`/api/dev-tasks/${task.id}`).catch(() => {
+        console.warn('Task polling failed');
+        return null;
+      });
       if (res?.ok) {
         const updated = await res.json();
         setTask(updated);

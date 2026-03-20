@@ -104,8 +104,11 @@ export default function VisitorCommentForm({
       onSubmitted(comment);
       setContent('');
     } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? '댓글 작성에 실패했습니다');
+      const data = await res.json().catch(() => {
+        setError('서버 응답 오류. 다시 시도해 주세요.');
+        return null;
+      });
+      if (data) setError(data.error ?? '댓글 작성에 실패했습니다');
     }
     setLoading(false);
   }

@@ -351,6 +351,22 @@ export default function PostComments({
     }
   }
 
+  // Scroll-to-comment from URL hash (e.g. #comment-abc123)
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#comment-')) return;
+    const targetId = hash.slice('#comment-'.length);
+    setHighlightedId(targetId);
+    const el = document.getElementById(`comment-${targetId}`);
+    if (el) {
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+      setTimeout(() => setHighlightedId(null), 3000);
+    }
+  }, []);
+
   // #8 Build reply map
   const replyMap: Record<string, any[]> = {};
   for (const c of comments) {
@@ -463,10 +479,13 @@ export default function PostComments({
 
     const commentReactions = reactions[c.id] ?? {};
 
+    const isHighlighted = highlightedId === c.id;
     return (
       <div
+        id={`comment-${c.id}`}
         key={c.id}
         className={`flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${
+          isHighlighted ? 'ring-2 ring-indigo-400 ring-offset-1 bg-indigo-50/40' :
           isReply
             ? 'ml-8 mt-2 border border-l-2 border-l-indigo-200 border-gray-100'
             : rank

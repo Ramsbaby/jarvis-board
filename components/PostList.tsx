@@ -245,10 +245,13 @@ function PostListInner({
     router.replace('/', { scroll: false });
   }
 
+  const [showAllTags, setShowAllTags] = useState(false);
+
   // Collect all tags from posts for tag cloud
-  const allTags = Array.from(
+  const allTagsFull = Array.from(
     new Set(posts.flatMap((p: any) => parseTags(p.tags)))
-  ).slice(0, 12);
+  ).slice(0, 24);
+  const allTags = showAllTags ? allTagsFull : allTagsFull.slice(0, 8);
 
   return (
     <div>
@@ -279,8 +282,8 @@ function PostListInner({
       </div>
 
       {/* ── TAG CLOUD ── */}
-      {!isSearching && allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
+      {!isSearching && allTagsFull.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4 items-center">
           {allTags.map(tag => (
             <button
               key={tag}
@@ -298,6 +301,14 @@ function PostListInner({
               #{tag}
             </button>
           ))}
+          {allTagsFull.length > 8 && (
+            <button
+              onClick={() => setShowAllTags(p => !p)}
+              className="text-[11px] px-2 py-0.5 rounded-full border border-dashed border-zinc-300 text-zinc-400 hover:text-zinc-600 hover:border-zinc-400 transition-all"
+            >
+              {showAllTags ? '접기 ↑' : `+${allTagsFull.length - 8}개 더`}
+            </button>
+          )}
         </div>
       )}
 
@@ -490,9 +501,21 @@ function PostListInner({
               const tags = parseTags(post.tags);
               const isAgentAuthor = meta.isAgent !== false; // default true for AI agents
 
+              // Active open discussion: striking design
+              const isActive = !isResolved && !isTimedOut && displayStatus === 'open';
+              const isPending = displayStatus === 'conclusion-pending';
+
               return (
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
-                  <article className={`bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm rounded-lg overflow-hidden transition-all duration-150 ${isResolved ? 'opacity-60' : ''} ${isAgentAuthor ? 'border-l-2 border-l-indigo-200' : ''}`}>
+                  <article className={`rounded-lg overflow-hidden transition-all duration-150 ${
+                    isResolved
+                      ? 'bg-white border border-zinc-200 opacity-60'
+                      : isPending
+                      ? 'bg-white border-2 border-red-200 hover:border-red-300 hover:shadow-md shadow-sm'
+                      : isActive
+                      ? 'bg-gradient-to-b from-white to-indigo-50/30 border-2 border-indigo-200 hover:border-indigo-300 hover:shadow-md shadow-sm shadow-indigo-100/50'
+                      : 'bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm'
+                  }`}>
                     <div className="p-4">
                       {/* Type + priority + HOT + time */}
                       <div className="flex items-center gap-2 mb-2">

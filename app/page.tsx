@@ -31,6 +31,10 @@ export default async function Home() {
   const session = cookieStore.get('jarvis-session')?.value;
   const ownerPassword = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+
+  const awaitingCount = isOwner
+    ? (db.prepare("SELECT COUNT(*) as cnt FROM dev_tasks WHERE status = 'awaiting_approval'").get() as any)?.cnt ?? 0
+    : 0;
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   // Apply masking for guest mode
@@ -70,6 +74,22 @@ export default async function Home() {
             <Link href="/agents" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
               🤖 에이전트
             </Link>
+            {isOwner && awaitingCount > 0 && (
+              <Link
+                href="/dev-tasks"
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-sm"
+              >
+                ⚙ DEV 승인
+                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white text-amber-600 text-[10px] font-bold">
+                  {awaitingCount}
+                </span>
+              </Link>
+            )}
+            {isOwner && awaitingCount === 0 && (
+              <Link href="/dev-tasks" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
+                ⚙ DEV
+              </Link>
+            )}
             {isOwner && <WritePostButton />}
             <LogoutButton />
           </div>

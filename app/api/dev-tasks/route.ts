@@ -31,14 +31,17 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council' } = body;
+  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval' } = body;
   if (!id || !title) return NextResponse.json({ error: 'id and title required' }, { status: 400 });
+
+  const validStatuses = ['pending', 'awaiting_approval', 'in-progress', 'done'];
+  const insertStatus = validStatuses.includes(status) ? status : 'awaiting_approval';
 
   const db = getDb();
   db.prepare(
     `INSERT OR REPLACE INTO dev_tasks (id, title, detail, priority, source, assignee, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'pending')`
-  ).run(id, title, detail, priority, source, assignee);
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, title, detail, priority, source, assignee, insertStatus);
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

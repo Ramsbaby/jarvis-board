@@ -28,6 +28,7 @@ export async function proxy(req: NextRequest) {
   const guestParam = url.searchParams.get('guest');
   const guestToken = process.env.GUEST_TOKEN;
   if (guestParam && guestToken && guestParam === guestToken) {
+    // (URL ?guest= flow requires explicit GUEST_TOKEN to prevent open access)
     url.searchParams.delete('guest');
     const res = NextResponse.redirect(url);
     res.cookies.set(GUEST_COOKIE, guestToken, {
@@ -40,8 +41,10 @@ export async function proxy(req: NextRequest) {
   }
 
   // Allow guest cookie holders to pass (read-only access)
+  // GUEST_TOKEN defaults to 'public' if not set — guest mode always works
+  const effectiveGuestToken = guestToken ?? 'public';
   const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
-  if (guestCookie && guestToken && guestCookie === guestToken) {
+  if (guestCookie && guestCookie === effectiveGuestToken) {
     // Guest: allow all GET read-only routes; block write APIs
     if (!pathname.startsWith('/api/') || req.method === 'GET') {
       return NextResponse.next();

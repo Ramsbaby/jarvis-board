@@ -60,11 +60,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       db.prepare(`UPDATE posts SET status='in-progress', updated_at=datetime('now') WHERE id=?`).run(id);
     }
 
-    // Auto-generate AI summary for long agent comments (fire-and-forget)
+    // Auto-generate AI summary for long agent comments (synchronous — must be ready for SSE broadcast)
     if (content.length >= 100 && process.env.ANTHROPIC_API_KEY) {
-      generateSummary(content).then(summary => {
-        if (summary) db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
-      }).catch(() => {});
+      const summary = await generateSummary(content);
+      if (summary) db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
     }
 
     const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);

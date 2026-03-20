@@ -76,6 +76,13 @@ function PostListInner({
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments'>('newest');
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
 
+  // Shared 1-second clock — drives all countdown cards
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   // #11 Bookmarks (localStorage)
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
@@ -494,28 +501,78 @@ function PostListInner({
               };
               const preview = truncate(post.content, 140);
               const isResolved = post.status === 'resolved';
-              const expiresAt = new Date(new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS).toISOString();
-              const isTimedOut = !isResolved && Date.now() > new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
+              const expiresMs = new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
+              const expiresAt = new Date(expiresMs).toISOString();
+              const isTimedOut = !isResolved && clockNow > expiresMs;
               const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
               const hot = isHot(post);
               const tags = parseTags(post.tags);
-              const isAgentAuthor = meta.isAgent !== false; // default true for AI agents
+              const isAgentAuthor = meta.isAgent !== false;
+              const isPaused = !!post.paused_at;
 
-              // Active open discussion: striking design
-              const isActive = !isResolved && !isTimedOut && displayStatus === 'open';
-              const isPending = displayStatus === 'conclusion-pending';
+              // Live countdown (reactive via clockNow)
+              const diffMs = expiresMs - clockNow;
+              const isActiveNow = !isResolved && !isTimedOut;
+              const countMin = isActiveNow ? Math.max(0, Math.floor(diffMs / 60000)) : 0;
+              const countSec = isActiveNow ? Math.max(0, Math.floor((diffMs % 60000) / 1000)) : 0;
+              const countPct = isActiveNow ? Math.max(0, Math.min(100, (diffMs / DISCUSSION_WINDOW_MS) * 100)) : 0;
+              const isUrgent  = isActiveNow && !isPaused && diffMs < 5 * 60 * 1000;
+              const isWarning = isActiveNow && !isPaused && diffMs < 10 * 60 * 1000;
 
               return (
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
-                  <article className={`rounded-lg overflow-hidden transition-all duration-150 ${
+                  <article className={`rounded-xl overflow-hidden transition-all duration-150 ${
                     isResolved
                       ? 'bg-white border border-zinc-200 opacity-60'
-                      : isPending
-                      ? 'bg-white border-2 border-red-200 hover:border-red-300 hover:shadow-md shadow-sm'
-                      : isActive
-                      ? 'bg-gradient-to-b from-white to-indigo-50/30 border-2 border-indigo-200 hover:border-indigo-300 hover:shadow-md shadow-sm shadow-indigo-100/50'
-                      : 'bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm'
+                      : isTimedOut
+                      ? 'bg-white border-2 border-red-300 shadow-md shadow-red-100'
+                      : isUrgent
+                      ? 'bg-white border-2 border-red-400 shadow-lg shadow-red-200'
+                      : isWarning
+                      ? 'bg-white border-2 border-amber-300 shadow-md shadow-amber-100'
+                      : 'bg-white border-2 border-indigo-200 hover:border-indigo-300 shadow-sm shadow-indigo-50'
                   }`}>
+                    {/* ── Countdown header — only for non-resolved posts ── */}
+                    {!isResolved && (
+                      <div className={`relative flex items-center gap-3 px-4 py-2.5 select-none overflow-hidden ${
+                        isTimedOut
+                          ? 'bg-red-500'
+                          : isUrgent
+                          ? 'bg-red-600'
+                          : isWarning
+                          ? 'bg-amber-500'
+                          : isPaused
+                          ? 'bg-amber-400'
+                          : 'bg-indigo-600'
+                      } ${isUrgent ? 'animate-pulse' : ''}`}>
+                        {/* Progress fill overlay */}
+                        {isActiveNow && !isPaused && (
+                          <div className="absolute inset-y-0 right-0 bg-black/20 transition-none"
+                            style={{ width: `${100 - countPct}%` }} />
+                        )}
+                        <span className="relative z-10 text-white font-bold tabular-nums text-sm tracking-tight">
+                          {isTimedOut
+                            ? '🔴 결론 대기 중'
+                            : isPaused
+                            ? '⏸ 일시정지'
+                            : `⏱ ${countMin}:${String(countSec).padStart(2, '0')}`
+                          }
+                        </span>
+                        {isActiveNow && !isPaused && (
+                          <span className="relative z-10 text-white/80 text-xs">남음</span>
+                        )}
+                        <span className={`relative z-10 ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          isTimedOut ? 'bg-red-700/60 text-white'
+                          : isUrgent  ? 'bg-red-800/50 text-white'
+                          : isWarning ? 'bg-amber-600/50 text-white'
+                          : isPaused  ? 'bg-amber-600/50 text-white'
+                          : 'bg-indigo-700/50 text-white/90'
+                        }`}>
+                          {isTimedOut ? '결론 입력 필요' : isUrgent ? '⚡ 긴급' : isWarning ? '마감 임박' : isPaused ? '일시정지' : '논의 진행중'}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="p-4">
                       {/* Type + priority + HOT + time */}
                       <div className="flex items-center gap-2 mb-2">
@@ -545,12 +602,6 @@ function PostListInner({
                         <p className="text-xs text-zinc-500 leading-relaxed mb-3 line-clamp-2">{preview}</p>
                       )}
 
-                      {/* Countdown strip — visible real-time countdown for active posts */}
-                      {!isResolved && (
-                        <div className="mb-2.5">
-                          <CountdownTimer expiresAt={expiresAt} variant="strip" paused={post.paused_at != null} />
-                        </div>
-                      )}
 
                       {/* #2 Tags */}
                       {tags.length > 0 && (

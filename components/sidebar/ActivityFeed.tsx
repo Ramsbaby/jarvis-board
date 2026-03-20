@@ -98,57 +98,83 @@ export default function ActivityFeed() {
         </div>
       ) : activities.length === 0 ? (
         <div className="px-4 py-10 text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center">
-            <svg className="w-5 h-5 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-            </svg>
-          </div>
           <p className="text-xs font-medium text-zinc-500">아직 활동이 없습니다</p>
           <p className="text-[10px] text-zinc-400 mt-1">팀원들의 활동이 여기 표시됩니다</p>
         </div>
-      ) : (
-        <div className="max-h-64 overflow-y-auto">
-          {activities.map((act, i) => {
-            const emoji = AUTHOR_META[act.author]?.emoji || (act.type === 'new_post' ? '📝' : '💬');
-            const isPost = act.type === 'new_post';
-            // Comments deep-link to the comment anchor; posts link to the post
-            const href = isPost
-              ? `/posts/${act.postId}`
-              : `/posts/${act.postId}#comment-${act.id}`;
+      ) : (() => {
+        // Latest comment (pinned at top)
+        const latest = activities[0];
+        const latestEmoji = AUTHOR_META[latest.author]?.emoji || (latest.type === 'new_post' ? '📝' : '💬');
+        const latestHref = latest.type === 'new_post'
+          ? `/posts/${latest.postId}`
+          : `/posts/${latest.postId}#comment-${latest.id}`;
+        const rest = activities.slice(1);
 
-            return (
-              <Link
-                key={`${act.id}-${i}`}
-                href={href}
-                className="flex items-start gap-3 px-4 py-2.5 hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0 group"
-              >
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm shrink-0 mt-0.5 ${
-                  isPost ? 'bg-indigo-50 border border-indigo-100' : 'bg-zinc-100 border border-zinc-200'
-                }`}>
-                  {emoji}
+        return (
+          <div>
+            {/* Pinned: always-visible latest activity */}
+            <Link
+              href={latestHref}
+              className="block px-4 py-3 bg-indigo-50 border-b border-indigo-100 hover:bg-indigo-100/70 transition-colors group"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 bg-white border border-indigo-200 shadow-sm">
+                  {latestEmoji}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-zinc-700 leading-snug">
-                    <span className="font-semibold text-zinc-900 group-hover:text-indigo-600 transition-colors">
-                      {act.authorDisplay}
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-xs font-bold text-indigo-900 group-hover:text-indigo-700 transition-colors truncate">
+                      {latest.authorDisplay}
                     </span>
-                    {isPost ? (
-                      <span className="text-zinc-500"> 이 토론을 열었습니다</span>
-                    ) : (
-                      <span className="text-zinc-500">: {act.title.slice(0, 40)}{act.title.length > 40 ? '…' : ''}</span>
-                    )}
+                    <span className="text-[10px] text-indigo-400 shrink-0">{timeAgo(latest.ts)} 전</span>
+                  </div>
+                  <p className="text-xs text-indigo-700 leading-snug line-clamp-2">
+                    {latest.type === 'new_post'
+                      ? `새 토론: ${latest.title}`
+                      : latest.title.slice(0, 60) + (latest.title.length > 60 ? '…' : '')}
                   </p>
-                  {act.postTitle && !isPost && (
-                    <p className="text-[10px] text-zinc-400 truncate mt-0.5">↳ {act.postTitle}</p>
+                  {latest.postTitle && latest.type === 'new_comment' && (
+                    <p className="text-[10px] text-indigo-400 truncate mt-0.5">↳ {latest.postTitle}</p>
                   )}
-                  <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgo(act.ts)} 전</p>
                 </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+              </div>
+            </Link>
+
+            {/* Older activities */}
+            {rest.length > 0 && (
+              <div className="max-h-48 overflow-y-auto">
+                {rest.map((act, i) => {
+                  const emoji = AUTHOR_META[act.author]?.emoji || (act.type === 'new_post' ? '📝' : '💬');
+                  const href = act.type === 'new_post'
+                    ? `/posts/${act.postId}`
+                    : `/posts/${act.postId}#comment-${act.id}`;
+                  return (
+                    <Link
+                      key={`${act.id}-${i}`}
+                      href={href}
+                      className="flex items-start gap-2.5 px-4 py-2 hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0 group"
+                    >
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 bg-zinc-100">
+                        {emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] text-zinc-600 leading-snug line-clamp-1">
+                          <span className="font-semibold text-zinc-800">{act.authorDisplay}</span>
+                          {act.type === 'new_post'
+                            ? ': 새 토론'
+                            : `: ${act.title.slice(0, 30)}${act.title.length > 30 ? '…' : ''}`
+                          }
+                        </p>
+                        <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgo(act.ts)} 전</p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

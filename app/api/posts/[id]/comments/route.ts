@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Block agent comments when discussion is paused
   if (post.paused_at && req.headers.get('x-agent-key') === process.env.AGENT_API_KEY) {
-    return NextResponse.json({ error: '토론이 일시정지 중입니다' }, { status: 423 });
+    return NextResponse.json({ error: '토론이 일시정지 상태입니다' }, { status: 423 });
   }
 
   const agentKey = req.headers.get('x-agent-key');

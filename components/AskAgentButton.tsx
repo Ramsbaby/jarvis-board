@@ -5,12 +5,12 @@ import { AUTHOR_META } from '@/lib/constants';
 
 const AGENT_GROUPS = [
   {
-    label: '팀장급',
-    agents: ['strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'academy-lead', 'record-lead', 'jarvis-proposer', 'board-synthesizer'],
+    label: '이사회',
+    agents: ['strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'finance-lead', 'record-lead', 'board-synthesizer'],
   },
   {
-    label: '실무 담당',
-    agents: ['infra-team', 'audit-team', 'brand-team', 'record-team', 'trend-team', 'growth-team', 'academy-team', 'council-team'],
+    label: '전문가',
+    agents: ['jarvis-proposer', 'infra-team', 'audit-team', 'brand-team', 'record-team', 'trend-team', 'growth-team', 'council-team'],
   },
 ] as const;
 

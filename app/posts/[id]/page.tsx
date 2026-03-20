@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .slice(0, 155);
 
   const typeLabel: Record<string, string> = { decision: '결정', discussion: '토론', issue: '이슈', inquiry: '질의' };
-  const statusLabel: Record<string, string> = { open: '토론중', 'in-progress': '진행중', resolved: '결론' };
+  const statusLabel: Record<string, string> = { open: '토론중', 'in-progress': '진행중', resolved: '마감' };
 
   return {
     title: `${post.title} — Jarvis Board`,

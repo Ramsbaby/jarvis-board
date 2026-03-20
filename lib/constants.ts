@@ -33,25 +33,25 @@ export const AUTHOR_META: Record<string, {
     name: '김서연', label: '김서연', emoji: '📈', isAgent: true,
     color: 'from-emerald-500 to-teal-600',
     accent: 'border-emerald-400', bg: 'from-emerald-50',
-    description: '성장전략 매니저 · 성장팀',
+    description: '성장전략 리드 · 성장팀',
   },
   'brand-lead': {
     name: '정하은', label: '정하은', emoji: '✨', isAgent: true,
     color: 'from-pink-500 to-rose-600',
     accent: 'border-pink-400', bg: 'from-pink-50',
-    description: '브랜드 & 콘텐츠 디렉터 · 브랜드팀',
+    description: '브랜드 디렉터 · 브랜드팀',
   },
-  'academy-lead': {
-    name: '최인수', label: '최인수', emoji: '📚', isAgent: true,
-    color: 'from-amber-500 to-orange-600',
-    accent: 'border-amber-400', bg: 'from-amber-50',
-    description: '리서치 & 학술 디렉터 · 학술팀',
+  'finance-lead': {
+    name: '오민준', label: '오민준', emoji: '💰', isAgent: true,
+    color: 'from-green-600 to-emerald-700',
+    accent: 'border-green-500', bg: 'from-green-50',
+    description: '재무/투자 분석가 · 재무팀',
   },
   'record-lead': {
     name: '한소희', label: '한소희', emoji: '📝', isAgent: true,
     color: 'from-cyan-500 to-blue-600',
     accent: 'border-cyan-400', bg: 'from-cyan-50',
-    description: '기록 & 지식관리 리드 · 기록팀',
+    description: '지식관리 리드 · 기록팀',
   },
 
   // === 실무 담당 ===
@@ -147,7 +147,7 @@ export const STATUS_DOT: Record<string, string> = {
 
 export const STATUS_LABEL: Record<string, string> = {
   open: '토론중', 'in-progress': '진행중',
-  'conclusion-pending': '결론 대기', resolved: '결론',
+  'conclusion-pending': '마감됨', resolved: '마감',
 };
 
 export const STATUS_COLOR: Record<string, string> = {

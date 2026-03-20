@@ -86,8 +86,8 @@ export default async function Home() {
               </Link>
             )}
             {isOwner && awaitingCount === 0 && (
-              <Link href="/dev-tasks" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
-                ⚙ DEV
+              <Link href="/dev-tasks" className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 transition-colors hidden sm:flex">
+                ⚙ <span>DEV 태스크</span>
               </Link>
             )}
             {isOwner && <WritePostButton />}

@@ -528,9 +528,6 @@ export default function PostComments({
                     <span className="ml-0.5 text-[9px] px-1 rounded bg-violet-100 text-violet-600 font-semibold border border-violet-200">AI</span>
                   )}
                 </span>
-                {meta.description && meta.isAgent !== false && (
-                  <span className="text-[10px] text-gray-400 hidden sm:inline">{meta.description}</span>
-                )}
               </>
             ) : null}
             {rank && (
@@ -678,7 +675,7 @@ export default function PostComments({
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-300 rounded-xl mb-2">
           <span className="text-xl">⏸</span>
           <div className="flex-1">
-            <p className="font-semibold text-amber-800 text-sm">토론 일시정지 중</p>
+            <p className="font-semibold text-amber-800 text-sm">토론 일시정지</p>
             <p className="text-amber-600 text-xs mt-0.5">에이전트 댓글이 차단됩니다. 대표님이 재개하면 토론이 계속됩니다.</p>
           </div>
         </div>
@@ -728,7 +725,7 @@ export default function PostComments({
             onClick={() => document.getElementById('comment-form')?.scrollIntoView({ behavior: 'smooth' })}
             className="text-xs px-3 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
           >
-            결론 입력 →
+            결론 작성 →
           </button>
         </div>
       )}

@@ -14,8 +14,8 @@ const STATUSES = ['open', 'in-progress', 'resolved'] as const;
 const STATUS_LABEL_KO: Record<string, string> = {
   open: '토론중',
   'in-progress': '진행중',
-  'conclusion-pending': '결론 대기',
-  resolved: '결론',
+  'conclusion-pending': '마감됨',
+  resolved: '마감',
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -509,14 +509,14 @@ function PostListInner({
               };
               const preview = truncate(post.content, 140);
               const isResolved = post.status === 'resolved';
+              const isPaused = !!post.paused_at;
               const expiresMs = new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
               const expiresAt = new Date(expiresMs).toISOString();
-              const isTimedOut = !isResolved && clockNow > expiresMs;
+              const isTimedOut = post.status === 'open' && !isPaused && clockNow > expiresMs;
               const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
               const hot = isHot(post);
               const tags = parseTags(post.tags);
               const isAgentAuthor = meta.isAgent !== false;
-              const isPaused = !!post.paused_at;
 
               // Live countdown (reactive via clockNow)
               const diffMs = expiresMs - clockNow;
@@ -542,42 +542,65 @@ function PostListInner({
                   }`}>
                     {/* ── Countdown header — only for non-resolved posts ── */}
                     {!isResolved && (
-                      <div className={`relative flex items-center gap-3 px-4 py-2.5 select-none overflow-hidden ${
-                        isTimedOut
-                          ? 'bg-red-500'
-                          : isUrgent
-                          ? 'bg-red-600'
-                          : isWarning
-                          ? 'bg-amber-500'
-                          : isPaused
-                          ? 'bg-amber-400'
-                          : 'bg-indigo-600'
+                      <div className={`select-none overflow-hidden ${
+                        isTimedOut ? 'bg-red-500' :
+                        isUrgent   ? 'bg-red-600' :
+                        isWarning  ? 'bg-amber-500' :
+                        isPaused   ? 'bg-amber-400' :
+                                     'bg-indigo-600'
                       } ${isUrgent ? 'animate-pulse' : ''}`}>
-                        {/* Progress fill overlay */}
+                        {/* Main timer row */}
+                        <div className="relative flex items-center gap-3 px-4 pt-2.5 pb-1.5 overflow-hidden">
+                          {/* Progress fill overlay (dark right side) */}
+                          {isActiveNow && !isPaused && (
+                            <div className="absolute inset-y-0 right-0 bg-black/20 transition-none pointer-events-none"
+                              style={{ width: `${100 - countPct}%` }} />
+                          )}
+
+                          {/* Big timer number */}
+                          <span className={`relative z-10 font-black tabular-nums tracking-tight leading-none ${
+                            isTimedOut ? 'text-white text-base' :
+                            isUrgent   ? 'text-white text-2xl' :
+                            isWarning  ? 'text-white text-xl' :
+                                         'text-white text-2xl'
+                          }`}>
+                            {isTimedOut
+                              ? '🔴 마감됨'
+                              : isPaused
+                              ? '⏸ 일시정지'
+                              : `${countMin}분 ${String(countSec).padStart(2, '0')}초`
+                            }
+                          </span>
+
+                          {isActiveNow && !isPaused && (
+                            <span className="relative z-10 text-white/70 text-xs font-medium">남음</span>
+                          )}
+
+                          {/* Right label */}
+                          <span className={`relative z-10 ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                            isTimedOut ? 'bg-red-700/60 text-white' :
+                            isUrgent   ? 'bg-red-800/50 text-white' :
+                            isWarning  ? 'bg-amber-600/50 text-white' :
+                            isPaused   ? 'bg-amber-600/50 text-white' :
+                                         'bg-indigo-700/50 text-white/90'
+                          }`}>
+                            {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '논의 진행중'}
+                          </span>
+                        </div>
+
+                        {/* Progress bar strip */}
                         {isActiveNow && !isPaused && (
-                          <div className="absolute inset-y-0 right-0 bg-black/20 transition-none"
-                            style={{ width: `${100 - countPct}%` }} />
+                          <div className="h-1 bg-black/20 mx-4 mb-2 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-none ${
+                                isUrgent  ? 'bg-white/90' :
+                                isWarning ? 'bg-white/80' :
+                                            'bg-white/70'
+                              }`}
+                              style={{ width: `${countPct}%` }}
+                            />
+                          </div>
                         )}
-                        <span className="relative z-10 text-white font-bold tabular-nums text-sm tracking-tight">
-                          {isTimedOut
-                            ? '🔴 결론 대기 중'
-                            : isPaused
-                            ? '⏸ 일시정지'
-                            : `⏱ ${countMin}:${String(countSec).padStart(2, '0')}`
-                          }
-                        </span>
-                        {isActiveNow && !isPaused && (
-                          <span className="relative z-10 text-white/80 text-xs">남음</span>
-                        )}
-                        <span className={`relative z-10 ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                          isTimedOut ? 'bg-red-700/60 text-white'
-                          : isUrgent  ? 'bg-red-800/50 text-white'
-                          : isWarning ? 'bg-amber-600/50 text-white'
-                          : isPaused  ? 'bg-amber-600/50 text-white'
-                          : 'bg-indigo-700/50 text-white/90'
-                        }`}>
-                          {isTimedOut ? '결론 입력 필요' : isUrgent ? '⚡ 긴급' : isWarning ? '마감 임박' : isPaused ? '일시정지' : '논의 진행중'}
-                        </span>
                       </div>
                     )}
 

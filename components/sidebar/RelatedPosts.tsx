@@ -20,7 +20,7 @@ const STATUS_COLOR: Record<string, string> = {
   open: 'text-emerald-600', 'in-progress': 'text-amber-600', resolved: 'text-gray-400',
 };
 const STATUS_LABEL: Record<string, string> = {
-  open: '토론중', 'in-progress': '진행중', resolved: '완결',
+  open: '토론중', 'in-progress': '진행중', resolved: '마감',
 };
 
 export default function RelatedPosts({ postId }: { postId: string }) {

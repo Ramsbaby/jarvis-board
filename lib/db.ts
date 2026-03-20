@@ -141,6 +141,7 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN changed_files TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN execution_log TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN content_summary TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN rejection_note TEXT'); } catch { /* already exists */ }
   }
   return _db;
 }

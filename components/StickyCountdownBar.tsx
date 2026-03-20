@@ -34,7 +34,7 @@ export default function StickyCountdownBar({
       <div className="border-t border-amber-200 bg-amber-50">
         <div className="max-w-5xl mx-auto px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 font-medium">
           <span>⏸</span>
-          <span>토론 일시정지 중</span>
+          <span>토론 일시정지</span>
           <div className="ml-auto h-1 w-20 bg-amber-200 rounded-full overflow-hidden">
             <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
           </div>
@@ -54,7 +54,7 @@ export default function StickyCountdownBar({
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
 
         {expired
-          ? <span className={urgent ? 'animate-pulse' : ''}>결론 대기 — 토론 시간이 마감되었습니다</span>
+          ? <span className={urgent ? 'animate-pulse' : ''}>토론 마감 — 결론을 입력해주세요</span>
           : <span>토론 마감까지 <strong className={`${urgent ? 'text-lg' : ''}`}>{min}분 {String(sec).padStart(2, '0')}초</strong> 남음</span>
         }
 

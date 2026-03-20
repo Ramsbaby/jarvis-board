@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 
 interface DevTask {
   id: string;
@@ -151,7 +152,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
             return (
               <div
                 key={task.id}
-                className={`bg-white rounded-xl border overflow-hidden transition-shadow ${
+                className={`bg-white rounded-xl border overflow-hidden transition-shadow hover:shadow-md ${
                   isWaiting ? 'border-amber-200 shadow-sm shadow-amber-50' : 'border-zinc-200'
                 }`}
               >
@@ -169,12 +170,13 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   <div className="h-1 w-full bg-zinc-300" />
                 )}
 
+                <Link href={`/dev-tasks/${task.id}`} className="block">
                 <div className="p-4">
                   {/* Header row */}
                   <div className="flex items-start gap-3 mb-3">
                     <span className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-zinc-900 leading-snug">{task.title}</h3>
+                      <h3 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">{task.title}</h3>
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
                         {task.assignee && (
@@ -223,16 +225,16 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
 
                   {/* Approve/Reject buttons — only for awaiting_approval */}
                   {isWaiting && (
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 pt-1" onClick={e => e.preventDefault()}>
                       <button
-                        onClick={() => handleAction(task.id, 'rejected')}
+                        onClick={e => { e.preventDefault(); handleAction(task.id, 'rejected'); }}
                         disabled={isLoading}
                         className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-zinc-50 text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors"
                       >
                         ✕ 반려
                       </button>
                       <button
-                        onClick={() => handleAction(task.id, 'approved')}
+                        onClick={e => { e.preventDefault(); handleAction(task.id, 'approved'); }}
                         disabled={isLoading}
                         className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
                       >
@@ -242,7 +244,11 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                       </button>
                     </div>
                   )}
+                  {!isWaiting && task.status !== 'rejected' && (
+                    <p className="text-[10px] text-zinc-400 pt-1">클릭하여 상세 보기 →</p>
+                  )}
                 </div>
+                </Link>
               </div>
             );
           })}

@@ -12,17 +12,61 @@ function checkAuth(req: NextRequest) {
   return key === process.env.AGENT_API_KEY;
 }
 
-export async function GET() {
-  const db = getDb();
-  const posts = db.prepare(`
-    SELECT p.*, COUNT(c.id) as comment_count
-    FROM posts p LEFT JOIN comments c ON c.post_id = p.id
-    GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
-  `).all();
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const search = url.searchParams.get('search')?.trim();
+  const cursor = url.searchParams.get('cursor');
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
 
+  const db = getDb();
+
+  // Guest masking
   const cookieStore = await cookies();
   const isGuest = isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
-  const result = isGuest ? (posts as any[]).map(maskPost) : posts;
+
+  let posts: any[];
+
+  if (search) {
+    // FTS5 search — sanitize by escaping quotes
+    const safeSearch = search.replace(/"/g, '""') + '*';
+    posts = db.prepare(`
+      SELECT p.*, COUNT(c.id) as comment_count
+      FROM posts p
+      JOIN posts_fts f ON p.rowid = f.rowid
+      LEFT JOIN comments c ON c.post_id = p.id
+      WHERE posts_fts MATCH ?
+      GROUP BY p.id
+      ORDER BY rank
+      LIMIT ?
+    `).all(safeSearch, limit) as any[];
+  } else if (cursor) {
+    // Cursor-based pagination
+    const cursorPost = db.prepare('SELECT created_at FROM posts WHERE id = ?').get(cursor) as any;
+    if (cursorPost) {
+      posts = db.prepare(`
+        SELECT p.*, COUNT(c.id) as comment_count
+        FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+        WHERE p.created_at < ?
+        GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
+      `).all(cursorPost.created_at, limit) as any[];
+    } else {
+      posts = [];
+    }
+  } else {
+    posts = db.prepare(`
+      SELECT p.*, COUNT(c.id) as comment_count
+      FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+      GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
+    `).all(limit) as any[];
+  }
+
+  const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;
+  const result = isGuest ? posts.map(maskPost) : posts;
+
+  // If cursor/search requested, return paginated format
+  if (cursor || search) {
+    return NextResponse.json({ posts: result, nextCursor });
+  }
   return NextResponse.json(result);
 }
 

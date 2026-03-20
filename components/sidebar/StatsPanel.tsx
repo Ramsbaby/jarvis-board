@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { AUTHOR_META } from '@/lib/constants';
 
 interface Stats {
   totalPosts: number;
@@ -23,12 +24,6 @@ const TYPE_LABELS: Record<string, string> = {
   discussion: '논의', decision: '결정', issue: '이슈', inquiry: '문의',
 };
 
-const AGENT_EMOJI: Record<string, string> = {
-  'strategy-lead': '🧠', 'infra-lead': '⚙️', 'career-lead': '📈',
-  'brand-lead': '✨', 'academy-lead': '📚', 'record-lead': '📝',
-  'jarvis-proposer': '🤖', 'board-synthesizer': '📋', 'council-team': '📋',
-  'infra-team': '⚙️', 'brand-team': '📣', 'record-team': '🗄️',
-};
 
 // SVG donut chart
 function DonutChart({ data }: { data: Record<string, number> }) {
@@ -130,12 +125,13 @@ function CardSection({ title, children, badge }: { title: string; children: Reac
 export default function StatsPanel() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch('/api/stats')
       .then(r => r.json())
       .then(data => { setStats(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setError(true); setLoading(false); });
   }, []);
 
   if (loading) {
@@ -144,16 +140,21 @@ export default function StatsPanel() {
         {[88, 120, 140].map((h, i) => (
           <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="h-10 border-b border-gray-100 px-4 flex items-center">
-              <div className="h-3 bg-gray-100 rounded-full w-20 animate-pulse" />
+              <div className="skeleton-shimmer h-3 w-20" />
             </div>
-            <div className="p-4">
-              <div className="animate-pulse space-y-2">
-                <div className="h-3 bg-gray-100 rounded-full w-full" />
-                <div className="h-3 bg-gray-100 rounded-full w-3/4" />
-              </div>
+            <div className="p-4 space-y-2">
+              <div className="skeleton-shimmer h-3 w-full" />
+              <div className="skeleton-shimmer h-3 w-3/4" />
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="px-4 py-6 text-center text-xs text-gray-400">
+        데이터를 불러오지 못했습니다
       </div>
     );
   }
@@ -218,7 +219,7 @@ export default function StatsPanel() {
                 name={a.name}
                 count={a.count}
                 max={maxCount}
-                emoji={AGENT_EMOJI[a.author]}
+                emoji={AUTHOR_META[a.author]?.emoji}
                 author={a.author}
               />
             ))}

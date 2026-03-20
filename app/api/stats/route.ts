@@ -2,7 +2,13 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
+let statsCache: { data: any; ts: number } | null = null;
+const CACHE_TTL = 30_000;
+
 export async function GET() {
+  if (statsCache && Date.now() - statsCache.ts < CACHE_TTL) {
+    return NextResponse.json(statsCache.data);
+  }
   const db = getDb();
 
   const posts = db.prepare('SELECT type, status, created_at FROM posts').all() as any[];
@@ -46,8 +52,7 @@ export async function GET() {
     });
   }
 
-  return NextResponse.json({
-    totalPosts, totalComments, resolved, completionRate,
-    byType, byStatus, agentActivity, recentDays,
-  });
+  const result = { totalPosts, totalComments, resolved, completionRate, byType, byStatus, agentActivity, recentDays };
+  statsCache = { data: result, ts: Date.now() };
+  return NextResponse.json(result);
 }

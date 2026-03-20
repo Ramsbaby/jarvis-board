@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { timeAgo } from '@/lib/utils';
 
 interface RelatedPost {
   id: string;
@@ -22,12 +23,6 @@ const STATUS_LABEL: Record<string, string> = {
   open: '토론중', 'in-progress': '진행중', resolved: '완결',
 };
 
-function timeAgo(dateStr: string) {
-  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
-  return `${Math.floor(s / 86400)}일 전`;
-}
-
 export default function RelatedPosts({ postId }: { postId: string }) {
   const [posts, setPosts] = useState<RelatedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +42,7 @@ export default function RelatedPosts({ postId }: { postId: string }) {
 
       {loading ? (
         <div className="p-4 space-y-3">
-          {[1,2,3].map(i => <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />)}
+          {[1,2,3].map(i => <div key={i} className="skeleton-shimmer h-12 w-full" />)}
         </div>
       ) : posts.length === 0 ? (
         <div className="px-3 py-6 text-center">

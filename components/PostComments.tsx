@@ -5,6 +5,7 @@ import { AUTHOR_META } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
 import MarkdownContent from '@/components/MarkdownContent';
 import VisitorCommentForm from './VisitorCommentForm';
+import { useEvent } from '@/contexts/EventContext';
 
 function DiscussionSummary({ postId, commentCount }: { postId: string; commentCount: number }) {
   const [summary, setSummary] = useState<string | null>(null);
@@ -67,34 +68,40 @@ export default function PostComments({
   postId,
   initialComments,
   isOwner,
+  postCreatedAt,
+  postStatus,
 }: {
   postId: string;
   initialComments: any[];
   isOwner: boolean;
+  postCreatedAt: string;
+  postStatus: string;
 }) {
   const [comments, setComments] = useState(initialComments);
   const [toast, setToast] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { subscribe } = useEvent();
+
+  // Task #14: compute if discussion time has expired
+  const isExpired = postStatus !== 'resolved' &&
+    new Date(postCreatedAt).getTime() + 30 * 60 * 1000 < Date.now();
+
+  // Task #11/#12: use singleton SSE via EventContext
   useEffect(() => {
-    const es = new EventSource('/api/events');
-    es.onmessage = (e) => {
-      try {
-        const ev = JSON.parse(e.data);
-        if (ev.type === 'new_comment' && ev.post_id === postId) {
-          setComments(prev =>
-            prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data]
-          );
-          setNewIds(prev => new Set(prev).add(ev.data.id));
-          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-          setToast(`💬 ${ev.data?.author_display || '팀원'}이 댓글을 달았습니다`);
-          toastTimerRef.current = setTimeout(() => setToast(null), 5000);
-        }
-      } catch { /* ignore */ }
-    };
-    return () => es.close();
-  }, [postId]);
+    return subscribe((ev) => {
+      if (ev.type === 'new_comment' && ev.post_id === postId) {
+        setComments(prev =>
+          prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data]
+        );
+        setNewIds(prev => new Set(prev).add(ev.data.id));
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast(`💬 ${ev.data?.author_display || '팀원'}이 댓글을 달았습니다`);
+        toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+      }
+    });
+  }, [subscribe, postId]);
 
   const agentComments = comments.filter(c => !c.is_visitor);
   const humanComments = comments.filter(c => c.is_visitor);
@@ -128,6 +135,23 @@ export default function PostComments({
           <span className="text-gray-400 text-sm">· 방문자 {humanComments.length}</span>
         )}
       </div>
+
+      {/* Task #14: Expired CTA for owner */}
+      {isExpired && isOwner && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl mb-2 text-sm">
+          <span>⏰</span>
+          <div className="flex-1">
+            <p className="font-medium text-amber-800 text-xs">토론 시간이 종료되었습니다</p>
+            <p className="text-amber-600 text-xs">결론 댓글을 작성해 주세요</p>
+          </div>
+          <button
+            onClick={() => document.getElementById('comment-form')?.scrollIntoView({ behavior: 'smooth' })}
+            className="text-xs px-3 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+          >
+            결론 입력 →
+          </button>
+        </div>
+      )}
 
       {/* Auto discussion summary */}
       <DiscussionSummary postId={postId} commentCount={comments.length} />
@@ -243,11 +267,13 @@ export default function PostComments({
       })}
 
       {/* Comment submission form */}
-      <VisitorCommentForm
-        postId={postId}
-        isOwner={isOwner}
-        onSubmitted={comment => setComments(prev => [...prev, comment])}
-      />
+      <div id="comment-form">
+        <VisitorCommentForm
+          postId={postId}
+          isOwner={isOwner}
+          onSubmitted={comment => setComments(prev => [...prev, comment])}
+        />
+      </div>
     </section>
   );
 }

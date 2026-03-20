@@ -2,6 +2,7 @@ import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
+import WritePostButton from '@/components/WritePostButton';
 import StatsPanel from '@/components/sidebar/StatsPanel';
 import RightSidebar from '@/components/sidebar/RightSidebar';
 import Link from 'next/link';
@@ -61,6 +62,7 @@ export default async function Home() {
                 LIVE
               </span>
             </div>
+            {isOwner && <WritePostButton />}
             <LogoutButton />
           </div>
         </div>

@@ -22,13 +22,14 @@ const PRIORITY_CONFIG: Record<string, { dot: string; badge: string; label: strin
 export default function DevTaskList() {
   const [tasks, setTasks] = useState<DevTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/dev-tasks')
       .then(r => r.json())
       .then(data => { setTasks(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setError(true); setLoading(false); });
   }, []);
 
   const pending = tasks.filter(t => t.status === 'pending');
@@ -48,11 +49,15 @@ export default function DevTaskList() {
       {loading ? (
         <div className="p-4 space-y-3">
           {[1,2].map(i => (
-            <div key={i} className="animate-pulse space-y-2">
-              <div className="h-3 bg-gray-100 rounded-full w-full" />
-              <div className="h-2 bg-gray-100 rounded-full w-2/3" />
+            <div key={i} className="space-y-2">
+              <div className="skeleton-shimmer h-3 w-full" />
+              <div className="skeleton-shimmer h-2 w-2/3" />
             </div>
           ))}
+        </div>
+      ) : error ? (
+        <div className="px-4 py-6 text-center text-xs text-gray-400">
+          데이터를 불러오지 못했습니다
         </div>
       ) : pending.length === 0 ? (
         <div className="px-4 py-10 text-center">

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, TYPE_COLOR, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
+import { useEvent } from '@/contexts/EventContext';
 
 const TYPES = ['decision', 'discussion', 'issue', 'inquiry'] as const;
 const STATUSES = ['open', 'in-progress', 'resolved'] as const;
@@ -44,7 +45,15 @@ function PostListInner({
   const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || '');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [authorFilter, setAuthorFilter] = useState(searchParams.get('author') || '');
-  const [sseError, setSseError] = useState(false);
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments'>('newest');
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
+
+  const { subscribe } = useEvent();
+
+  // Task #15: initialize notification permission state on mount
+  useEffect(() => {
+    if ('Notification' in window) setNotifPerm(Notification.permission);
+  }, []);
 
   function pushFilter(t: string, s: string, a: string) {
     const p = new URLSearchParams();
@@ -61,22 +70,23 @@ function PostListInner({
     setAuthorFilter(searchParams.get('author') || '');
   }, [searchParams]);
 
+  // Task #11/#12: use singleton SSE via EventContext
   useEffect(() => {
-    const es = new EventSource('/api/events');
-    es.onmessage = (e) => {
-      try {
-        const ev = JSON.parse(e.data);
-        if (ev.type === 'new_post') setPosts(p => [{ ...ev.data, comment_count: 0 }, ...p]);
-        if (ev.type === 'new_comment') {
-          setPosts(p => p.map((post: any) =>
-            post.id === ev.post_id ? { ...post, comment_count: (post.comment_count || 0) + 1 } : post
-          ));
+    return subscribe((ev) => {
+      if (ev.type === 'new_post') {
+        setPosts(p => [{ ...ev.data, comment_count: 0 }, ...p]);
+        // Task #15: browser notification
+        if (notifPerm === 'granted') {
+          new Notification('새 토론 📋', { body: ev.data?.title, icon: '/favicon.ico' });
         }
-      } catch { /* ignore */ }
-    };
-    es.onerror = () => setSseError(true);
-    return () => es.close();
-  }, []);
+      }
+      if (ev.type === 'new_comment') {
+        setPosts(p => p.map((post: any) =>
+          post.id === ev.post_id ? { ...post, comment_count: (post.comment_count || 0) + 1 } : post
+        ));
+      }
+    });
+  }, [subscribe, notifPerm]);
 
   const typeCounts = Object.fromEntries(
     TYPES.map(t => [t, posts.filter((p: any) => p.type === t).length])
@@ -87,6 +97,13 @@ function PostListInner({
     if (statusFilter && p.status !== statusFilter) return false;
     if (authorFilter && p.author !== authorFilter) return false;
     return true;
+  });
+
+  // Task #22: client-side sort
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === 'comments') return (b.comment_count || 0) - (a.comment_count || 0);
+    if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
   const hasFilter = !!(typeFilter || statusFilter || authorFilter);
@@ -165,8 +182,32 @@ function PostListInner({
         )}
 
         {hasFilter && (
-          <button onClick={clearFilters} className="ml-auto text-sm text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={clearFilters} className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
             초기화 ×
+          </button>
+        )}
+
+        {/* Task #22: Sort dropdown */}
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as any)}
+          className="ml-auto text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:border-indigo-300"
+        >
+          <option value="newest">최신순</option>
+          <option value="oldest">오래된순</option>
+          <option value="comments">댓글 많은순</option>
+        </select>
+
+        {/* Task #15: Notification permission button */}
+        {notifPerm === 'default' && (
+          <button
+            onClick={async () => {
+              const perm = await Notification.requestPermission();
+              setNotifPerm(perm);
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs bg-white border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-all"
+          >
+            🔔 알림 받기
           </button>
         )}
       </div>
@@ -176,17 +217,11 @@ function PostListInner({
         {/* Result bar */}
         <div className="flex items-center justify-between mb-3 px-0.5">
           <span className="text-gray-400 text-sm">
-            {hasFilter ? `${filtered.length}개 결과` : `전체 ${posts.length}개`}
+            {hasFilter ? `${sorted.length}개 결과` : `전체 ${posts.length}개`}
           </span>
         </div>
 
-        {sseError && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-            실시간 연결 끊김 — 새로고침하면 최신 내용을 볼 수 있습니다
-          </p>
-        )}
-
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,7 +239,7 @@ function PostListInner({
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((post: any) => {
+            {sorted.map((post: any) => {
               const meta = authorMeta[post.author] ?? {
                 label: post.author_display,
                 color: 'bg-gray-100 text-gray-600 border-gray-200',
@@ -225,7 +260,8 @@ function PostListInner({
 
               return (
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
-                  <article className={`bg-white border border-gray-200 hover:border-indigo-300 hover:shadow-md border-l-4 ${accentClass} rounded-xl overflow-hidden transition-all duration-200 ${isResolved ? 'opacity-60' : ''}`}>
+                  {/* Task #29: changed opacity-60 to opacity-75 for WCAG */}
+                  <article className={`bg-white border border-gray-200 hover:border-indigo-300 hover:shadow-md border-l-4 ${accentClass} rounded-xl overflow-hidden transition-all duration-200 ${isResolved ? 'opacity-75' : ''}`}>
                     <div className="p-4">
                       {/* Type + time */}
                       <div className="flex items-center gap-2 mb-2">

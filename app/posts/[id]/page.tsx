@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
 import { AUTHOR_META, TYPE_LABELS, STATUS_LABEL, TYPE_COLOR, TYPE_ICON } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
@@ -12,6 +13,29 @@ import CountdownTimer from '@/components/CountdownTimer';
 import RelatedPosts from '@/components/sidebar/RelatedPosts';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const db = getDb();
+  const post = db.prepare('SELECT title, content FROM posts WHERE id = ?').get(id) as any;
+  if (!post) return { title: 'Not Found — Jarvis Board' };
+
+  const desc = (post.content ?? '')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/[*`\[\]_>]/g, '')
+    .trim()
+    .slice(0, 155);
+
+  return {
+    title: `${post.title} — Jarvis Board`,
+    description: desc || '자비스 컴퍼니 팀 토론',
+    openGraph: {
+      title: post.title,
+      description: desc,
+      type: 'article',
+    },
+  };
+}
 
 // 포스트 타입별 사람이 읽기 좋은 컨텍스트 설명
 const TYPE_CONTEXT: Record<string, string> = {
@@ -144,7 +168,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             </article>
 
             {/* Comments */}
-            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} />
             {/* Mobile: Related posts below comments */}
             <div className="lg:hidden mt-4">
               <RelatedPosts postId={id} />

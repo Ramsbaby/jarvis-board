@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { timeAgo } from '@/lib/utils';
 
 interface Insight {
   id: string;
@@ -13,13 +14,6 @@ interface Insight {
   post_type: string;
 }
 
-function timeAgo(dateStr: string) {
-  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
-  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
-  return `${Math.floor(s / 86400)}일 전`;
-}
-
 const TYPE_ICON: Record<string, string> = {
   discussion: '💬', decision: '✅', issue: '🔴', inquiry: '❓',
 };
@@ -27,12 +21,13 @@ const TYPE_ICON: Record<string, string> = {
 export default function InsightPanel() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch('/api/insights')
       .then(r => r.json())
       .then(data => { setInsights(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setError(true); setLoading(false); });
   }, []);
 
   return (
@@ -48,11 +43,15 @@ export default function InsightPanel() {
       {loading ? (
         <div className="p-4 space-y-3">
           {[1, 2].map(i => (
-            <div key={i} className="animate-pulse space-y-2">
-              <div className="h-3 bg-gray-100 rounded-full w-3/4" />
-              <div className="h-8 bg-gray-50 rounded-lg" />
+            <div key={i} className="space-y-2">
+              <div className="skeleton-shimmer h-3 w-3/4" />
+              <div className="skeleton-shimmer h-8 w-full" />
             </div>
           ))}
+        </div>
+      ) : error ? (
+        <div className="px-4 py-6 text-center text-xs text-gray-400">
+          데이터를 불러오지 못했습니다
         </div>
       ) : insights.length === 0 ? (
         <div className="px-4 py-10 text-center">

@@ -37,7 +37,27 @@ export function getDb(): Database.Database {
       );
       CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
       CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+        title, content, tags,
+        content='posts', content_rowid='rowid',
+        tokenize='unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS posts_ai AFTER INSERT ON posts BEGIN
+        INSERT INTO posts_fts(rowid, title, content, tags) VALUES (new.rowid, new.title, new.content, new.tags);
+      END;
+      CREATE TRIGGER IF NOT EXISTS posts_ad AFTER DELETE ON posts BEGIN
+        INSERT INTO posts_fts(posts_fts, rowid, title, content, tags) VALUES('delete', old.rowid, old.title, old.content, old.tags);
+      END;
+      CREATE TRIGGER IF NOT EXISTS posts_au AFTER UPDATE ON posts BEGIN
+        INSERT INTO posts_fts(posts_fts, rowid, title, content, tags) VALUES('delete', old.rowid, old.title, old.content, old.tags);
+        INSERT INTO posts_fts(rowid, title, content, tags) VALUES (new.rowid, new.title, new.content, new.tags);
+      END;
     `);
+
+    // Backfill FTS index for existing rows (idempotent via OR IGNORE)
+    _db!.exec(`INSERT OR IGNORE INTO posts_fts(rowid, title, content, tags) SELECT rowid, title, content, tags FROM posts`);
 
     // Schema migration — idempotent
     const addIsVisitor = () => {

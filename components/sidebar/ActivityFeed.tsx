@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { AUTHOR_META } from '@/lib/constants';
+import { useEvent } from '@/contexts/EventContext';
 
 interface Activity {
   id: string;
@@ -12,13 +14,6 @@ interface Activity {
   ts: number;
 }
 
-const EMOJI: Record<string, string> = {
-  'strategy-lead': '🧠', 'infra-lead': '⚙️', 'career-lead': '📈',
-  'brand-lead': '✨', 'academy-lead': '📚', 'record-lead': '📝',
-  'jarvis-proposer': '🤖', 'board-synthesizer': '📋', 'council-team': '📋',
-  'infra-team': '⚙️', 'brand-team': '📣', 'record-team': '🗄️',
-  'owner': '👤',
-};
 
 function timeAgo(ts: number) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -29,46 +24,39 @@ function timeAgo(ts: number) {
 
 export default function ActivityFeed() {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [connected, setConnected] = useState(false);
+  const { connected, subscribe } = useEvent();
 
   useEffect(() => {
-    const es = new EventSource('/api/events');
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-    es.onmessage = (e) => {
-      try {
-        const ev = JSON.parse(e.data);
-        const now = Date.now();
+    return subscribe((ev) => {
+      const now = Date.now();
 
-        if (ev.type === 'new_post') {
-          const item: Activity = {
-            id: ev.data?.id || String(now),
-            type: 'new_post',
-            title: ev.data?.title || '새 토론',
-            author: ev.data?.author || '',
-            authorDisplay: ev.data?.author_display || '시스템',
-            postId: ev.data?.id || '',
-            ts: now,
-          };
-          setActivities(prev => [item, ...prev].slice(0, 12));
-        }
+      if (ev.type === 'new_post') {
+        const item: Activity = {
+          id: ev.data?.id || String(now),
+          type: 'new_post',
+          title: ev.data?.title || '새 토론',
+          author: ev.data?.author || '',
+          authorDisplay: ev.data?.author_display || '시스템',
+          postId: ev.data?.id || '',
+          ts: now,
+        };
+        setActivities(prev => [item, ...prev].slice(0, 12));
+      }
 
-        if (ev.type === 'new_comment') {
-          const item: Activity = {
-            id: ev.data?.id || String(now),
-            type: 'new_comment',
-            title: ev.data?.content?.slice(0, 50) || '새 댓글',
-            author: ev.data?.author || '',
-            authorDisplay: ev.data?.author_display || '팀원',
-            postId: ev.post_id || '',
-            ts: now,
-          };
-          setActivities(prev => [item, ...prev].slice(0, 12));
-        }
-      } catch {}
-    };
-    return () => es.close();
-  }, []);
+      if (ev.type === 'new_comment') {
+        const item: Activity = {
+          id: ev.data?.id || String(now),
+          type: 'new_comment',
+          title: ev.data?.content?.slice(0, 50) || '새 댓글',
+          author: ev.data?.author || '',
+          authorDisplay: ev.data?.author_display || '팀원',
+          postId: ev.post_id || '',
+          ts: now,
+        };
+        setActivities(prev => [item, ...prev].slice(0, 12));
+      }
+    });
+  }, [subscribe]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -99,7 +87,7 @@ export default function ActivityFeed() {
       ) : (
         <div className="max-h-64 overflow-y-auto">
           {activities.map((act, i) => {
-            const emoji = EMOJI[act.author] || (act.type === 'new_post' ? '📝' : '💬');
+            const emoji = AUTHOR_META[act.author]?.emoji || (act.type === 'new_post' ? '📝' : '💬');
             const isPost = act.type === 'new_post';
             return (
               <Link

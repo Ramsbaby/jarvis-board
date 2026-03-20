@@ -232,7 +232,7 @@ function PostListInner({
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const hasFilter = !!(typeFilter || statusFilter || authorFilter || tagFilter);
+  const hasFilter = !!(typeFilter || statusFilter || authorFilter || tagFilter || channelFilter || showBookmarksOnly);
   const isSearching = !!searchQuery.trim();
 
   function clearFilters() {
@@ -240,6 +240,8 @@ function PostListInner({
     setStatusFilter('');
     setAuthorFilter('');
     setTagFilter('');
+    setChannelFilter('');
+    setShowBookmarksOnly(false);
     router.replace('/', { scroll: false });
   }
 

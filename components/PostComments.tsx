@@ -84,6 +84,52 @@ function getVisitorId(isOwner: boolean): string {
   return id;
 }
 
+// Per-comment AI summary component
+function CommentSummary({ commentId, initialSummary, content }: {
+  commentId: string;
+  initialSummary?: string | null;
+  content: string;
+}) {
+  const [summary, setSummary] = useState<string | null>(initialSummary ?? null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(!!initialSummary);
+
+  if (!content || content.length < 100) return null;
+
+  async function load() {
+    if (summary || loading) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/comments/${commentId}/summarize`);
+      const d = await r.json();
+      if (d.summary) setSummary(d.summary);
+    } catch {} finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => { const next = !open; setOpen(next); if (next) load(); }}
+        className="flex items-center gap-1 text-[11px] text-violet-500 hover:text-violet-700 transition-colors"
+      >
+        <span>✨</span>
+        <span>{open ? 'AI 요약 닫기' : 'AI 요약 보기'}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
+          {loading ? (
+            <span className="text-xs text-violet-400 animate-pulse">요약 생성 중...</span>
+          ) : summary ? (
+            <p className="text-xs text-violet-700 leading-relaxed">{summary}</p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // #4 Reactions bar component
 function CommentReactions({
   commentId,
@@ -397,9 +443,17 @@ export default function PostComments({
                 👤 {c.author_display}
               </span>
             ) : meta ? (
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs ${badgeClass}`}>
-                {meta.emoji} {meta.label}
-              </span>
+              <>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs ${badgeClass}`}>
+                  {meta.emoji} {meta.label ?? c.author_display}
+                  {meta.isAgent !== false && (
+                    <span className="ml-0.5 text-[9px] px-1 rounded bg-violet-100 text-violet-600 font-semibold border border-violet-200">AI</span>
+                  )}
+                </span>
+                {meta.description && meta.isAgent !== false && (
+                  <span className="text-[10px] text-gray-400 hidden sm:inline">{meta.description}</span>
+                )}
+              </>
             ) : null}
             {isBest && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-semibold">
@@ -410,6 +464,9 @@ export default function PostComments({
           </div>
 
           <MarkdownContent content={c.content} />
+
+          {/* Per-comment AI summary */}
+          <CommentSummary commentId={c.id} initialSummary={c.ai_summary} content={c.content ?? ''} />
 
           {/* #4 Reactions */}
           <CommentReactions

@@ -85,7 +85,7 @@ function TimelineStep({
 }) {
   return (
     <div className="flex items-start gap-4">
-      <div className="flex flex-col items-center shrink-0">
+      <div className="flex flex-col items-center shrink-0 relative z-10">
         <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold transition-all ${
           rejected ? 'bg-zinc-100 border-zinc-200 text-zinc-300' :
           done     ? 'bg-emerald-500 border-emerald-500 text-white' :
@@ -570,7 +570,7 @@ export default function TaskDetailClient({
         <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm">
           <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-5">진행 타임라인</h2>
           <div className="relative pl-4">
-            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-zinc-100" />
+            <div className="absolute left-[32px] top-5 bottom-5 w-0.5 bg-zinc-100" />
 
             <TimelineStep
               icon="📋" label="태스크 생성됨" sublabel="Jarvis 시스템에 등록"

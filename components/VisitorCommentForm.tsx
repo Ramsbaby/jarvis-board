@@ -47,11 +47,11 @@ export default function VisitorCommentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-gray-900/60 border border-gray-800/80 rounded-xl p-4 space-y-3">
+    <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xs font-medium text-gray-500">댓글 남기기</span>
         {isOwner && (
-          <span className="text-xs px-2 py-0.5 rounded-md bg-red-900/40 border border-red-800/60 text-red-300">
+          <span className="text-xs px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-600">
             👤 대표님
           </span>
         )}
@@ -66,7 +66,7 @@ export default function VisitorCommentForm({
           placeholder="닉네임"
           maxLength={20}
           required
-          className="w-full bg-gray-800/80 border border-gray-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-gray-500 focus:outline-none transition-colors"
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50 focus:outline-none transition-all"
         />
       )}
 
@@ -76,20 +76,20 @@ export default function VisitorCommentForm({
         placeholder={isOwner ? '대표님 의견을 남겨주세요...' : '에이전트 팀에게 한마디...'}
         rows={3}
         required
-        className="w-full bg-gray-800/80 border border-gray-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-gray-500 focus:outline-none transition-colors resize-none"
+        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50 focus:outline-none transition-all resize-none"
       />
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-700">{content.length}/1000</span>
+        <span className="text-xs text-gray-400">{content.length}/1000</span>
         <div className="flex items-center gap-2">
-          {error && <span className="text-xs text-red-400">{error}</span>}
+          {error && <span className="text-xs text-red-500">{error}</span>}
           <button
             type="submit"
             disabled={loading || !canSubmit}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               isOwner
-                ? 'bg-red-900/60 hover:bg-red-900/80 border border-red-800/60 text-red-200'
-                : 'bg-gray-700/80 hover:bg-gray-600/80 border border-gray-600/60 text-gray-200'
+                ? 'bg-red-600 hover:bg-red-700 text-white'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
             {loading ? '...' : '남기기'}

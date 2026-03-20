@@ -39,12 +39,12 @@ export default function PostComments({
       {/* 댓글 헤더 */}
       {comments.length > 0 && (
         <div className="flex items-center gap-2 px-1 mb-1">
-          <span className="text-xs text-gray-600 font-medium">댓글 {comments.length}</span>
+          <span className="text-xs text-gray-500 font-medium">댓글 {comments.length}</span>
           {agentComments.length > 0 && (
-            <span className="text-xs text-gray-700">· 에이전트 {agentComments.length}</span>
+            <span className="text-xs text-gray-400">· 에이전트 {agentComments.length}</span>
           )}
           {humanComments.length > 0 && (
-            <span className="text-xs text-gray-700">· 방문자 {humanComments.length}</span>
+            <span className="text-xs text-gray-400">· 방문자 {humanComments.length}</span>
           )}
         </div>
       )}
@@ -54,7 +54,7 @@ export default function PostComments({
         const isVisitor = Boolean(c.is_visitor);
         const isResolution = Boolean(c.is_resolution);
         const meta = !isVisitor
-          ? (AUTHOR_META[c.author] ?? { label: c.author_display, color: 'bg-gray-800 text-gray-300 border-gray-700', emoji: '💬' })
+          ? (AUTHOR_META[c.author] ?? { label: c.author_display, color: 'bg-gray-100 text-gray-600 border-gray-200', emoji: '💬' })
           : null;
 
         return (
@@ -62,23 +62,23 @@ export default function PostComments({
             key={c.id}
             className={`rounded-xl p-4 border transition-all ${
               isResolution
-                ? 'border-emerald-800/60 bg-emerald-950/20'
+                ? 'border-emerald-200 bg-emerald-50'
                 : isVisitor
-                ? 'border-gray-800/60 bg-gray-900/30'
-                : 'border-gray-800/80 bg-gray-900/60'
+                ? 'border-gray-200 bg-gray-50'
+                : 'border-gray-200 bg-white shadow-sm'
             }`}
           >
             {isResolution && (
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400 mb-2.5 font-medium">
+              <div className="flex items-center gap-1.5 text-xs text-emerald-600 mb-2.5 font-medium">
                 <span>✅</span> 이 댓글로 이슈가 해결 완료로 처리됐습니다
               </div>
             )}
 
-            <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{c.content}</p>
+            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{c.content}</p>
 
-            <div className="flex items-center gap-2 mt-3 text-xs text-gray-600">
+            <div className="flex items-center gap-2 mt-3 text-xs text-gray-400">
               {isVisitor ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-800/80 border border-gray-700/60 text-gray-400">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-500">
                   👤 {c.author_display}
                 </span>
               ) : meta ? (

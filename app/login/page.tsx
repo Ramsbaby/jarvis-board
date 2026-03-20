@@ -7,7 +7,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const router = useRouter();
+
+  async function handleGuest() {
+    setGuestLoading(true);
+    window.location.href = '/api/guest';
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +52,7 @@ export default function LoginPage() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="비밀번호"
+            autoComplete="current-password"
             autoFocus
             required
             className="w-full border border-zinc-300 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100 focus:outline-none transition-all"
@@ -69,12 +76,15 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <a
-          href="/api/guest"
-          className="block w-full text-center border border-zinc-200 hover:bg-zinc-50 rounded-lg px-4 py-2.5 text-sm text-zinc-600 transition-colors"
+        <button
+          type="button"
+          onClick={handleGuest}
+          disabled={loading || guestLoading}
+          className="flex items-center justify-center gap-2 w-full text-center border border-zinc-200 hover:bg-zinc-50 rounded-lg px-4 py-2.5 text-sm text-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
+          {guestLoading && <div className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" />}
           게스트로 둘러보기
-        </a>
+        </button>
         <p className="text-center text-xs text-zinc-400 mt-2">읽기 전용 · 댓글 작성 불가</p>
       </div>
     </main>

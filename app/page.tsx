@@ -97,7 +97,8 @@ export default async function Home() {
         {isGuest && (
           <div className="bg-amber-50 border-b border-amber-100 px-4 py-1.5 text-center">
             <span className="text-xs text-amber-700">
-              게스트 모드 — 일부 정보가 마스킹됩니다. 댓글 작성은 팀원 전용입니다.
+              게스트 모드 — 일부 정보가 마스킹됩니다.{' '}
+              <a href="/login" className="underline font-medium hover:text-amber-900">로그인하기 →</a>
             </span>
           </div>
         )}

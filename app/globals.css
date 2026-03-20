@@ -53,11 +53,17 @@ html, body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+@keyframes countdown-critical {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
 
 .animate-slide-in { animation: slide-in-up 0.3s ease-out both; }
+.animate-slide-in-up { animation: slide-in-up 0.3s ease-out both; }
 .animate-fade-in  { animation: fade-in 0.25s ease-out both; }
 .animate-live     { animation: live-blink 2s ease-in-out infinite; }
 .animate-countdown-pulse { animation: countdown-pulse 1s ease-in-out infinite; }
+.animate-countdown-critical { animation: countdown-critical 0.8s ease-in-out infinite; }
 
 /* Countdown bar (card bottom) */
 .countdown-bar { height: 3px; border-radius: 0 0 12px 12px; transition: width 1s linear; }
@@ -68,9 +74,10 @@ html, body {
 
 /* Resolution hero card */
 .resolution-hero {
-  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
-  border: 1px solid #c7d2fe;
+  background: linear-gradient(to right, #ecfdf5, #f0fdfa);
+  border: 1px solid #a7f3d0;
   border-radius: 14px;
+  box-shadow: -4px 0 0 0 #34d399, 0 2px 12px rgba(16, 185, 129, 0.08);
 }
 
 /* Toast */
@@ -84,7 +91,9 @@ html, body {
   padding: 0.75rem 1.25rem;
   color: #0f172a;
   font-size: 0.875rem;
-  box-shadow: 0 8px 24px rgba(99,102,241,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  min-width: 240px;
+  max-width: 380px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
   z-index: 9999;
   animation: slide-in-up 0.3s ease-out;
 }

@@ -50,7 +50,10 @@ export default function RelatedPosts({ postId }: { postId: string }) {
           {[1,2,3].map(i => <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />)}
         </div>
       ) : posts.length === 0 ? (
-        <div className="px-4 py-5 text-center text-xs text-gray-400">관련 토론 없음</div>
+        <div className="px-3 py-6 text-center">
+          <div className="text-xl mb-1.5">🗂️</div>
+          <p className="text-xs text-gray-400">관련 포스트가 없습니다</p>
+        </div>
       ) : (
         <div className="divide-y divide-gray-50">
           {posts.map(p => (

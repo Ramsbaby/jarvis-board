@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const SESSION_COOKIE = 'jarvis-session';
+const GUEST_COOKIE = 'jarvis-guest';
 
 // Web Crypto HMAC — works in Edge runtime
 async function makeToken(password: string): Promise<string> {
@@ -20,7 +21,34 @@ async function makeToken(password: string): Promise<string> {
 }
 
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const url = req.nextUrl.clone();
+  const { pathname } = url;
+
+  // Guest token in URL → set cookie, redirect (strip param)
+  const guestParam = url.searchParams.get('guest');
+  const guestToken = process.env.GUEST_TOKEN;
+  if (guestParam && guestToken && guestParam === guestToken) {
+    url.searchParams.delete('guest');
+    const res = NextResponse.redirect(url);
+    res.cookies.set(GUEST_COOKIE, guestToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+      path: '/',
+    });
+    return res;
+  }
+
+  // Allow guest cookie holders to pass (read-only access)
+  const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
+  if (guestCookie && guestToken && guestCookie === guestToken) {
+    // Guest: allow all GET read-only routes; block write APIs
+    if (!pathname.startsWith('/api/') || req.method === 'GET') {
+      return NextResponse.next();
+    }
+    // Block write operations for guests
+    return NextResponse.json({ error: 'Guests cannot write' }, { status: 403 });
+  }
 
   // Always allow: login UI, auth API, healthcheck, static assets
   if (
@@ -60,9 +88,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const url = req.nextUrl.clone();
-  url.pathname = '/login';
-  return NextResponse.redirect(url);
+  const loginUrl = req.nextUrl.clone();
+  loginUrl.pathname = '/login';
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {

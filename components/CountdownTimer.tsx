@@ -35,6 +35,10 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
     return () => clearInterval(t);
   }, [expiresAt]);
 
+  // Derive remaining seconds for critical threshold
+  const remaining = info.expired ? 0 : Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+  const isCritical = remaining > 0 && remaining < 60;
+
   /* ── Badge variant (default, for post detail) ── */
   if (variant === 'badge') {
     if (info.expired) {
@@ -45,12 +49,15 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
         </span>
       );
     }
-    const dotColor = info.color === 'green' ? 'bg-emerald-400' : info.color === 'amber' ? 'bg-amber-400' : 'bg-red-400';
-    const textColor = info.color === 'green' ? 'text-emerald-300' : info.color === 'amber' ? 'text-amber-300' : 'text-red-300';
-    const bgColor = info.color === 'green' ? 'bg-emerald-900/30 border-emerald-700/40' : info.color === 'amber' ? 'bg-amber-900/30 border-amber-700/40' : 'bg-red-900/30 border-red-700/40';
+    const dotColor = isCritical ? 'bg-red-500' : info.color === 'green' ? 'bg-emerald-400' : info.color === 'amber' ? 'bg-amber-400' : 'bg-red-400';
+    const textColor = isCritical ? 'text-red-600' : info.color === 'green' ? 'text-emerald-300' : info.color === 'amber' ? 'text-amber-300' : 'text-red-300';
+    const bgColor = isCritical
+      ? 'bg-red-50 border-red-300'
+      : info.color === 'green' ? 'bg-emerald-900/30 border-emerald-700/40' : info.color === 'amber' ? 'bg-amber-900/30 border-amber-700/40' : 'bg-red-900/30 border-red-700/40';
     const pulse = info.color === 'red' ? 'animate-countdown-pulse' : '';
+    const critical = isCritical ? 'animate-countdown-critical' : '';
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${bgColor} ${textColor} ${pulse} ${className}`}>
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${bgColor} ${textColor} ${pulse} ${critical} ${className}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${info.color === 'red' ? 'animate-pulse' : ''}`} />
         ⏱ {info.label} 남음
       </span>
@@ -60,14 +67,16 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
   /* ── Bar variant (for post cards — 3px bar at card bottom) ── */
   if (variant === 'bar') {
     const barClass = info.expired ? 'countdown-bar countdown-bar-expired' :
+      isCritical ? 'countdown-bar' :
       info.color === 'green' ? 'countdown-bar countdown-bar-green' :
       info.color === 'amber' ? 'countdown-bar countdown-bar-amber' :
       'countdown-bar countdown-bar-red';
+    const criticalBarStyle = isCritical ? { background: '#ef4444' } : {};
     return (
       <div className={`w-full bg-slate-800/50 rounded-b-xl overflow-hidden ${className}`} style={{ height: '3px' }}>
         <div
-          className={barClass}
-          style={{ width: info.expired ? '100%' : `${info.pct}%`, height: '100%', transition: 'width 1s linear' }}
+          className={`${barClass} ${isCritical ? 'animate-countdown-critical' : ''}`}
+          style={{ width: info.expired ? '100%' : `${info.pct}%`, height: '100%', transition: 'width 1s linear', ...criticalBarStyle }}
         />
       </div>
     );
@@ -78,9 +87,12 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
   const circ = 2 * Math.PI * radius;
   const strokeDash = info.expired ? circ : (info.pct / 100) * circ;
   const strokeColor = info.expired ? '#374151' :
+    isCritical ? '#ef4444' :
     info.color === 'green' ? '#10b981' :
     info.color === 'amber' ? '#f59e0b' : '#ef4444';
-  const glow = !info.expired && info.color === 'red' ? `drop-shadow(0 0 6px #ef4444)` : 'none';
+  const glow = isCritical
+    ? 'drop-shadow(0 0 4px #ef4444)'
+    : (!info.expired && info.color === 'red' ? 'drop-shadow(0 0 6px #ef4444)' : 'none');
 
   return (
     <div className={`flex flex-col items-center gap-1 ${className}`}>

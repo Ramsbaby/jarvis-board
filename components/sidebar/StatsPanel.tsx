@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface Stats {
   totalPosts: number;
@@ -22,12 +23,21 @@ const TYPE_LABELS: Record<string, string> = {
   discussion: '논의', decision: '결정', issue: '이슈', inquiry: '문의',
 };
 
+const AGENT_EMOJI: Record<string, string> = {
+  'strategy-lead': '🧠', 'infra-lead': '⚙️', 'career-lead': '📈',
+  'brand-lead': '✨', 'academy-lead': '📚', 'record-lead': '📝',
+  'jarvis-proposer': '🤖', 'board-synthesizer': '📋', 'council-team': '📋',
+  'infra-team': '⚙️', 'brand-team': '📣', 'record-team': '🗄️',
+};
+
 // SVG donut chart
 function DonutChart({ data }: { data: Record<string, number> }) {
   const total = Object.values(data).reduce((a, b) => a + b, 0);
-  if (total === 0) return <div className="h-24 flex items-center justify-center text-gray-400 text-xs">데이터 없음</div>;
+  if (total === 0) return (
+    <div className="h-16 flex items-center justify-center text-xs text-gray-400">데이터 없음</div>
+  );
 
-  const cx = 44, cy = 44, r = 36;
+  const cx = 44, cy = 44, r = 34;
   const circ = 2 * Math.PI * r;
   let offset = 0;
 
@@ -40,75 +50,82 @@ function DonutChart({ data }: { data: Record<string, number> }) {
   });
 
   return (
-    <div className="flex items-center gap-3">
-      <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90 shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth="10" />
+    <div className="flex items-center gap-4">
+      <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90 shrink-0" aria-label="유형 분포 도넛 차트">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth="12" />
         {slices.map(s => (
           <circle
             key={s.key}
             cx={cx} cy={cy} r={r}
             fill="none"
             stroke={TYPE_COLORS[s.key] || '#94a3b8'}
-            strokeWidth="10"
+            strokeWidth="12"
             strokeDasharray={`${s.dash} ${circ - s.dash}`}
             strokeDashoffset={-s.offset}
             strokeLinecap="butt"
           />
         ))}
-        {/* Center text - rotated back */}
         <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
-          fontSize="14" fontWeight="bold" fill="#0f172a"
+          fontSize="16" fontWeight="700" fill="#0f172a"
           transform={`rotate(90 ${cx} ${cy})`}>
           {total}
         </text>
-        <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="middle"
+        <text x={cx} y={cy + 15} textAnchor="middle" dominantBaseline="middle"
           fontSize="9" fill="#94a3b8"
           transform={`rotate(90 ${cx} ${cy})`}>
           전체
         </text>
       </svg>
-      <div className="space-y-1.5 flex-1 min-w-0">
+      <div className="space-y-2 flex-1 min-w-0">
         {slices.map(s => (
-          <div key={s.key} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: TYPE_COLORS[s.key] || '#94a3b8' }} />
-            <span className="text-xs text-gray-600 flex-1 truncate">{TYPE_LABELS[s.key] || s.key}</span>
-            <span className="text-xs font-semibold text-gray-700">{s.val}</span>
-          </div>
+          <Link key={s.key} href={`/?type=${s.key}`}
+            className="flex items-center gap-2 group rounded-md px-2 py-1 -mx-2 hover:bg-gray-50 transition-colors"
+          >
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: TYPE_COLORS[s.key] || '#94a3b8' }} />
+            <span className="text-xs text-gray-600 flex-1 truncate group-hover:text-gray-900 transition-colors">
+              {TYPE_LABELS[s.key] || s.key}
+            </span>
+            <span className="text-xs font-bold text-gray-800 tabular-nums">{s.val}</span>
+          </Link>
         ))}
       </div>
     </div>
   );
 }
 
-// Horizontal bar
-function AgentBar({ name, count, max, emoji }: { name: string; count: number; max: number; emoji?: string }) {
+// Progress bar for agent activity
+function AgentRow({ name, count, max, emoji, author }: { name: string; count: number; max: number; emoji?: string; author: string }) {
   const pct = max > 0 ? (count / max) * 100 : 0;
   return (
-    <div className="space-y-0.5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600 truncate flex items-center gap-1">
-          {emoji && <span>{emoji}</span>}
+    <Link href={`/?author=${author}`} className="block group rounded-lg px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-colors">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-600 truncate flex items-center gap-1.5 group-hover:text-gray-900 transition-colors">
+          {emoji && <span className="text-sm">{emoji}</span>}
           {name}
         </span>
-        <span className="text-xs font-semibold text-gray-700 ml-1">{count}</span>
+        <span className="text-xs font-bold text-gray-700 ml-2 tabular-nums">{count}</span>
       </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all duration-700 ease-out"
+          className="h-full bg-gradient-to-r from-indigo-400 to-violet-500 rounded-full transition-all duration-700 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
-    </div>
+    </Link>
   );
 }
 
-// AUTHOR_META emoji mapping for agent names
-const AGENT_EMOJI: Record<string, string> = {
-  'strategy-lead': '🧠', 'infra-lead': '⚙️', 'career-lead': '📈',
-  'brand-lead': '✨', 'academy-lead': '📚', 'record-lead': '📝',
-  'jarvis-proposer': '🤖', 'board-synthesizer': '📋', 'council-team': '📋',
-  'infra-team': '⚙️', 'brand-team': '📣', 'record-team': '🗄️',
-};
+function CardSection({ title, children, badge }: { title: string; children: React.ReactNode; badge?: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
+        {badge}
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+}
 
 export default function StatsPanel() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -124,10 +141,17 @@ export default function StatsPanel() {
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1,2,3].map(i => (
-          <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 animate-pulse">
-            <div className="h-3 bg-gray-200 rounded w-1/2 mb-3" />
-            <div className="h-16 bg-gray-100 rounded" />
+        {[88, 120, 140].map((h, i) => (
+          <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="h-10 border-b border-gray-100 px-4 flex items-center">
+              <div className="h-3 bg-gray-100 rounded-full w-20 animate-pulse" />
+            </div>
+            <div className="p-4">
+              <div className="animate-pulse space-y-2">
+                <div className="h-3 bg-gray-100 rounded-full w-full" />
+                <div className="h-3 bg-gray-100 rounded-full w-3/4" />
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -136,88 +160,92 @@ export default function StatsPanel() {
   if (!stats) return null;
 
   const maxCount = Math.max(...stats.agentActivity.map(a => a.count), 1);
+  const active = stats.totalPosts - stats.resolved;
 
   return (
     <div className="space-y-3">
 
       {/* Summary numbers */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">보드 현황</p>
-        <div className="grid grid-cols-3 gap-2 text-center">
+      <CardSection title="보드 현황">
+        <div className="grid grid-cols-3 gap-3 text-center mb-4">
+          <Link href="/" className="group">
+            <div className="text-2xl font-bold text-gray-900 tabular-nums group-hover:text-indigo-600 transition-colors">
+              {stats.totalPosts}
+            </div>
+            <div className="text-[10px] text-gray-400 mt-0.5 font-medium uppercase tracking-wide">전체</div>
+          </Link>
           <div>
-            <div className="text-xl font-bold text-gray-900">{stats.totalPosts}</div>
-            <div className="text-[10px] text-gray-400">전체</div>
+            <div className="text-2xl font-bold text-indigo-600 tabular-nums">{stats.totalComments}</div>
+            <div className="text-[10px] text-gray-400 mt-0.5 font-medium uppercase tracking-wide">댓글</div>
           </div>
-          <div>
-            <div className="text-xl font-bold text-indigo-600">{stats.totalComments}</div>
-            <div className="text-[10px] text-gray-400">댓글</div>
-          </div>
-          <div>
-            <div className="text-xl font-bold text-emerald-600">{stats.completionRate}%</div>
-            <div className="text-[10px] text-gray-400">완결</div>
-          </div>
+          <Link href="/?status=resolved" className="group">
+            <div className="text-2xl font-bold text-emerald-600 tabular-nums group-hover:text-emerald-700 transition-colors">
+              {stats.completionRate}%
+            </div>
+            <div className="text-[10px] text-gray-400 mt-0.5 font-medium uppercase tracking-wide">완결</div>
+          </Link>
         </div>
 
-        {/* Completion bar */}
-        <div className="mt-3">
+        {/* Progress bar */}
+        <div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-1000"
               style={{ width: `${stats.completionRate}%` }}
             />
           </div>
-          <div className="flex justify-between mt-1">
-            <span className="text-[10px] text-gray-400">진행 {stats.totalPosts - stats.resolved}</span>
-            <span className="text-[10px] text-emerald-600">완결 {stats.resolved}</span>
+          <div className="flex justify-between mt-1.5">
+            <span className="text-[10px] text-gray-400">진행 {active}</span>
+            <span className="text-[10px] text-emerald-600 font-medium">완결 {stats.resolved}</span>
           </div>
         </div>
-      </div>
+      </CardSection>
 
-      {/* Type distribution donut */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">유형 분포</p>
+      {/* Type distribution */}
+      <CardSection title="유형 분포">
         <DonutChart data={stats.byType} />
-      </div>
+      </CardSection>
 
-      {/* Agent activity bars */}
+      {/* Agent activity */}
       {stats.agentActivity.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">팀 활동</p>
-          <div className="space-y-2.5">
+        <CardSection title="팀 활동" badge={
+          <span className="text-[10px] text-gray-400 font-medium">{stats.agentActivity.length}명</span>
+        }>
+          <div className="space-y-0.5">
             {stats.agentActivity.slice(0, 7).map(a => (
-              <AgentBar
+              <AgentRow
                 key={a.author}
                 name={a.name}
                 count={a.count}
                 max={maxCount}
                 emoji={AGENT_EMOJI[a.author]}
+                author={a.author}
               />
             ))}
           </div>
-        </div>
+        </CardSection>
       )}
 
-      {/* 7-day sparkline (simple dots) */}
+      {/* 7-day sparkline */}
       {stats.recentDays.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">최근 7일</p>
-          <div className="flex items-end gap-1 h-12">
+        <CardSection title="최근 7일">
+          <div className="flex items-end gap-1 h-10">
             {stats.recentDays.map(d => {
               const maxComments = Math.max(...stats.recentDays.map(x => x.comments), 1);
               const h = Math.round((d.comments / maxComments) * 100);
               const isToday = d.date === new Date().toISOString().slice(0,10);
               return (
-                <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: 댓글 ${d.comments}`}>
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-1" title={`${d.date}: 댓글 ${d.comments}`}>
                   <div
                     className={`w-full rounded-sm transition-all duration-500 ${isToday ? 'bg-indigo-500' : 'bg-indigo-200'}`}
-                    style={{ height: `${Math.max(h, 4)}%` }}
+                    style={{ height: `${Math.max(h, 6)}%` }}
                   />
-                  <span className="text-[8px] text-gray-300">{d.date.slice(5)}</span>
+                  <span className="text-[8px] text-gray-300 font-mono">{d.date.slice(5)}</span>
                 </div>
               );
             })}
           </div>
-        </div>
+        </CardSection>
       )}
 
     </div>

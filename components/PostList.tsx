@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, TYPE_COLOR, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
@@ -27,7 +28,7 @@ interface Stats {
   resolved: number;
 }
 
-export default function PostList({
+function PostListInner({
   initialPosts,
   authorMeta,
   stats,
@@ -36,10 +37,29 @@ export default function PostList({
   authorMeta: any;
   stats: Stats;
 }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [posts, setPosts] = useState(initialPosts);
-  const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
+  const [authorFilter, setAuthorFilter] = useState(searchParams.get('author') || '');
   const [sseError, setSseError] = useState(false);
+
+  function pushFilter(t: string, s: string, a: string) {
+    const p = new URLSearchParams();
+    if (t) p.set('type', t);
+    if (s) p.set('status', s);
+    if (a) p.set('author', a);
+    const q = p.toString();
+    router.replace(q ? `/?${q}` : '/', { scroll: false });
+  }
+
+  useEffect(() => {
+    setTypeFilter(searchParams.get('type') || '');
+    setStatusFilter(searchParams.get('status') || '');
+    setAuthorFilter(searchParams.get('author') || '');
+  }, [searchParams]);
 
   useEffect(() => {
     const es = new EventSource('/api/events');
@@ -65,14 +85,17 @@ export default function PostList({
   const filtered = posts.filter((p: any) => {
     if (typeFilter && p.type !== typeFilter) return false;
     if (statusFilter && p.status !== statusFilter) return false;
+    if (authorFilter && p.author !== authorFilter) return false;
     return true;
   });
 
-  const hasFilter = !!(typeFilter || statusFilter);
+  const hasFilter = !!(typeFilter || statusFilter || authorFilter);
 
   function clearFilters() {
     setTypeFilter('');
     setStatusFilter('');
+    setAuthorFilter('');
+    router.replace('/', { scroll: false });
   }
 
   return (
@@ -81,7 +104,7 @@ export default function PostList({
       <div className="flex items-center gap-2 flex-wrap mb-5">
         {/* Type tabs */}
         <button
-          onClick={() => setTypeFilter('')}
+          onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter); }}
           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
             !typeFilter ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600'
           }`}
@@ -91,7 +114,11 @@ export default function PostList({
         {TYPES.map(t => (
           <button
             key={t}
-            onClick={() => setTypeFilter(typeFilter === t ? '' : t)}
+            onClick={() => {
+              const next = typeFilter === t ? '' : t;
+              setTypeFilter(next);
+              pushFilter(next, statusFilter, authorFilter);
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
               typeFilter === t
                 ? 'bg-indigo-600 text-white'
@@ -111,7 +138,11 @@ export default function PostList({
         {STATUSES.map(s => (
           <button
             key={s}
-            onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
+            onClick={() => {
+              const next = statusFilter === s ? '' : s;
+              setStatusFilter(next);
+              pushFilter(typeFilter, next, authorFilter);
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all ${
               statusFilter === s
                 ? 'bg-indigo-50 border border-indigo-300 text-indigo-700 font-medium'
@@ -122,6 +153,16 @@ export default function PostList({
             {STATUS_LABEL_KO[s]}
           </button>
         ))}
+
+        {/* Author filter chip */}
+        {authorFilter && (
+          <button
+            onClick={() => { setAuthorFilter(''); pushFilter(typeFilter, statusFilter, ''); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm bg-amber-50 border border-amber-300 text-amber-700 font-medium"
+          >
+            👤 {authorFilter} ×
+          </button>
+        )}
 
         {hasFilter && (
           <button onClick={clearFilters} className="ml-auto text-sm text-gray-400 hover:text-gray-600 transition-colors">
@@ -146,10 +187,18 @@ export default function PostList({
         )}
 
         {filtered.length === 0 ? (
-          <div className="text-center py-24 text-gray-400">
-            <p className="text-4xl mb-3">📭</p>
-            <p className="text-sm mb-3">해당 조건의 게시글이 없습니다</p>
-            <button onClick={clearFilters} className="text-xs text-indigo-600 underline">
+          <div className="text-center py-16">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-gray-500 mb-1">해당 조건의 포스트가 없습니다</p>
+            <p className="text-xs text-gray-400 mb-4">다른 필터를 선택하거나 조건을 변경해보세요</p>
+            <button
+              onClick={clearFilters}
+              className="text-xs px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg border border-indigo-200 transition-colors"
+            >
               필터 초기화
             </button>
           </div>
@@ -209,10 +258,23 @@ export default function PostList({
                           <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[post.status] ?? 'bg-gray-300'}`} />
                           {STATUS_LABEL_KO[post.status]}
                         </span>
-                        {post.comment_count > 0 && (
+                        {/* Countdown visible badge — only for open/in-progress */}
+                        {post.status !== 'resolved' && (
+                          <CountdownTimer
+                            expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
+                            variant="badge"
+                          />
+                        )}
+                        {post.status !== 'resolved' ? (
                           <span className="ml-auto bg-gray-50 border border-gray-200 text-gray-500 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
-                            💬 {post.comment_count}
+                            💬 {post.comment_count || 0}개 의견
                           </span>
+                        ) : (
+                          post.comment_count > 0 && (
+                            <span className="ml-auto bg-gray-50 border border-gray-200 text-gray-500 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                              💬 {post.comment_count}
+                            </span>
+                          )
                         )}
                       </div>
                     </div>
@@ -232,5 +294,13 @@ export default function PostList({
         )}
       </main>
     </div>
+  );
+}
+
+export default function PostList(props: Parameters<typeof PostListInner>[0]) {
+  return (
+    <Suspense fallback={<div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-24 bg-white border border-gray-200 rounded-xl animate-pulse"/>)}</div>}>
+      <PostListInner {...props} />
+    </Suspense>
   );
 }

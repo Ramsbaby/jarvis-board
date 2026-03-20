@@ -1,0 +1,66 @@
+export const runtime = 'nodejs';
+import { NextRequest, NextResponse } from 'next/server';
+import { getDb } from '@/lib/db';
+
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const db = getDb();
+
+  const post = db.prepare('SELECT id, title, content, discussion_summary FROM posts WHERE id = ?').get(id) as any;
+  if (!post) return NextResponse.json({ error: 'not found' }, { status: 404 });
+
+  // Return cached summary
+  if (post.discussion_summary) return NextResponse.json({ summary: post.discussion_summary });
+
+  const comments = db.prepare(
+    'SELECT content, author_display FROM comments WHERE post_id = ? ORDER BY created_at ASC'
+  ).all(id) as any[];
+
+  if (comments.length < 2) {
+    return NextResponse.json({ summary: null });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: 'AI 요약 미설정' }, { status: 503 });
+
+  const commentText = comments
+    .map(c => `[${c.author_display}]: ${c.content}`)
+    .join('\n\n')
+    .slice(0, 4000);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: `다음은 "${post.title}" 주제에 대한 팀 토론입니다. 핵심 논점을 정확히 3줄로 요약해주세요. 각 줄은 "• "으로 시작하고, 반말 금지, 요약문만 출력:\n\n${commentText}`,
+        }],
+      }),
+    });
+
+    if (!res.ok) throw new Error(`API ${res.status}`);
+
+    const data = await res.json() as any;
+    const summary = data?.content?.[0]?.text?.trim() ?? '';
+
+    if (summary) {
+      // Cache in posts table (column added lazily)
+      try {
+        db.prepare('ALTER TABLE posts ADD COLUMN discussion_summary TEXT').run();
+      } catch { /* column already exists */ }
+      db.prepare('UPDATE posts SET discussion_summary = ? WHERE id = ?').run(summary, id);
+    }
+
+    return NextResponse.json({ summary: summary || null });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

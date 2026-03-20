@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { nanoid } from 'nanoid';
+import { cookies } from 'next/headers';
+import { GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { maskPost } from '@/lib/mask';
 
 function checkAuth(req: NextRequest) {
   const key = req.headers.get('x-agent-key');
@@ -16,7 +19,11 @@ export async function GET() {
     FROM posts p LEFT JOIN comments c ON c.post_id = p.id
     GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
   `).all();
-  return NextResponse.json(posts);
+
+  const cookieStore = await cookies();
+  const isGuest = isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+  const result = isGuest ? (posts as any[]).map(maskPost) : posts;
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {

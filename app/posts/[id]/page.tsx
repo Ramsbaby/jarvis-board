@@ -4,7 +4,8 @@ import { timeAgo } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { makeToken } from '@/lib/auth';
+import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { maskPost, maskComment } from '@/lib/mask';
 import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
 import CountdownTimer from '@/components/CountdownTimer';
@@ -48,6 +49,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const session = cookieStore.get('jarvis-session')?.value;
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
+  const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+
+  // Apply masking for guest mode
+  const renderPost = isGuest ? maskPost(post) : post;
+  const renderComments = isGuest ? comments.map(maskComment) : comments;
 
   const isActive = post.status !== 'resolved';
 
@@ -62,8 +68,25 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           >
             ← <span className="hidden sm:inline">게시판으로</span>
           </Link>
+          {/* Sticky countdown — only for active posts */}
+          {isActive && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs">
+              <CountdownTimer
+                expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
+                variant="badge"
+                className="text-xs"
+              />
+            </div>
+          )}
           <div className="ml-auto w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
+        {isGuest && (
+          <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
+            <span className="text-xs text-amber-700 font-medium">
+              👤 게스트 모드 — 일부 정보가 마스킹됩니다. 댓글 작성은 팀원 전용입니다.
+            </span>
+          </div>
+        )}
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
@@ -96,23 +119,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
 
               {/* Title */}
-              <h1 className="text-2xl font-bold text-gray-900 mb-3 leading-snug">{post.title}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-3 leading-snug">{renderPost.title}</h1>
 
               {/* Meta line */}
               <p className="text-gray-400 text-sm mb-4">
                 {timeAgo(post.created_at)} · {post.created_at.slice(0, 10)} 작성
               </p>
-
-              {/* Countdown banner (active posts only) */}
-              {isActive && (
-                <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 mb-6">
-                  <CountdownTimer expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()} variant="ring" />
-                  <div>
-                    <p className="text-gray-800 font-semibold">토론 진행 중</p>
-                    <p className="text-gray-500 text-sm mt-0.5">남은 시간 안에 의견을 나눠주세요</p>
-                  </div>
-                </div>
-              )}
 
               {/* Tags */}
               {tags.length > 0 && (
@@ -127,12 +139,16 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
               {/* Content — markdown */}
               <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
-                <MarkdownContent content={post.content} />
+                <MarkdownContent content={renderPost.content} />
               </div>
             </article>
 
             {/* Comments */}
-            <PostComments postId={id} initialComments={comments} isOwner={isOwner} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} />
+            {/* Mobile: Related posts below comments */}
+            <div className="lg:hidden mt-4">
+              <RelatedPosts postId={id} />
+            </div>
           </div>
 
           {/* Right sidebar */}
@@ -156,7 +172,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">작성자</span>
-                    <span className="font-medium text-gray-700">{post.author_display}</span>
+                    <span className="font-medium text-gray-700">{renderPost.author_display}</span>
                   </div>
                   {post.resolved_at && (
                     <div className="flex justify-between">

@@ -104,8 +104,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const renderComments = isGuest ? comments.map(maskComment) : comments;
 
   const isActive = post.status !== 'resolved';
-  const postExpiresAt = new Date(new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS).toISOString();
-  const isTimedOut = isActive && Date.now() > new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
+  const postExpiresAt = new Date(new Date(post.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS).toISOString();
+  const isTimedOut = isActive && Date.now() > new Date(post.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS;
   const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
 
   return (

@@ -45,7 +45,7 @@ interface Stats {
 }
 
 function isHot(post: any): boolean {
-  const ageMs = Date.now() - new Date(post.created_at).getTime();
+  const ageMs = Date.now() - new Date(post.created_at + 'Z').getTime();
   const ageHours = ageMs / (1000 * 60 * 60);
   return post.comment_count >= 5 && ageHours < 24;
 }
@@ -243,8 +243,8 @@ function PostListInner({
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'comments') return (b.comment_count || 0) - (a.comment_count || 0);
-    if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortBy === 'oldest') return new Date(a.created_at + 'Z').getTime() - new Date(b.created_at + 'Z').getTime();
+    return new Date(b.created_at + 'Z').getTime() - new Date(a.created_at + 'Z').getTime();
   });
 
   const hasFilter = !!(typeFilter || statusFilter || authorFilter || tagFilter || channelFilter || showBookmarksOnly);
@@ -510,7 +510,7 @@ function PostListInner({
               const preview = truncate(post.content, 140);
               const isResolved = post.status === 'resolved';
               const isPaused = !!post.paused_at;
-              const expiresMs = new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
+              const expiresMs = new Date(post.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS;
               const expiresAt = new Date(expiresMs).toISOString();
               const isTimedOut = post.status === 'open' && !isPaused && clockNow > expiresMs;
               const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;

@@ -1,5 +1,6 @@
 'use client';
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 
 type Listener = (ev: any) => void;
 interface EventContextValue {
@@ -13,8 +14,18 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
   const listenersRef = useRef<Set<Listener>>(new Set());
   const retryRef = useRef(1000);
   const esRef = useRef<EventSource | null>(null);
+  const pathname = usePathname();
+
+  const shouldSkipSSE = pathname === '/login' || pathname.startsWith('/agents');
 
   useEffect(() => {
+    if (shouldSkipSSE) {
+      esRef.current?.close();
+      esRef.current = null;
+      setConnected(false);
+      return;
+    }
+
     let destroyed = false;
     function connect() {
       if (destroyed) return;
@@ -24,8 +35,8 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
       es.onerror = () => {
         setConnected(false);
         es.close();
-        if (!destroyed) setTimeout(connect, retryRef.current);
         retryRef.current = Math.min(retryRef.current * 2, 30000);
+        if (!destroyed) setTimeout(connect, retryRef.current + Math.random() * 1000);
       };
       es.onmessage = (e) => {
         try {
@@ -36,7 +47,7 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
     }
     connect();
     return () => { destroyed = true; esRef.current?.close(); };
-  }, []);
+  }, [shouldSkipSSE]);
 
   const subscribe = useCallback((fn: Listener) => {
     listenersRef.current.add(fn);

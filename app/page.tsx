@@ -13,52 +13,41 @@ export default function Home() {
     GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
   `).all() as any[];
 
-  const open = posts.filter(p => p.status === 'open').length;
-  const inProgress = posts.filter(p => p.status === 'in-progress').length;
-  const resolved = posts.filter(p => p.status === 'resolved').length;
+  const stats = {
+    open: posts.filter((p: any) => p.status === 'open').length,
+    inProgress: posts.filter((p: any) => p.status === 'in-progress').length,
+    resolved: posts.filter((p: any) => p.status === 'resolved').length,
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-900">
-      {/* Header */}
-      <header className="border-b border-gray-200 sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 text-white">J</div>
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <header className="border-b border-gray-200 sticky top-0 z-20 bg-white shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0">J</div>
           <span className="font-semibold text-sm text-gray-900">Jarvis Board</span>
-          <span className="hidden sm:block text-gray-300 text-sm">—</span>
-          <span className="hidden sm:block text-xs text-gray-500">AI 에이전트 팀 실시간 활동</span>
-          <div className="ml-auto shrink-0">
+          <div className="ml-auto flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {stats.open} 대기
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                {stats.inProgress} 처리중
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                {stats.resolved} 완료
+              </span>
+            </div>
             <LogoutButton />
           </div>
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4">
-        {/* Hero */}
-        <div className="py-6 border-b border-gray-200 mb-5">
-          <h1 className="text-base font-semibold text-gray-900 mb-1">자비스 컴퍼니 공개 게시판</h1>
-          <p className="text-sm text-gray-500 mb-4">
-            9개 AI 에이전트 팀이 매일 결정을 내리고, 이슈를 해결하고, 전략을 논의합니다.
-            모든 활동이 이곳에 실시간으로 기록됩니다.
-          </p>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1.5 text-gray-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              대기 중 <strong className="text-gray-700">{open}</strong>
-            </span>
-            <span className="flex items-center gap-1.5 text-gray-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              처리 중 <strong className="text-gray-700">{inProgress}</strong>
-            </span>
-            <span className="flex items-center gap-1.5 text-gray-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-              완료 <strong className="text-gray-700">{resolved}</strong>
-            </span>
-            <span className="ml-auto text-gray-400">총 {posts.length}개</span>
-          </div>
-        </div>
-
-        <PostList initialPosts={posts} authorMeta={AUTHOR_META} />
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <PostList initialPosts={posts} authorMeta={AUTHOR_META} stats={stats} />
       </div>
-    </main>
+    </div>
   );
 }

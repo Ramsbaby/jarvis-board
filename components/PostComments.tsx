@@ -70,6 +70,18 @@ const PERSONA_BADGE: Record<string, string> = {
   'council-team':     'bg-yellow-50 text-yellow-800 border-yellow-200',
 };
 
+const PERSONA_ACCENT: Record<string, string> = {
+  'strategy-lead':    'border-l-purple-400',
+  'infra-lead':       'border-l-slate-400',
+  'career-lead':      'border-l-emerald-400',
+  'brand-lead':       'border-l-pink-400',
+  'academy-lead':     'border-l-amber-400',
+  'record-lead':      'border-l-cyan-400',
+  'jarvis-proposer':  'border-l-violet-400',
+  'board-synthesizer':'border-l-yellow-400',
+  'council-team':     'border-l-yellow-400',
+};
+
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '🤔'];
 
 type ReactionMap = Record<string, Record<string, { count: number; authors: string[] }>>;
@@ -367,12 +379,22 @@ export default function PostComments({
       ? 'bg-amber-50 text-amber-700 border-amber-200'
       : (PERSONA_BADGE[c.author] ?? (meta?.color?.includes('from-') ? 'bg-gray-100 text-gray-700 border-gray-200' : (meta?.color ?? 'bg-gray-100 text-gray-700 border-gray-200')));
 
+    const accentBorder = !isVisitor && !isOwnerComment && !isReply
+      ? (PERSONA_ACCENT[c.author] ?? 'border-l-zinc-300')
+      : '';
+
     const commentReactions = reactions[c.id] ?? {};
 
     return (
       <div
         key={c.id}
-        className={`flex gap-3 p-4 rounded-xl bg-white border hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${isReply ? 'ml-8 mt-2 border-l-2 border-l-indigo-100 border-gray-100' : isBest ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100 hover:border-indigo-200'}`}
+        className={`flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${
+          isReply
+            ? 'ml-8 mt-2 border border-l-2 border-l-indigo-200 border-gray-100'
+            : isBest
+            ? 'border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/30'
+            : `border border-gray-100 border-l-4 ${accentBorder} hover:border-gray-200`
+        }`}
       >
         {/* Avatar */}
         {isVisitor ? (
@@ -581,6 +603,20 @@ export default function PostComments({
       <DiscussionSummary postId={postId} commentCount={comments.length} />
 
       {/* #8 Threaded comment list */}
+      {rootComments.length === 0 && viewTab === 'all' && (
+        <div className="flex flex-col items-center justify-center py-10 text-center bg-white border border-dashed border-zinc-200 rounded-xl">
+          <div className="text-3xl mb-3 opacity-40">💬</div>
+          <p className="text-sm font-medium text-zinc-500">아직 의견이 없습니다</p>
+          <p className="text-xs text-zinc-400 mt-1">
+            {postStatus === 'resolved' ? '이 토론은 의견 없이 종료되었습니다.' : 'AI 팀원들이 곧 의견을 작성합니다.'}
+          </p>
+        </div>
+      )}
+      {rootComments.length === 0 && viewTab !== 'all' && (
+        <div className="py-6 text-center text-xs text-zinc-400">
+          {viewTab === 'ai' ? '🤖 AI 의견이 없습니다' : '👤 팀원 의견이 없습니다'}
+        </div>
+      )}
       {rootComments.map((c: any) => (
         <div key={c.id}>
           {renderComment(c, false)}

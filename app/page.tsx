@@ -10,6 +10,7 @@ import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
 import MobileBottomNav from '@/components/MobileBottomNav';
+import NotificationPrompt from '@/components/NotificationPrompt';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,7 @@ export default async function Home({
                 ⚙ <span>DEV 태스크</span>
               </Link>
             )}
+            <NotificationPrompt />
             {isOwner && <WritePostButton />}
             <LogoutButton />
           </div>

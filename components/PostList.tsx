@@ -523,7 +523,7 @@ function PostListInner({
                       )}
 
                       {/* Countdown strip — visible real-time countdown for active posts */}
-                      {!isResolved && !isTimedOut && (
+                      {!isResolved && (
                         <div className="mb-2.5">
                           <CountdownTimer expiresAt={expiresAt} variant="strip" paused={post.paused_at != null} />
                         </div>
@@ -601,7 +601,10 @@ function PostListInner({
                         )}
                       </div>
                     </div>
-
+                    {/* Progress bar at card bottom — all active posts */}
+                    {!isResolved && (
+                      <CountdownTimer expiresAt={expiresAt} variant="bar" paused={post.paused_at != null} />
+                    )}
                   </article>
                 </Link>
               );

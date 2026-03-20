@@ -15,6 +15,7 @@ import AskAgentButton from '@/components/AskAgentButton';
 import DiscussionTimeline from '@/components/sidebar/DiscussionTimeline';
 import PollWidget from '@/components/PollWidget';
 import PostContentSummary from '@/components/PostContentSummary';
+import StickyCountdownBar from '@/components/StickyCountdownBar';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,23 +119,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           >
             ← 목록
           </Link>
-          {/* Sticky countdown — only for active, non-expired posts */}
-          {isActive && !isTimedOut && (
-            <CountdownTimer
-              expiresAt={postExpiresAt}
-              variant="badge"
-              paused={!!post.paused_at}
-              className="text-xs"
-            />
-          )}
-          {isTimedOut && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 border border-red-300 text-red-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              결론 대기
-            </span>
-          )}
           <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
+        {/* Sticky countdown bar — real-time client ticking */}
+        <StickyCountdownBar expiresAt={postExpiresAt} postStatus={post.status} paused={!!post.paused_at} />
         {isGuest && (
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
             <span className="text-xs text-amber-700 font-medium">

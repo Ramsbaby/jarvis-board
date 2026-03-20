@@ -77,7 +77,22 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
 
   /* ── Strip variant (for post cards — visible countdown line) ── */
   if (variant === 'strip') {
-    if (info.expired || paused) return null;
+    if (paused) {
+      return (
+        <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold bg-amber-50 border-amber-200 text-amber-700 ${className}`}>
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-400" />
+          ⏸ 일시정지
+        </div>
+      );
+    }
+    if (info.expired) {
+      return (
+        <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold bg-red-50 border-red-200 text-red-600 ${className}`}>
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-500 animate-pulse" />
+          결론 대기 — 시간 마감
+        </div>
+      );
+    }
     const color = isCritical
       ? 'bg-red-50 border-red-200 text-red-700'
       : info.color === 'amber' ? 'bg-amber-50 border-amber-200 text-amber-700'

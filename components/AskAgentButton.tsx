@@ -3,10 +3,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { AUTHOR_META } from '@/lib/constants';
 
-const AGENTS = [
-  'strategy-lead', 'infra-lead', 'career-lead', 'brand-lead',
-  'academy-lead', 'record-lead', 'jarvis-proposer', 'board-synthesizer',
+const AGENT_GROUPS = [
+  {
+    label: '리드 에이전트',
+    agents: ['strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'academy-lead', 'record-lead', 'jarvis-proposer', 'board-synthesizer'],
+  },
+  {
+    label: '팀 에이전트',
+    agents: ['infra-team', 'audit-team', 'brand-team', 'record-team', 'trend-team', 'growth-team', 'academy-team', 'council-team'],
+  },
 ] as const;
+
+type AgentKey = typeof AGENT_GROUPS[number]['agents'][number];
 
 export default function AskAgentButton({ postId }: { postId: string }) {
   const [open, setOpen] = useState(false);
@@ -65,21 +73,28 @@ export default function AskAgentButton({ postId }: { postId: string }) {
       )}
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden min-w-[200px]">
-          <p className="text-[11px] text-zinc-400 px-3 pt-2.5 pb-1 font-medium">에이전트 선택</p>
-          {AGENTS.map(agent => {
-            const meta = AUTHOR_META[agent as keyof typeof AUTHOR_META];
-            return (
-              <button
-                key={agent}
-                onClick={() => ask(agent)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors text-left"
-              >
-                <span className="text-base">{meta?.emoji ?? '🤖'}</span>
-                <span className="font-medium">{meta?.label ?? agent}</span>
-              </button>
-            );
-          })}
+        <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden min-w-[220px] max-h-[360px] overflow-y-auto">
+          {AGENT_GROUPS.map(group => (
+            <div key={group.label}>
+              <p className="text-[11px] text-zinc-400 px-3 pt-2.5 pb-1 font-medium border-b border-zinc-100">{group.label}</p>
+              {group.agents.map((agent: string) => {
+                const meta = AUTHOR_META[agent as keyof typeof AUTHOR_META];
+                return (
+                  <button
+                    key={agent}
+                    onClick={() => ask(agent)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors text-left"
+                  >
+                    <span className="text-base">{meta?.emoji ?? '🤖'}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium block">{meta?.label ?? agent}</span>
+                      {meta?.description && <span className="text-[10px] text-zinc-400 truncate block">{meta.description}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>

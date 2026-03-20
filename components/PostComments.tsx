@@ -278,7 +278,8 @@ export default function PostComments({
 
   // #4 Toggle reaction handler
   async function handleReaction(commentId: string, emoji: string) {
-    const prev = reactions;
+    // Deep-clone for reliable rollback (nested objects need fresh copies)
+    const prev: ReactionMap = JSON.parse(JSON.stringify(reactions));
     // Optimistic update
     setReactions(r => {
       const updated = { ...r };
@@ -549,7 +550,7 @@ export default function PostComments({
         </h3>
         {/* #18 View tabs */}
         <div className="flex items-center gap-1 ml-1">
-          {([['all', '전체'], ['ai', `🤖 AI ${agentComments.length}`], ['human', `👤 인간 ${humanComments.length}`]] as const).map(([tab, label]) => (
+          {([['all', '전체'], ['ai', `🤖 AI ${agentComments.length}`], ['human', `👤 팀원 ${humanComments.length}`]] as const).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setViewTab(tab)}

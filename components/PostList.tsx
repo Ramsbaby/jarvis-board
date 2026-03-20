@@ -303,136 +303,128 @@ function PostListInner({
 
       {/* ── FILTER BAR ── */}
       {!isSearching && (
-        <div className="flex items-center gap-2 flex-wrap mb-5">
-          <button
-            onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
-            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-              !typeFilter
-                ? 'bg-zinc-900 text-white'
-                : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
-            }`}
-          >
-            전체
-          </button>
-          {TYPES.map(t => (
+        <div className="space-y-2 mb-5">
+          {/* Row 1 — 유형 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide shrink-0 w-7">유형</span>
             <button
-              key={t}
-              onClick={() => {
-                const next = typeFilter === t ? '' : t;
-                setTypeFilter(next);
-                pushFilter(next, statusFilter, authorFilter, tagFilter);
-              }}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-                typeFilter === t
+              onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
+              className={`text-xs px-3 py-1 rounded-full font-medium transition-all ${
+                !typeFilter
                   ? 'bg-zinc-900 text-white'
                   : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === t ? 'bg-white' : (TYPE_DOT[t] ?? 'bg-zinc-400')}`} />
-              {TYPE_LABELS[t]}
-              {typeCounts[t] > 0 && (
-                <span className={`${typeFilter === t ? 'opacity-70' : 'text-zinc-400'}`}>{typeCounts[t]}</span>
+              전체
+            </button>
+            {TYPES.map(t => (
+              <button
+                key={t}
+                onClick={() => {
+                  const next = typeFilter === t ? '' : t;
+                  setTypeFilter(next);
+                  pushFilter(next, statusFilter, authorFilter, tagFilter);
+                }}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-medium transition-all ${
+                  typeFilter === t
+                    ? 'bg-zinc-900 text-white'
+                    : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === t ? 'bg-white' : (TYPE_DOT[t] ?? 'bg-zinc-400')}`} />
+                {TYPE_LABELS[t]}
+                {typeCounts[t] > 0 && (
+                  <span className={`${typeFilter === t ? 'opacity-70' : 'text-zinc-400'}`}>{typeCounts[t]}</span>
+                )}
+              </button>
+            ))}
+            {authorFilter && (
+              <button
+                onClick={() => { setAuthorFilter(''); pushFilter(typeFilter, statusFilter, '', tagFilter); }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-zinc-900 text-white font-medium"
+              >
+                {authorFilter} ×
+              </button>
+            )}
+            {tagFilter && (
+              <button
+                onClick={() => { setTagFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, ''); }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-indigo-600 text-white font-medium"
+              >
+                #{tagFilter} ×
+              </button>
+            )}
+            {channelFilter && (
+              <button
+                onClick={() => { setChannelFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, tagFilter, ''); }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-zinc-700 text-white font-medium"
+              >
+                #{channelFilter} ×
+              </button>
+            )}
+          </div>
+
+          {/* Row 2 — 상태 + 정렬/알림/북마크 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide shrink-0 w-7">상태</span>
+            {STATUSES.map(s => (
+              <button
+                key={s}
+                onClick={() => {
+                  const next = statusFilter === s ? '' : s;
+                  setStatusFilter(next);
+                  pushFilter(typeFilter, next, authorFilter, tagFilter);
+                }}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all ${
+                  statusFilter === s
+                    ? 'bg-zinc-900 text-white font-medium'
+                    : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
+                {STATUS_LABEL_KO[s]}
+              </button>
+            ))}
+            {hasFilter && (
+              <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors px-1">
+                초기화 ×
+              </button>
+            )}
+            <div className="ml-auto flex items-center gap-1.5">
+              {/* Bookmark filter */}
+              <button
+                onClick={() => setShowBookmarksOnly(p => !p)}
+                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all ${
+                  showBookmarksOnly
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+                }`}
+                title="북마크 필터"
+              >
+                🔖 {showBookmarksOnly ? bookmarks.size : ''}
+              </button>
+              {notifPerm === 'default' && (
+                <button
+                  onClick={async () => {
+                    const perm = await Notification.requestPermission();
+                    setNotifPerm(perm);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-all"
+                >
+                  🔔
+                </button>
               )}
-            </button>
-          ))}
-
-          <span className="w-px h-5 bg-zinc-200 mx-1" />
-
-          {STATUSES.map(s => (
-            <button
-              key={s}
-              onClick={() => {
-                const next = statusFilter === s ? '' : s;
-                setStatusFilter(next);
-                pushFilter(typeFilter, next, authorFilter, tagFilter);
-              }}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all ${
-                statusFilter === s
-                  ? 'bg-zinc-900 text-white font-medium'
-                  : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
-              {STATUS_LABEL_KO[s]}
-            </button>
-          ))}
-
-          {authorFilter && (
-            <button
-              onClick={() => { setAuthorFilter(''); pushFilter(typeFilter, statusFilter, '', tagFilter); }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium"
-            >
-              {authorFilter} ×
-            </button>
-          )}
-
-          {tagFilter && (
-            <button
-              onClick={() => { setTagFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, ''); }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-indigo-600 text-white font-medium"
-            >
-              #{tagFilter} ×
-            </button>
-          )}
-
-          {hasFilter && (
-            <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
-              초기화 ×
-            </button>
-          )}
-
-          {/* #17 Channel filter */}
-          {['strategy', 'dev', 'ops', 'urgent'].map(ch => (
-            <button
-              key={ch}
-              onClick={() => {
-                const next = channelFilter === ch ? '' : ch;
-                setChannelFilter(next);
-                pushFilter(typeFilter, statusFilter, authorFilter, tagFilter, next);
-              }}
-              className={`text-xs px-2.5 py-1 rounded-md border transition-all ${
-                channelFilter === ch
-                  ? 'bg-zinc-900 text-white border-zinc-900'
-                  : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
-              }`}
-            >
-              #{ch}
-            </button>
-          ))}
-
-          {/* #11 Bookmark filter */}
-          <button
-            onClick={() => setShowBookmarksOnly(p => !p)}
-            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${
-              showBookmarksOnly
-                ? 'bg-amber-500 text-white border-amber-500'
-                : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
-            }`}
-          >
-            🔖 {showBookmarksOnly ? `북마크 ${bookmarks.size}` : '북마크'}
-          </button>
-
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
-            className="ml-auto text-xs border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none focus:border-zinc-400"
-          >
-            <option value="newest">최신순</option>
-            <option value="oldest">오래된순</option>
-            <option value="comments">댓글 많은순</option>
-          </select>
-
-          {notifPerm === 'default' && (
-            <button
-              onClick={async () => {
-                const perm = await Notification.requestPermission();
-                setNotifPerm(perm);
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-all"
-            >
-              알림 받기
-            </button>
-          )}
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as any)}
+                className="text-xs border border-zinc-200 rounded-lg px-2 py-1 bg-white text-zinc-600 focus:outline-none focus:border-zinc-400"
+              >
+                <option value="newest">최신순</option>
+                <option value="oldest">오래된순</option>
+                <option value="comments">댓글 많은순</option>
+              </select>
+            </div>
+          </div>
         </div>
       )}
 

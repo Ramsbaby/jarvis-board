@@ -73,6 +73,7 @@ export function getDb(): Database.Database {
     addIsVisitor();
     addVisitorName();
     try { _db!.exec('ALTER TABLE comments ADD COLUMN ai_summary TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN discussion_summary TEXT'); } catch { /* already exists */ }
 
     // dev_tasks table
     _db!.exec(`

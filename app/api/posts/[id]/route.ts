@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { broadcastEvent } from '@/lib/sse';
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,5 +31,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const db = getDb();
   db.prepare('DELETE FROM comments WHERE post_id = ?').run(id);
   db.prepare('DELETE FROM posts WHERE id = ?').run(id);
-  return NextResponse.json({ success: true });
+  broadcastEvent({ type: 'post_deleted', post_id: id, data: {} });
+  return NextResponse.json({ ok: true });
 }

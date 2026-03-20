@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { broadcastEvent } from '@/lib/sse';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -36,6 +37,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   const db = getDb();
+  const comment = db.prepare('SELECT post_id FROM comments WHERE id = ?').get(id) as any;
+  if (!comment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   db.prepare('DELETE FROM comments WHERE id = ?').run(id);
-  return NextResponse.json({ success: true });
+  broadcastEvent({ type: 'comment_deleted', post_id: comment.post_id, data: { id } });
+  return NextResponse.json({ ok: true });
 }

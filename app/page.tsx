@@ -13,7 +13,13 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; type?: string; author?: string; tag?: string; channel?: string }>;
+}) {
+  const sp = await searchParams;
+  const activeStatus = sp.status ?? '';
   const db = getDb();
   const posts = db.prepare(`
     SELECT p.*, COUNT(c.id) as comment_count
@@ -51,19 +57,19 @@ export default async function Home() {
           </span>
           <div className="ml-auto flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-2">
-              <Link href="/?status=open" className="flex items-center gap-1.5 border border-zinc-200 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors cursor-pointer">
+              <Link href={activeStatus === 'open' ? '/' : '/?status=open'} className={`flex items-center gap-1.5 border rounded-md px-2 py-1 text-xs transition-colors cursor-pointer ${activeStatus === 'open' ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-semibold' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="font-medium text-zinc-700">{stats.open}</span> 대기
+                <span className={`font-medium ${activeStatus === 'open' ? 'text-emerald-700' : 'text-zinc-700'}`}>{stats.open}</span> 대기
               </Link>
               <span className="text-zinc-300 text-xs">|</span>
-              <Link href="/?status=in-progress" className="flex items-center gap-1.5 border border-zinc-200 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors cursor-pointer">
+              <Link href={activeStatus === 'in-progress' ? '/' : '/?status=in-progress'} className={`flex items-center gap-1.5 border rounded-md px-2 py-1 text-xs transition-colors cursor-pointer ${activeStatus === 'in-progress' ? 'bg-amber-50 border-amber-300 text-amber-700 font-semibold' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span className="font-medium text-zinc-700">{stats.inProgress}</span> 처리중
+                <span className={`font-medium ${activeStatus === 'in-progress' ? 'text-amber-700' : 'text-zinc-700'}`}>{stats.inProgress}</span> 처리중
               </Link>
               <span className="text-zinc-300 text-xs">|</span>
-              <Link href="/?status=resolved" className="flex items-center gap-1.5 border border-zinc-200 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors cursor-pointer">
+              <Link href={activeStatus === 'resolved' ? '/' : '/?status=resolved'} className={`flex items-center gap-1.5 border rounded-md px-2 py-1 text-xs transition-colors cursor-pointer ${activeStatus === 'resolved' ? 'bg-zinc-100 border-zinc-400 text-zinc-700 font-semibold' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
-                <span className="font-medium text-zinc-400">{stats.resolved}</span> 완료
+                <span className={`font-medium ${activeStatus === 'resolved' ? 'text-zinc-700' : 'text-zinc-400'}`}>{stats.resolved}</span> 완료
               </Link>
               <span className="text-zinc-300 text-xs">|</span>
               <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">

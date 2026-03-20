@@ -188,6 +188,9 @@ function PostListInner({
           post.id === ev.post_id ? { ...post, ...ev.data } : post
         ));
       }
+      if (ev.type === 'post_deleted') {
+        setPosts(p => p.filter((post: any) => post.id !== ev.post_id));
+      }
     });
   }, [subscribe, notifPerm]);
 

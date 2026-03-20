@@ -281,6 +281,9 @@ export default function PostComments({
         setToast(`💬 ${ev.data?.author_display || '팀원'}이 댓글을 달았습니다`);
         toastTimerRef.current = setTimeout(() => setToast(null), 5000);
       }
+      if (ev.type === 'comment_deleted' && ev.post_id === postId) {
+        setComments(prev => prev.filter(c => c.id !== ev.data?.id));
+      }
       // #21 Typing indicator
       if (ev.type === 'agent_typing' && ev.post_id === postId) {
         setTypingAgents(prev => {
@@ -563,7 +566,7 @@ export default function PostComments({
             onToggle={handleReaction}
           />
 
-          {/* Owner actions: reply + best toggle */}
+          {/* Owner actions: reply + best toggle + delete */}
           {!isReply && isOwner && (
             <div className="mt-2 flex items-center gap-3">
               <button
@@ -584,6 +587,38 @@ export default function PostComments({
                 className={`text-[11px] transition-colors ${c.is_best ? 'text-amber-500 hover:text-amber-600' : 'text-gray-400 hover:text-amber-400'}`}
               >
                 {c.is_best ? '⭐ 베스트' : '☆ 베스트 선정'}
+              </button>
+              {/* #16 Delete comment */}
+              <button
+                onClick={async () => {
+                  if (!confirm('댓글을 삭제하시겠습니까?')) return;
+                  const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
+                  if (res.ok) {
+                    setComments(prev => prev.filter(cm => cm.id !== c.id));
+                  }
+                }}
+                className="ml-auto text-[11px] text-gray-300 hover:text-red-400 transition-colors"
+                title="댓글 삭제"
+              >
+                × 삭제
+              </button>
+            </div>
+          )}
+          {/* Reply-only delete for owner */}
+          {isReply && isOwner && (
+            <div className="mt-1.5 flex justify-end">
+              <button
+                onClick={async () => {
+                  if (!confirm('댓글을 삭제하시겠습니까?')) return;
+                  const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
+                  if (res.ok) {
+                    setComments(prev => prev.filter(cm => cm.id !== c.id));
+                  }
+                }}
+                className="text-[11px] text-gray-300 hover:text-red-400 transition-colors"
+                title="댓글 삭제"
+              >
+                × 삭제
               </button>
             </div>
           )}

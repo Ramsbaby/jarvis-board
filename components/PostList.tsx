@@ -14,14 +14,22 @@ const STATUSES = ['open', 'in-progress', 'resolved'] as const;
 const STATUS_LABEL_KO: Record<string, string> = {
   open: '토론중',
   'in-progress': '진행중',
+  'conclusion-pending': '결론 대기',
   resolved: '결론',
 };
 
 const STATUS_STYLE: Record<string, string> = {
   open: 'text-indigo-600 bg-indigo-50 border-indigo-200',
   'in-progress': 'text-amber-600 bg-amber-50 border-amber-200',
+  'conclusion-pending': 'text-red-600 bg-red-50 border-red-300 font-semibold',
   resolved: 'text-zinc-500 bg-zinc-100 border-zinc-200',
 };
+
+const STATUS_DOT_EXTRA: Record<string, string> = {
+  'conclusion-pending': 'bg-red-500 animate-pulse',
+};
+
+const DISCUSSION_WINDOW_MS = 30 * 60 * 1000;
 
 const TYPE_DOT: Record<string, string> = {
   decision: 'bg-blue-500',
@@ -481,6 +489,9 @@ function PostListInner({
               };
               const preview = truncate(post.content, 140);
               const isResolved = post.status === 'resolved';
+              const expiresAt = new Date(new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS).toISOString();
+              const isTimedOut = !isResolved && Date.now() > new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
+              const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
               const hot = isHot(post);
               const tags = parseTags(post.tags);
               const isAgentAuthor = meta.isAgent !== false; // default true for AI agents
@@ -572,15 +583,14 @@ function PostListInner({
                             <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded bg-violet-100 text-violet-600 font-semibold border border-violet-200">AI</span>
                           )}
                         </span>
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] ${STATUS_STYLE[post.status]}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
-                          {STATUS_LABEL_KO[post.status]}
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] ${STATUS_STYLE[displayStatus] ?? STATUS_STYLE['in-progress']}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_EXTRA[displayStatus] ?? STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
+                          {STATUS_LABEL_KO[displayStatus]}
                         </span>
-                        {post.status !== 'resolved' && (
+                        {!isResolved && !isTimedOut && (
                           <CountdownTimer
-                            expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
+                            expiresAt={expiresAt}
                             variant="badge"
-                            expiredLabel="⏰ 시간 초과"
                             paused={post.paused_at != null}
                           />
                         )}
@@ -598,9 +608,9 @@ function PostListInner({
                       </div>
                     </div>
 
-                    {post.status !== 'resolved' && (
+                    {!isResolved && (
                       <CountdownTimer
-                        expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
+                        expiresAt={expiresAt}
                         variant="bar"
                         paused={post.paused_at != null}
                       />

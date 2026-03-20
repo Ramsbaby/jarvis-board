@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { DISCUSSION_WINDOW_MS } from '@/lib/constants';
 
 interface CountdownTimerProps {
   expiresAt: string;
@@ -13,7 +14,7 @@ function getTimeInfo(expiresAt: string) {
   const now = Date.now();
   const end = new Date(expiresAt).getTime();
   const diffMs = end - now;
-  const totalMs = 30 * 60 * 1000; // 30 minutes
+  const totalMs = DISCUSSION_WINDOW_MS;
 
   if (diffMs <= 0) return { expired: true, label: '만료', pct: 0, color: 'expired' as const };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { AUTHOR_META } from '@/lib/constants';
+import { AUTHOR_META, DISCUSSION_WINDOW_MS } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
 import MarkdownContent from '@/components/MarkdownContent';
 import VisitorCommentForm from './VisitorCommentForm';
@@ -198,7 +198,7 @@ export default function PostComments({
 
   // Task #14: compute if discussion time has expired
   const isExpired = postStatus !== 'resolved' &&
-    new Date(postCreatedAt).getTime() + 30 * 60 * 1000 < Date.now();
+    new Date(postCreatedAt).getTime() + DISCUSSION_WINDOW_MS < Date.now();
 
   useEffect(() => {
     return subscribe((ev) => {

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
-import { AUTHOR_META, TYPE_LABELS, STATUS_LABEL, TYPE_COLOR, TYPE_ICON } from '@/lib/constants';
+import { AUTHOR_META, TYPE_LABELS, STATUS_LABEL, STATUS_STYLE, TYPE_COLOR, TYPE_ICON, DISCUSSION_WINDOW_MS } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -59,11 +59,6 @@ const TYPE_CONTEXT: Record<string, string> = {
   inquiry: '팀 내 질의사항입니다. 담당 팀의 답변이 필요한 사안입니다.',
 };
 
-const STATUS_STYLE: Record<string, string> = {
-  open: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-  'in-progress': 'text-amber-600 bg-amber-50 border-amber-200',
-  resolved: 'text-zinc-500 bg-zinc-100 border-zinc-200',
-};
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -107,6 +102,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const renderComments = isGuest ? comments.map(maskComment) : comments;
 
   const isActive = post.status !== 'resolved';
+  const postExpiresAt = new Date(new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS).toISOString();
+  const isTimedOut = isActive && Date.now() > new Date(post.created_at).getTime() + DISCUSSION_WINDOW_MS;
+  const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
 
   return (
     <main className="bg-zinc-50 min-h-screen">
@@ -119,14 +117,20 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           >
             ← 목록
           </Link>
-          {/* Sticky countdown — only for active posts */}
-          {isActive && (
+          {/* Sticky countdown — only for active, non-expired posts */}
+          {isActive && !isTimedOut && (
             <CountdownTimer
-              expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
+              expiresAt={postExpiresAt}
               variant="badge"
               paused={!!post.paused_at}
               className="text-xs"
             />
+          )}
+          {isTimedOut && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 border border-red-300 text-red-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              결론 대기
+            </span>
           )}
           <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
@@ -163,8 +167,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 {meta.description && (
                   <span className="text-xs text-zinc-400">{meta.description}</span>
                 )}
-                <span className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border ${STATUS_STYLE[post.status] ?? 'text-zinc-500 bg-zinc-100 border-zinc-200'}`}>
-                  {STATUS_LABEL[post.status]}
+                <span className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border ${STATUS_STYLE[displayStatus] ?? 'text-zinc-500 bg-zinc-100 border-zinc-200'}`}>
+                  {STATUS_LABEL[displayStatus]}
                 </span>
               </div>
 

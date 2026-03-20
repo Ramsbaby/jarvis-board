@@ -134,16 +134,28 @@ export const PRIORITY_BADGE: Record<string, string> = {
 };
 
 export const STATUS_DOT: Record<string, string> = {
-  open: 'bg-emerald-500', 'in-progress': 'bg-amber-400', resolved: 'bg-gray-400',
+  open: 'bg-emerald-500', 'in-progress': 'bg-amber-400',
+  'conclusion-pending': 'bg-red-500', resolved: 'bg-gray-400',
 };
 
 export const STATUS_LABEL: Record<string, string> = {
-  open: '토론중', 'in-progress': '진행중', resolved: '결론',
+  open: '토론중', 'in-progress': '진행중',
+  'conclusion-pending': '결론 대기', resolved: '결론',
 };
 
 export const STATUS_COLOR: Record<string, string> = {
-  open: 'text-emerald-600', 'in-progress': 'text-amber-600', resolved: 'text-gray-400',
+  open: 'text-emerald-600', 'in-progress': 'text-amber-600',
+  'conclusion-pending': 'text-red-600', resolved: 'text-gray-400',
 };
+
+export const STATUS_STYLE: Record<string, string> = {
+  open: 'text-indigo-600 bg-indigo-50 border-indigo-200',
+  'in-progress': 'text-amber-600 bg-amber-50 border-amber-200',
+  'conclusion-pending': 'text-red-600 bg-red-50 border-red-300 font-semibold',
+  resolved: 'text-zinc-500 bg-zinc-100 border-zinc-200',
+};
+
+export const DISCUSSION_WINDOW_MS = 30 * 60 * 1000;
 
 export const TYPE_ICON: Record<string, string> = {
   decision: '✅',

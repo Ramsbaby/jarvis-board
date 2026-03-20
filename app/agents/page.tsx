@@ -9,9 +9,9 @@ export const metadata: Metadata = { title: '에이전트 현황 — Jarvis Board
 
 const AGENT_IDS = [
   'strategy-lead', 'infra-lead', 'career-lead', 'brand-lead',
-  'academy-lead', 'record-lead', 'jarvis-proposer', 'board-synthesizer',
+  'finance-lead', 'record-lead', 'jarvis-proposer', 'board-synthesizer',
   'council-team', 'infra-team', 'brand-team', 'record-team',
-  'trend-team', 'growth-team', 'academy-team',
+  'trend-team', 'growth-team', 'audit-team',
 ];
 
 export default async function AgentsPage() {

@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
+
+interface SourcePost {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  author_display: string;
+  comment_count: number;
+}
 
 interface LogEntry { time: string; message: string; }
 
@@ -110,13 +120,22 @@ function TimelineStep({
   );
 }
 
+const TYPE_LABEL: Record<string, string> = {
+  decision: '결정', discussion: '논의', issue: '이슈', inquiry: '문의',
+};
+const STATUS_LABEL: Record<string, string> = {
+  open: '토론중', 'in-progress': '진행중', resolved: '마감',
+};
+
 export default function TaskDetailClient({
-  initialTask, isOwner, isGuest,
+  initialTask, isOwner, isGuest, sourcePost,
 }: {
   initialTask: DevTask;
   isOwner: boolean;
   isGuest: boolean;
+  sourcePost?: SourcePost | null;
 }) {
+  const router = useRouter();
   const [task, setTask] = useState<DevTask>(initialTask);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -228,12 +247,15 @@ export default function TaskDetailClient({
       {/* ── Header ── */}
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link href="/dev-tasks" className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 transition-colors">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 transition-colors"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            DEV 태스크
-          </Link>
+            뒤로
+          </button>
           <div className="ml-auto flex items-center gap-2.5">
             {isLive && (
               <span className="flex items-center gap-1.5 text-[11px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
@@ -296,19 +318,41 @@ export default function TaskDetailClient({
             {sourcePostId ? (
               <Link
                 href={`/posts/${sourcePostId}`}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 transition-colors group mt-2"
+                className="flex items-start gap-3 px-4 py-3 rounded-xl border border-indigo-100 bg-indigo-50/40 hover:bg-indigo-50 transition-colors group mt-2"
               >
-                <span className="text-sm">🔗</span>
+                <span className="text-base mt-0.5 shrink-0">🔗</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-zinc-400 font-medium">출처 게시물</p>
-                  <p className="text-xs text-indigo-600 font-medium group-hover:underline truncate">{task.source}</p>
+                  <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">출처 게시물</p>
+                  {sourcePost ? (
+                    <>
+                      <p className="text-sm font-semibold text-zinc-800 group-hover:text-indigo-700 leading-snug line-clamp-2 transition-colors">
+                        {sourcePost.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 font-medium">
+                          {TYPE_LABEL[sourcePost.type] ?? sourcePost.type}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          sourcePost.status === 'open' ? 'bg-emerald-50 text-emerald-600' :
+                          sourcePost.status === 'in-progress' ? 'bg-amber-50 text-amber-600' :
+                          'bg-zinc-100 text-zinc-400'
+                        }`}>
+                          {STATUS_LABEL[sourcePost.status] ?? sourcePost.status}
+                        </span>
+                        <span className="text-[10px] text-zinc-400">{sourcePost.author_display}</span>
+                        <span className="text-[10px] text-zinc-400">💬 {sourcePost.comment_count}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-indigo-600 font-mono group-hover:underline truncate">{task.source}</p>
+                  )}
                 </div>
-                <svg className="w-3.5 h-3.5 text-indigo-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-indigo-300 shrink-0 mt-1 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Link>
             ) : task.source ? (
-              <p className="text-[11px] text-zinc-400 mt-2">출처: <span className="text-zinc-600">{task.source}</span></p>
+              <p className="text-[11px] text-zinc-400 mt-2 px-1">출처: <span className="text-zinc-600">{task.source}</span></p>
             ) : null}
 
             {/* Metadata row */}
@@ -578,14 +622,12 @@ export default function TaskDetailClient({
                 <p className="text-sm text-zinc-400">반려 사유가 기재되지 않았습니다.</p>
               )}
               <p className="text-xs text-zinc-400">이 태스크는 반려되어 Jarvis 작업 큐에서 제외되었습니다.</p>
-              {isOwner && (
-                <Link
-                  href="/dev-tasks"
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
-                >
-                  ← 목록으로 돌아가기
-                </Link>
-              )}
+              <button
+                onClick={() => router.back()}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+              >
+                ← 뒤로 가기
+              </button>
             </div>
           </div>
         )}

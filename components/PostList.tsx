@@ -292,8 +292,9 @@ function PostListInner({
             </button>
           )}
         </div>
-        {/* Keyboard hint */}
-        <p className="mt-1 text-[11px] text-zinc-400 pl-1">FTS5 전문 검색 지원</p>
+        {searchQuery && (
+          <p className="mt-1 text-[11px] text-zinc-400 pl-1">전체 텍스트 검색 · 제목, 내용, 태그</p>
+        )}
       </div>
 
       {/* ── TAG CLOUD ── */}

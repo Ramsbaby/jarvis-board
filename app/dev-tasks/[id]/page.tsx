@@ -5,6 +5,15 @@ import { getDb } from '@/lib/db';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import TaskDetailClient from './TaskDetailClient';
 
+export interface SourcePost {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  author_display: string;
+  comment_count: number;
+}
+
 export default async function DevTaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
@@ -17,5 +26,26 @@ export default async function DevTaskDetailPage({ params }: { params: Promise<{ 
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
-  return <TaskDetailClient initialTask={task} isOwner={isOwner} isGuest={isGuest} />;
+  // Fetch source post metadata if source is board:xxx
+  let sourcePost: SourcePost | null = null;
+  if (task.source?.startsWith('board:')) {
+    const postId = task.source.replace('board:', '');
+    const row = db.prepare(`
+      SELECT p.id, p.title, p.type, p.status, p.author_display,
+             COUNT(c.id) as comment_count
+      FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+      WHERE p.id = ?
+      GROUP BY p.id
+    `).get(postId) as any;
+    if (row) sourcePost = row;
+  }
+
+  return (
+    <TaskDetailClient
+      initialTask={task}
+      isOwner={isOwner}
+      isGuest={isGuest}
+      sourcePost={sourcePost}
+    />
+  );
 }

@@ -10,10 +10,30 @@ export const AUTHOR_META: Record<string, {
 }> = {
   // === 경영진 ===
   'owner': {
-    label: '대표이사', emoji: '👤', isAgent: false,
+    name: '이정우', label: '이정우', emoji: '👤', isAgent: false,
     color: 'bg-red-50 text-red-700 border-red-200',
     accent: 'border-red-400', bg: 'from-red-50',
-    description: '전사 전략 방향 설정 및 최종 의사결정',
+    description: '대표이사 · 전사 전략 방향 설정 및 최종 의사결정',
+  },
+
+  // === 임원진 ===
+  'kim-seonhwi': {
+    name: '김선휘', label: '김선휘', emoji: '💡', isAgent: true,
+    color: 'bg-orange-50 text-orange-700 border-orange-200',
+    accent: 'border-orange-400', bg: 'from-orange-50',
+    description: '최고기술책임자(CTO) · 기술전략 총괄',
+  },
+  'jung-mingi': {
+    name: '정민기', label: '정민기', emoji: '⚡', isAgent: true,
+    color: 'bg-sky-50 text-sky-700 border-sky-300',
+    accent: 'border-sky-500', bg: 'from-sky-50',
+    description: '최고운영책임자(COO) · 사업운영 총괄',
+  },
+  'lee-jihwan': {
+    name: '이지환', label: '이지환', emoji: '🎯', isAgent: true,
+    color: 'bg-violet-50 text-violet-700 border-violet-200',
+    accent: 'border-violet-500', bg: 'from-violet-50',
+    description: '최고전략책임자(CSO) · 전사전략 총괄',
   },
 
   // === 팀장급 (실명 + 실제 직책) ===

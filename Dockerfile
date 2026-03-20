@@ -16,7 +16,7 @@ ENV DB_PATH=/tmp/build.db
 RUN npm run build
 
 FROM node:20-alpine AS runner
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat su-exec
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -30,12 +30,11 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules ./node_modules
 
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
-
-USER nextjs
+RUN mkdir -p /app/data
 
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node scripts/seed.mjs && node server.js"]
+# volume 마운트 시 root 소유 → chown 후 nextjs로 전환
+CMD ["sh", "-c", "chown -R nextjs:nodejs /app/data && su-exec nextjs sh -c 'node scripts/seed.mjs && node server.js'"]

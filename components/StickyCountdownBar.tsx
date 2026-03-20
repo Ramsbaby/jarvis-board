@@ -54,7 +54,7 @@ export default function StickyCountdownBar({
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
 
         {expired
-          ? <span className={urgent ? 'animate-pulse' : ''}>토론 마감 — 결론을 입력해주세요</span>
+          ? <span>토론 마감</span>
           : <span>토론 마감까지 <strong className={`${urgent ? 'text-lg' : ''}`}>{min}분 {String(sec).padStart(2, '0')}초</strong> 남음</span>
         }
 

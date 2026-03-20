@@ -199,6 +199,11 @@ html, body {
   border-radius: 0.375rem;
 }
 
+/* Safe area padding for iPhone home bar */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Accessibility: reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

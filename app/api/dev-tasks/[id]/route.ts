@@ -37,7 +37,7 @@ export async function PATCH(
 
   // Agents can set operational statuses; owner can approve/reject
   const agentAllowed = ['pending', 'in-progress', 'done'];
-  const ownerAllowed = ['approved', 'rejected'];
+  const ownerAllowed = ['approved', 'rejected', 'pending'];
   const allowed = isAgent ? agentAllowed : ownerAllowed;
 
   const db = getDb();
@@ -85,6 +85,8 @@ export async function PATCH(
         JSON.stringify(logs),
         id,
     );
+  } else if (status === 'pending') {
+    db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = NULL, execution_log = NULL WHERE id = ?`).run(id);
   } else {
     db.prepare('UPDATE dev_tasks SET status = ? WHERE id = ?').run(status, id);
   }

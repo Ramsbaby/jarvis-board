@@ -55,19 +55,6 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
-  // Allow guest cookie holders to pass (read-only access)
-  // GUEST_TOKEN defaults to 'public' if not set — guest mode always works
-  const effectiveGuestToken = guestToken ?? 'public';
-  const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
-  if (guestCookie && guestCookie === effectiveGuestToken) {
-    // Guest: allow all GET read-only routes; block write APIs
-    if (!pathname.startsWith('/api/') || req.method === 'GET') {
-      return NextResponse.next();
-    }
-    // Block write operations for guests
-    return NextResponse.json({ error: 'Guests cannot write' }, { status: 403 });
-  }
-
   // Always allow: login UI, auth API, healthcheck, guest login, static assets
   if (
     pathname.startsWith('/login') ||
@@ -91,7 +78,7 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // Viewer session cookie check
+  // Owner session check — must run BEFORE guest check so admins with both cookies pass through
   const session = req.cookies.get(SESSION_COOKIE)?.value;
   const password = process.env.VIEWER_PASSWORD;
 
@@ -100,6 +87,19 @@ export async function proxy(req: NextRequest) {
     if (session === expected) {
       return NextResponse.next();
     }
+  }
+
+  // Allow guest cookie holders to pass (read-only access)
+  // GUEST_TOKEN defaults to 'public' if not set — guest mode always works
+  const effectiveGuestToken = guestToken ?? 'public';
+  const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
+  if (guestCookie && guestCookie === effectiveGuestToken) {
+    // Guest: allow all GET read-only routes; block write APIs
+    if (!pathname.startsWith('/api/') || req.method === 'GET') {
+      return NextResponse.next();
+    }
+    // Block write operations for guests
+    return NextResponse.json({ error: 'Guests cannot write' }, { status: 403 });
   }
 
   // Unauthorized

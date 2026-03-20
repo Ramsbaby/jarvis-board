@@ -169,6 +169,7 @@ function CommentSummary({
 }) {
   const [summary, setSummary] = useState<string | null>(initialSummary ?? null);
   const [loading, setLoading] = useState(!initialSummary && content.length >= 100);
+  const isLong = content.length > 200;
 
   useEffect(() => {
     if (initialSummary || content.length < 100) return;
@@ -190,7 +191,7 @@ function CommentSummary({
         </div>
         <div className="space-y-1">
           <div className="h-2.5 bg-violet-100 rounded w-full" />
-          <div className="h-2.5 bg-violet-100 rounded w-3/4" />
+          {isLong && <div className="h-2.5 bg-violet-100 rounded w-3/4" />}
         </div>
       </div>
     );
@@ -199,9 +200,9 @@ function CommentSummary({
   if (!summary) return null;
 
   return (
-    <div className="mb-2 px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg flex items-start gap-1.5">
+    <div className="mt-2 px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg flex items-start gap-1.5">
       <span className="text-[10px] text-zinc-400 mt-0.5 shrink-0">💡</span>
-      <p className="text-xs text-zinc-600 leading-relaxed font-medium">{summary}</p>
+      <p className={`text-xs text-zinc-600 leading-relaxed font-medium ${isLong ? 'line-clamp-3' : 'line-clamp-1'}`}>{summary}</p>
     </div>
   );
 }
@@ -236,9 +237,6 @@ export default function PostComments({
   // #21 Typing indicators
   const [typingAgents, setTypingAgents] = useState<Array<{ agent: string; label: string }>>([]);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  // 긴 AI 댓글 접기/펼치기
-  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
 
   // #8 Thread reply state
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -324,11 +322,12 @@ export default function PostComments({
     });
 
     try {
-      await fetch('/api/reactions', {
+      const res = await fetch('/api/reactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target_id: commentId, emoji, author: myId }),
       });
+      if (!res.ok) throw new Error('reaction failed');
     } catch {
       setReactions(prev); // rollback
     }
@@ -553,36 +552,12 @@ export default function PostComments({
             <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
           </div>
 
-          {/* AI 요약 — 항상 상단 표시 (긴 댓글의 핵심 먼저) */}
+          {/* Full comment content */}
+          <MarkdownContent content={c.content} />
+
+          {/* AI 요약 — 댓글 하단 표시 (길면 3줄, 짧으면 1줄) */}
           {!isVisitor && !isOwnerComment && (
             <CommentSummary commentId={c.id} initialSummary={c.ai_summary} content={c.content} />
-          )}
-
-          {/* 긴 AI 댓글은 기본 접힘 (200자 초과) */}
-          {!isVisitor && !isOwnerComment && c.content.length > 200 && !expandedComments.has(c.id) ? (
-            <div className="mt-2">
-              <p className="text-sm text-zinc-500 leading-relaxed line-clamp-2">
-                {c.content.replace(/#{1,6}\s|[*`_>]/g, '').slice(0, 160)}…
-              </p>
-              <button
-                onClick={() => setExpandedComments(prev => new Set(prev).add(c.id))}
-                className="mt-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
-              >
-                자세히 보기 ↓
-              </button>
-            </div>
-          ) : (
-            <>
-              <MarkdownContent content={c.content} />
-              {!isVisitor && !isOwnerComment && c.content.length > 200 && expandedComments.has(c.id) && (
-                <button
-                  onClick={() => setExpandedComments(prev => { const n = new Set(prev); n.delete(c.id); return n; })}
-                  className="mt-2 text-xs text-zinc-400 hover:text-zinc-600 font-medium transition-colors"
-                >
-                  접기 ↑
-                </button>
-              )}
-            </>
           )}
 
           {/* #4 Reactions */}

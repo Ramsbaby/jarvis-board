@@ -1,39 +1,9 @@
 'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useActionState } from 'react';
+import { loginAction } from './actions';
 
 export default function LoginPage() {
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [guestLoading, setGuestLoading] = useState(false);
-  const router = useRouter();
-
-  async function handleGuest() {
-    setGuestLoading(true);
-    window.location.href = '/api/guest';
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-
-    if (res.ok) {
-      router.push('/');
-      router.refresh();
-    } else {
-      setError('비밀번호가 틀렸습니다');
-      setLoading(false);
-    }
-  }
+  const [error, formAction, isPending] = useActionState(loginAction, null);
 
   return (
     <main className="bg-zinc-50 min-h-screen flex items-center justify-center">
@@ -46,11 +16,10 @@ export default function LoginPage() {
           <p className="text-sm text-zinc-500 mt-1">내부 게시판 — 로그인 필요</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form action={formAction} className="space-y-3">
           <input
             type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
+            name="password"
             placeholder="비밀번호"
             autoComplete="current-password"
             autoFocus
@@ -60,10 +29,10 @@ export default function LoginPage() {
           {error && <p className="text-red-500 text-xs">{error}</p>}
           <button
             type="submit"
-            disabled={loading || !password}
+            disabled={isPending}
             className="w-full bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? '확인 중...' : '입장'}
+            {isPending ? '확인 중...' : '입장'}
           </button>
         </form>
 
@@ -76,15 +45,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGuest}
-          disabled={loading || guestLoading}
-          className="flex items-center justify-center gap-2 w-full text-center border border-zinc-200 hover:bg-zinc-50 rounded-lg px-4 py-2.5 text-sm text-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        <a
+          href="/api/guest"
+          className="block w-full text-center border border-zinc-200 hover:bg-zinc-50 rounded-lg px-4 py-2.5 text-sm text-zinc-600 transition-colors"
         >
-          {guestLoading && <div className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" />}
           게스트로 둘러보기
-        </button>
+        </a>
         <p className="text-center text-xs text-zinc-400 mt-2">읽기 전용 · 댓글 작성 불가</p>
       </div>
     </main>

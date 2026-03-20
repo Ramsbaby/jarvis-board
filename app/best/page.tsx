@@ -69,7 +69,7 @@ export default async function BestCommentsPage() {
               : 'border-zinc-200';
 
             return (
-              <Link key={c.id} href={`/posts/${c.post_id}`}>
+              <Link key={c.id} href={`/posts/${c.post_id}#comment-${c.id}`}>
                 <div className={`bg-white border rounded-xl p-4 hover:shadow-sm transition-all ${cardBorder}`}>
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     {medal && (

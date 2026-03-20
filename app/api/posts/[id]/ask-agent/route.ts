@@ -107,8 +107,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: '이미 이 토론에 의견을 남겼습니다' }, { status: 409 });
   }
 
+  const isSynthesizer = agent === 'board-synthesizer';
+
   const comments = db.prepare(
-    `SELECT c.author, c.author_display, c.content, m.description
+    `SELECT c.id, c.author, c.author_display, c.content, m.description
      FROM comments c
      LEFT JOIN (VALUES
        ('strategy-lead','전략'),('infra-lead','인프라'),('career-lead','성장'),
@@ -122,12 +124,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const commentText = comments.length > 0
     ? comments.map((c: any) => {
         const lens = c.description ? `[${c.description}·${c.author_display}]` : `[${c.author_display}]`;
-        return `${lens}: ${c.content.slice(0, 300)}`;
+        // Include comment ID for synthesizer so it can pick the best one
+        const idTag = isSynthesizer ? ` {id:${c.id}}` : '';
+        return `${lens}${idTag}: ${c.content.slice(0, 300)}`;
       }).join('\n\n')
     : '(아직 댓글이 없습니다)';
 
   const persona = AGENT_PERSONAS[agent];
   const agentMeta = AUTHOR_META[agent as keyof typeof AUTHOR_META];
+
+  const bestCommentInstruction = isSynthesizer && comments.length > 0
+    ? '\n\n위 댓글 중 가장 통찰력 있고 실행 가능한 의견 1개를 선정하여, 합성문 마지막 줄에 정확히 `BEST_COMMENT_ID: {id}` 형식으로만 기재하세요. (id는 {id:xxx} 에서 xxx 부분)'
+    : '';
 
   const prompt = `${persona}
 
@@ -139,7 +147,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 **현재까지의 댓글**:
 ${commentText.slice(0, 1500)}
 
-위 토론에 대해 당신의 역할과 전문성에 맞는 의견을 제시해 주세요. 마크다운 사용 가능.
+위 토론에 대해 당신의 역할과 전문성에 맞는 의견을 제시해 주세요. 마크다운 사용 가능.${bestCommentInstruction}
 
 ⚠️ 주의: 댓글 끝에 "— 이름, 팀명" 형식의 서명을 절대 추가하지 마세요. 작성자 정보는 UI에 자동으로 표시됩니다.`;
 
@@ -165,7 +173,17 @@ ${commentText.slice(0, 1500)}
     const data = await res.json() as any;
     // Strip trailing signature patterns like "— 김서연, 성장" or "— Jarvis"
     const raw = data?.content?.[0]?.text?.trim() ?? '';
-    const content = raw.replace(/\n*—\s*[^\n]+$/, '').trim();
+    // Extract BEST_COMMENT_ID before stripping (synthesizer only)
+    let bestCommentId: string | null = null;
+    let cleaned = raw.replace(/\n*—\s*[^\n]+$/, '').trim();
+    if (isSynthesizer) {
+      const bestMatch = cleaned.match(/BEST_COMMENT_ID:\s*([A-Za-z0-9_-]+)/);
+      if (bestMatch) {
+        bestCommentId = bestMatch[1];
+        cleaned = cleaned.replace(/\n*BEST_COMMENT_ID:\s*[A-Za-z0-9_-]+\s*$/, '').trim();
+      }
+    }
+    const content = cleaned;
     if (!content) throw new Error('Empty response');
     // [SKIP] 또는 자연어 거부 패턴 — 조용히 무시 (댓글 게시 안 함)
     const SKIP_PATTERNS = [/^\[SKIP\]$/i, /이미.*댓글/, /추가.*댓글.*작성하지/, /댓글.*있으므로/];
@@ -180,6 +198,11 @@ ${commentText.slice(0, 1500)}
       .run(cid, id, agent, agentMeta?.label || agent, content);
 
     db.prepare(`UPDATE posts SET status='in-progress', updated_at=datetime('now') WHERE id=? AND status='open'`).run(id);
+
+    // Mark best comment if synthesizer identified one
+    if (bestCommentId) {
+      db.prepare('UPDATE comments SET is_best = 1 WHERE id = ? AND post_id = ?').run(bestCommentId, id);
+    }
 
     const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);
     broadcastEvent({ type: 'new_comment', post_id: id, data: comment });

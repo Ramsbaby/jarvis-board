@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
+import MarkdownContent from '@/components/MarkdownContent';
 
 interface SourcePost {
   id: string;
@@ -138,9 +139,13 @@ export default function TaskDetailClient({
   const router = useRouter();
   const [task, setTask] = useState<DevTask>(initialTask);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [cronSecs, setCronSecs] = useState(secsToNextCron);
+  const [logExpanded, setLogExpanded] = useState(false);
+  const [showRetryForm, setShowRetryForm] = useState(false);
+  const [retryNote, setRetryNote] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
   const { subscribe } = useEvent();
 
@@ -189,25 +194,35 @@ export default function TaskDetailClient({
 
   async function handleApprove() {
     setActionLoading('approved');
+    setActionError(null);
     try {
       const res = await fetch(`/api/dev-tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ status: 'approved' }),
       });
       if (res.ok) {
         setTask(prev => ({ ...prev, status: 'approved', approved_at: new Date().toISOString() }));
+      } else if (res.status === 401) {
+        setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
+        setTimeout(() => router.push('/login'), 1500);
+      } else {
+        setActionError(`오류가 발생했습니다 (${res.status}). 페이지를 새로고침해주세요.`);
       }
-    } catch { /* ignore */ }
-    finally { setActionLoading(null); }
+    } catch {
+      setActionError('네트워크 오류. 연결을 확인해주세요.');
+    } finally { setActionLoading(null); }
   }
 
   async function handleReject() {
     setActionLoading('rejected');
+    setActionError(null);
     try {
       const res = await fetch(`/api/dev-tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ status: 'rejected', rejection_note: rejectNote || undefined }),
       });
       if (res.ok) {
@@ -217,9 +232,74 @@ export default function TaskDetailClient({
           rejection_note: rejectNote || undefined,
         }));
         setShowRejectForm(false);
+      } else if (res.status === 401) {
+        setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
+        setTimeout(() => router.push('/login'), 1500);
+      } else {
+        setActionError(`오류가 발생했습니다 (${res.status}).`);
       }
-    } catch { /* ignore */ }
-    finally { setActionLoading(null); }
+    } catch {
+      setActionError('네트워크 오류. 연결을 확인해주세요.');
+    } finally { setActionLoading(null); }
+  }
+
+  async function handleRetry() {
+    setActionLoading('retry');
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'pending' }),
+      });
+      if (res.ok) {
+        setTask(prev => ({
+          ...prev, status: 'pending',
+          rejected_at: undefined, rejection_note: undefined,
+          approved_at: undefined, started_at: undefined,
+          completed_at: undefined, result_summary: undefined,
+          changed_files: undefined, execution_log: undefined,
+        }));
+      } else if (res.status === 401) {
+        setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
+        setTimeout(() => router.push('/login'), 1500);
+      } else {
+        setActionError(`재시도 요청 실패 (${res.status})`);
+      }
+    } catch {
+      setActionError('네트워크 오류.');
+    } finally { setActionLoading(null); }
+  }
+
+  async function handleRetryWithNote() {
+    if (!retryNote.trim()) { setShowRetryForm(false); return; }
+    setActionLoading('retry-note');
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'pending' }),
+      });
+      if (res.ok) {
+        setTask(prev => ({
+          ...prev, status: 'pending',
+          rejected_at: undefined, rejection_note: undefined,
+          approved_at: undefined, started_at: undefined,
+          completed_at: undefined, result_summary: undefined,
+          changed_files: undefined, execution_log: undefined,
+        }));
+        setShowRetryForm(false);
+        setRetryNote('');
+      } else if (res.status === 401) {
+        setActionError('세션이 만료되었습니다.');
+        setTimeout(() => router.push('/login'), 1500);
+      }
+    } catch {
+      setActionError('네트워크 오류.');
+    } finally { setActionLoading(null); }
   }
 
   const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium;
@@ -388,6 +468,11 @@ export default function TaskDetailClient({
                   작업 내용을 꼼꼼히 검토한 후 결정해 주세요.
                 </p>
 
+                {actionError && (
+                  <div className="mb-4 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                    ⚠️ {actionError}
+                  </div>
+                )}
                 {!showRejectForm ? (
                   <div className="flex gap-3">
                     <button
@@ -534,12 +619,20 @@ export default function TaskDetailClient({
                 </span>
               )}
               <span className="ml-auto text-[10px] text-zinc-600 tabular-nums">{logs.length}개 항목</span>
+              {logs.length > 5 && (
+                <button
+                  onClick={() => setLogExpanded(v => !v)}
+                  className="ml-2 text-[10px] text-zinc-500 hover:text-zinc-300 underline"
+                >
+                  {logExpanded ? '접기' : `전체 보기 (${logs.length}개)`}
+                </button>
+              )}
             </div>
             <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto space-y-1.5">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
               ) : (
-                logs.map((entry, i) => {
+                (logExpanded ? logs : logs.slice(-5)).map((entry, i) => {
                   const msg = entry.message;
                   const isErr  = /error|fail|failed/i.test(msg);
                   const isWarn = /warn|warning/i.test(msg);
@@ -582,7 +675,9 @@ export default function TaskDetailClient({
               {task.result_summary ? (
                 <div>
                   <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">작업 내용</h3>
-                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap bg-zinc-50 border border-zinc-100 rounded-lg p-4">{task.result_summary}</p>
+                  <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4">
+                    <MarkdownContent content={task.result_summary} />
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-zinc-400 italic">작업 요약이 제출되지 않았습니다.</p>
@@ -625,12 +720,77 @@ export default function TaskDetailClient({
                 <p className="text-sm text-zinc-400">반려 사유가 기재되지 않았습니다.</p>
               )}
               <p className="text-xs text-zinc-400">이 태스크는 반려되어 Jarvis 작업 큐에서 제외되었습니다.</p>
-              <button
-                onClick={() => router.back()}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
-              >
-                ← 뒤로 가기
-              </button>
+              {actionError && (
+                <div className="px-3 py-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                  ⚠️ {actionError}
+                </div>
+              )}
+              {isOwner && !showRetryForm && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => router.back()}
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                  >
+                    ← 뒤로 가기
+                  </button>
+                  <button
+                    onClick={handleRetry}
+                    disabled={!!actionLoading}
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 disabled:opacity-40 transition-colors"
+                  >
+                    {actionLoading === 'retry' ? (
+                      <><span className="w-3 h-3 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" /> 처리 중...</>
+                    ) : '↺ 재시도'}
+                  </button>
+                  <button
+                    onClick={() => setShowRetryForm(true)}
+                    disabled={!!actionLoading}
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-50 text-violet-600 border border-violet-100 hover:bg-violet-100 disabled:opacity-40 transition-colors"
+                  >
+                    ✏ 수정 후 재요청
+                  </button>
+                </div>
+              )}
+              {!isOwner && (
+                <button
+                  onClick={() => router.back()}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                >
+                  ← 뒤로 가기
+                </button>
+              )}
+              {isOwner && showRetryForm && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-zinc-600 mb-1.5 block">추가 지시사항 <span className="text-zinc-400 font-normal">(선택)</span></label>
+                    <textarea
+                      value={retryNote}
+                      onChange={e => setRetryNote(e.target.value)}
+                      placeholder="어떤 부분을 수정해서 다시 시도할지 작성해주세요..."
+                      className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg p-3 resize-none outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100 transition-colors"
+                      rows={3}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setShowRetryForm(false); setRetryNote(''); }}
+                      className="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-700 transition-colors"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleRetryWithNote}
+                      disabled={!!actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                    >
+                      {actionLoading === 'retry-note' ? (
+                        <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
+                      ) : '↺ 재요청 확정'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

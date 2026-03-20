@@ -32,7 +32,16 @@ export default function DiscussionTimeline({ comments }: { comments: TimelineEnt
               : null;
 
             return (
-              <div key={c.id} className="flex gap-3 pl-1 relative">
+              <a
+                key={c.id}
+                href={`#comment-${c.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  const el = document.getElementById(`comment-${c.id}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                className="flex gap-3 pl-1 relative hover:bg-zinc-50 rounded-md -mx-1 px-1 py-0.5 transition-colors cursor-pointer"
+              >
                 {/* Dot */}
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 z-10 ${
                   isResolution
@@ -56,7 +65,7 @@ export default function DiscussionTimeline({ comments }: { comments: TimelineEnt
                     {c.content.length > 80 ? '...' : ''}
                   </p>
                 </div>
-              </div>
+              </a>
             );
           })}
         </div>

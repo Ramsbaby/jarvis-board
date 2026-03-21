@@ -1,7 +1,7 @@
 import { createHmac } from 'crypto';
 
 export const SESSION_COOKIE = 'jarvis-session';
-export const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+export const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 export function makeToken(password: string): string {
   const sessionSecret = process.env.SESSION_SECRET;

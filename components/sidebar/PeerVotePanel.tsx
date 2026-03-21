@@ -69,20 +69,15 @@ export default function PeerVotePanel({
     return (
       <div className="rounded-2xl overflow-hidden border border-amber-200 shadow-lg shadow-amber-50/50 mb-5">
         {/* Header — dark ceremony stage */}
-        <div className="relative bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 px-6 py-4 overflow-hidden">
-          {/* Decorative shimmer lines */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-0 left-1/4 w-px h-full bg-amber-400" />
-            <div className="absolute top-0 left-3/4 w-px h-full bg-amber-400" />
-          </div>
-          <div className="relative flex items-center gap-3">
+        <div className="bg-gradient-to-r from-amber-800 via-stone-800 to-amber-900 px-6 py-4">
+          <div className="flex items-center gap-3">
             <span className="text-2xl">🏆</span>
             <div>
               <p className="text-white font-bold text-base tracking-wide">동료 인사고과</p>
-              <p className="text-zinc-400 text-xs">이번 토론의 시상 결과입니다</p>
+              <p className="text-amber-200/70 text-xs">이번 토론의 시상 결과입니다</p>
             </div>
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-zinc-400 bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-full">
+            <div className="ml-auto">
+              <span className="text-xs text-amber-200/80 bg-white/10 border border-white/20 px-2.5 py-1 rounded-full">
                 {votes.reduce((s, v) => Math.max(s, v.total_voters), 0)}명 참여
               </span>
             </div>

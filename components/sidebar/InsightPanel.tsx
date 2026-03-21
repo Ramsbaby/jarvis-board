@@ -160,16 +160,39 @@ export default function InsightPanel() {
               전체 보기 →
             </Link>
           </div>
-          <div className="space-y-1.5">
-            {teamStats.slice(0, 5).map((team, idx) => (
-              <div key={team.key} className="flex items-center gap-2">
-                <span className="text-xs w-4 text-center shrink-0">{team.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[10px] font-medium text-zinc-600 truncate">{team.label}</span>
-                    <span className="text-[10px] text-zinc-400 shrink-0 ml-1">{team.score}점</span>
+          <div className="space-y-2">
+            {teamStats.slice(0, 5).map((team, idx) => {
+              // TEAM_GROUPS에서 멤버 IDs 가져오기
+              const teamGroup = TEAM_GROUPS.find(t => t.key === team.key);
+              const memberIds = teamGroup ? [...teamGroup.ids] : [];
+              return (
+                <div key={team.key}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs w-4 text-center shrink-0">{team.emoji}</span>
+                    <span className="text-[10px] font-medium text-zinc-700 truncate flex-1">{team.label}</span>
+                    <span className="text-[9px] text-zinc-400 shrink-0">{memberIds.length}명</span>
+                    <span className="text-[10px] text-zinc-500 font-semibold shrink-0 ml-1">{team.score}점</span>
                   </div>
-                  <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                  {/* 멤버 아바타 */}
+                  {memberIds.length > 0 && (
+                    <div className="flex items-center gap-1 ml-6 mb-1">
+                      {memberIds.map(id => {
+                        const m = AUTHOR_META[id];
+                        if (!m) return null;
+                        const role = m.description?.split('·')[0]?.trim() ?? '';
+                        return (
+                          <span
+                            key={id}
+                            title={`${m.name ?? m.label}${role ? ` · ${role}` : ''}`}
+                            className="text-[11px] leading-none"
+                          >
+                            {m.emoji}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="ml-6 h-1 bg-zinc-100 rounded-full overflow-hidden">
                     <div
                       className={[
                         'h-full rounded-full transition-all',
@@ -179,36 +202,50 @@ export default function InsightPanel() {
                     />
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* ── 이번 주 MVP ─────────────────────────────────────────────────── */}
-      {mvp && (
-        <div className="border-t border-zinc-100 px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">이번 주 MVP</span>
-            <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full">⭐ 7일</span>
-          </div>
-          <Link
-            href="/leaderboard"
-            className="flex items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 hover:bg-amber-100/70 transition-colors group"
-          >
-            <span className="text-2xl shrink-0">
-              {AUTHOR_META[mvp.agent_id]?.emoji ?? '🤖'}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-amber-800 truncate group-hover:text-amber-900">
-                {AUTHOR_META[mvp.agent_id]?.name ?? AUTHOR_META[mvp.agent_id]?.label ?? mvp.agent_id}
-              </p>
-              <p className="text-[10px] text-amber-600 font-medium">{mvp.display_30d}점</p>
+      {mvp && (() => {
+        const mvpMeta = AUTHOR_META[mvp.agent_id];
+        const descParts = mvpMeta?.description?.split('·') ?? [];
+        const mvpRole = descParts[0]?.trim() ?? '';
+        const mvpTeam = descParts[1]?.trim() ?? '';
+        return (
+          <div className="border-t border-zinc-100 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">이번 주 MVP</span>
+              <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full">⭐ 7일</span>
             </div>
-            <span className="text-[10px] text-amber-400 group-hover:text-amber-600 transition-colors shrink-0">→</span>
-          </Link>
-        </div>
-      )}
+            <Link
+              href="/leaderboard"
+              className="flex items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 hover:bg-amber-100/70 transition-colors group"
+            >
+              <span className="text-2xl shrink-0">
+                {mvpMeta?.emoji ?? '🤖'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-amber-800 truncate group-hover:text-amber-900">
+                  {mvpMeta?.name ?? mvpMeta?.label ?? mvp.agent_id}
+                </p>
+                <p className="text-[10px] text-amber-600 leading-tight">
+                  {mvpRole && <span>{mvpRole}</span>}
+                  {mvpRole && mvpTeam && <span className="mx-1 opacity-50">·</span>}
+                  {mvpTeam && <span className="opacity-70">{mvpTeam}</span>}
+                  {!mvpRole && !mvpTeam && <span>{mvp.display_30d}점</span>}
+                </p>
+                {(mvpRole || mvpTeam) && (
+                  <p className="text-[10px] text-amber-500 font-semibold">{mvp.display_30d}점</p>
+                )}
+              </div>
+              <span className="text-[10px] text-amber-400 group-hover:text-amber-600 transition-colors shrink-0">→</span>
+            </Link>
+          </div>
+        );
+      })()}
     </div>
   );
 }

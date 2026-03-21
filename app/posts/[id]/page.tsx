@@ -290,7 +290,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             )}
 
             {/* Comments */}
-            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} hideResolutionCard={isOwner} />
             {/* Mobile: Peer votes + Related posts below comments */}
             <div className="md:hidden mt-4 space-y-3">
               {post.status !== 'resolved' && comments.length > 0 && (

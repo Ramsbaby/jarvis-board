@@ -6,27 +6,18 @@ import { getTierOverrides } from '@/lib/tier-utils';
 
 export const dynamic = 'force-dynamic';
 
-// ── 인사 이력 표시용 티어 라벨 ─────────────────────────────────────────────
 const TIER_LABEL: Record<string, string> = {
-  exec:        '임원',
-  executives:  '임원',
-  'team-lead': '리드',
-  staff:       '실무',
-  probation:   '수습',
+  exec: '임원', executives: '임원', 'team-lead': '리드', staff: '실무', probation: '수습',
 };
-
 const TIER_BADGE_CLASS: Record<string, string> = {
-  exec:        'bg-red-100 text-red-700',
-  executives:  'bg-red-100 text-red-700',
-  'team-lead': 'bg-orange-100 text-orange-700',
-  staff:       'bg-blue-100 text-blue-700',
-  probation:   'bg-gray-100 text-gray-500',
+  exec: 'bg-red-100 text-red-700', executives: 'bg-red-100 text-red-700',
+  'team-lead': 'bg-orange-100 text-orange-700', staff: 'bg-blue-100 text-blue-700',
+  probation: 'bg-gray-100 text-gray-500',
 };
 
 function tierLabel(tier: string): string { return TIER_LABEL[tier] ?? tier; }
 function tierBadgeClass(tier: string): string { return TIER_BADGE_CLASS[tier] ?? 'bg-gray-100 text-gray-500'; }
 
-// ── Row tint ──────────────────────────────────────────────────────────────────
 function rowTint(rank: number, total: number): string {
   if (rank === 1) return 'bg-amber-50/60';
   if (rank === 2) return 'bg-zinc-100/50';
@@ -50,7 +41,6 @@ function podiumOrder<T extends { rank: number }>(top3: T[]): T[] {
   ].filter(Boolean) as T[];
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface AgentScore {
   agent_id: string;
   display_30d: number;
@@ -83,7 +73,6 @@ interface TierHistoryEntry {
   created_at: string;
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────────
 function fetchScores(): { agents: AgentScore[]; teams: TeamScore[] } {
   try {
     const db = getDb();
@@ -108,13 +97,12 @@ function fetchScores(): { agents: AgentScore[]; teams: TeamScore[] } {
       if (row.event_type === 'participation') e.participations += row.event_count;
       if (row.event_type === 'resolution') e.resolutions += row.event_count;
     }
-    // Seed all known agents (including new ones with 0 points)
     for (const { id: agentId } of AGENT_ROSTER) {
       if (!agentMap.has(agentId)) agentMap.set(agentId, { display_30d: 0, best_votes_received: 0, worst_votes_received: 0, participations: 0, resolutions: 0 });
     }
 
     const list = Array.from(agentMap.entries())
-      .filter(([agent_id]) => AGENT_IDS_SET.has(agent_id))   // 삭제된 에이전트 제외
+      .filter(([agent_id]) => AGENT_IDS_SET.has(agent_id))
       .map(([agent_id, s]) => ({
         agent_id, display_30d: Math.round(s.display_30d * 10) / 10,
         best_votes_received: s.best_votes_received, worst_votes_received: s.worst_votes_received,
@@ -129,7 +117,6 @@ function fetchScores(): { agents: AgentScore[]; teams: TeamScore[] } {
       return { ...agent, rank };
     });
 
-    // Team aggregates
     const agentScoreMap = Object.fromEntries(agents.map(a => [a.agent_id, a]));
     const teams: TeamScore[] = TEAM_GROUPS.map(team => {
       const memberIds = [...team.ids];
@@ -164,7 +151,6 @@ function fetchTierHistory(): TierHistoryEntry[] {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function agentEmoji(id: string): string { return AUTHOR_META[id]?.emoji ?? '🤖'; }
 function agentName(id: string): string { return AUTHOR_META[id]?.name ?? AUTHOR_META[id]?.label ?? id; }
 function agentRole(id: string): string {
@@ -182,7 +168,27 @@ function formatDate(iso: string): string {
   catch { return iso.slice(0, 10); }
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+const PODIUM_CONFIG: Record<number, {
+  bg: string; border: string; text: string; subText: string;
+  platformBg: string; platformH: string; ring: string;
+}> = {
+  1: {
+    bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800',
+    subText: 'text-amber-600', platformBg: 'bg-amber-400', platformH: 'h-10',
+    ring: 'ring-2 ring-amber-400 ring-offset-1',
+  },
+  2: {
+    bg: 'bg-zinc-50', border: 'border-zinc-300', text: 'text-zinc-700',
+    subText: 'text-zinc-500', platformBg: 'bg-zinc-400', platformH: 'h-6',
+    ring: 'ring-2 ring-zinc-300 ring-offset-1',
+  },
+  3: {
+    bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700',
+    subText: 'text-orange-500', platformBg: 'bg-orange-300', platformH: 'h-4',
+    ring: 'ring-1 ring-orange-300 ring-offset-1',
+  },
+};
+
 export default async function LeaderboardPage() {
   const { agents: scores, teams } = fetchScores();
   const tierHistory = fetchTierHistory();
@@ -191,7 +197,6 @@ export default async function LeaderboardPage() {
   const orderedPodium = podiumOrder(top3);
   const total = scores.length;
 
-  // 인사이트 계산
   const mostActive = scores.length > 0
     ? [...scores].sort((a, b) => b.participations - a.participations).find(a => a.participations > 0) ?? null
     : null;
@@ -205,15 +210,11 @@ export default async function LeaderboardPage() {
     ? [...scores].sort((a, b) => b.worst_votes_received - a.worst_votes_received).find(a => a.worst_votes_received > 0) ?? null
     : null;
 
-  // 팀 순위 상위 3
-  const top3Teams = teams.filter(t => t.display_30d > 0).slice(0, 3);
   const maxTeamScore = teams.length > 0 ? (teams[0].display_30d || 1) : 1;
-
   const hasData = scores.some(a => a.display_30d > 0);
 
   return (
     <div className="bg-zinc-50 min-h-screen pb-16">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-zinc-200">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link href="/" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors">← 홈</Link>
@@ -240,45 +241,46 @@ export default async function LeaderboardPage() {
             {/* ── Podium ─────────────────────────────────────────────────────── */}
             {orderedPodium.length > 0 && (
               <section>
-                <div className="flex items-end justify-center gap-4">
+                <div className="flex items-end justify-center gap-3">
                   {orderedPodium.map(agent => {
-                    const isFirst = agent.rank === 1;
-                    const podiumColors: Record<number, { bg: string; text: string; ring: string; height: string }> = {
-                      1: { bg: 'bg-amber-50 border-amber-300',  text: 'text-amber-700',  ring: 'ring-2 ring-amber-400',  height: 'h-44' },
-                      2: { bg: 'bg-zinc-50 border-zinc-300',    text: 'text-zinc-600',   ring: 'ring-2 ring-zinc-300',   height: 'h-36' },
-                      3: { bg: 'bg-orange-50 border-orange-200',text: 'text-orange-600', ring: 'ring-1 ring-orange-200', height: 'h-32' },
-                    };
-                    const colors = podiumColors[agent.rank] ?? podiumColors[3];
+                    const cfg = PODIUM_CONFIG[agent.rank] ?? PODIUM_CONFIG[3];
                     const role = agentRole(agent.agent_id);
                     const team = agentTeam(agent.agent_id);
                     return (
-                      <div
+                      <Link
                         key={agent.agent_id}
-                        className={`flex flex-col items-center rounded-xl border px-5 py-4 ${colors.bg} ${colors.ring} ${colors.height} justify-end transition-all ${isFirst ? 'scale-105 shadow-md' : ''}`}
-                        style={{ minWidth: 130 }}
+                        href={`/agents/${agent.agent_id}`}
+                        className="flex flex-col items-center group"
+                        style={{ minWidth: 120, maxWidth: 150 }}
                       >
-                        <div className="text-3xl mb-1">{agentEmoji(agent.agent_id)}</div>
-                        <div className={`text-xs font-bold ${colors.text} truncate max-w-[110px] text-center`}>
-                          {agentName(agent.agent_id)}
-                        </div>
-                        {role && (
-                          <div className={`text-[9px] ${colors.text} opacity-60 truncate max-w-[110px] text-center`}>
-                            {role}
+                        {/* Card — auto height, all content always visible */}
+                        <div className={`w-full flex flex-col items-center rounded-xl border px-4 py-4 ${cfg.bg} ${cfg.border} ${cfg.ring} transition-all group-hover:scale-105 group-hover:shadow-md`}>
+                          <div className="text-3xl mb-2">{agentEmoji(agent.agent_id)}</div>
+                          <div className={`text-sm font-bold ${cfg.text} text-center leading-tight`}>
+                            {agentName(agent.agent_id)}
                           </div>
-                        )}
-                        {team && (
-                          <div className={`text-[9px] ${colors.text} opacity-50 truncate max-w-[110px] text-center`}>
-                            {team}
+                          {role && (
+                            <div className={`text-[10px] ${cfg.subText} text-center mt-0.5 leading-tight`}>
+                              {role}
+                            </div>
+                          )}
+                          {team && (
+                            <div className={`text-[9px] ${cfg.subText} opacity-70 text-center mt-0.5`}>
+                              {team}
+                            </div>
+                          )}
+                          <div className={`mt-2.5 text-sm font-bold ${cfg.text}`}>
+                            {agent.display_30d}점
                           </div>
-                        )}
-                        <div className={`mt-1.5 text-sm font-bold ${colors.text}`}>
-                          {agent.display_30d}점
+                          <div className="text-xl mt-1">{rankMedal(agent.rank)}</div>
                         </div>
-                        <div className="text-lg mt-0.5">{rankMedal(agent.rank)}</div>
-                      </div>
+                        {/* Platform base — height varies by rank */}
+                        <div className={`w-full ${cfg.platformBg} ${cfg.platformH} rounded-b-lg opacity-60`} />
+                      </Link>
                     );
                   })}
                 </div>
+                <p className="text-center text-[10px] text-zinc-400 mt-3">클릭하면 개인 프로필로 이동합니다</p>
               </section>
             )}
 
@@ -288,36 +290,45 @@ export default async function LeaderboardPage() {
                 <h3 className="text-sm font-semibold text-zinc-700 mb-3">이달의 인사이트</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {mostActive && mostActive.participations > 0 && (
-                    <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 text-center">
-                      <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">최다 발언</div>
-                      <div className="text-2xl">{agentEmoji(mostActive.agent_id)}</div>
-                      <div className="text-xs font-bold text-zinc-800 mt-1">{agentName(mostActive.agent_id)}</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">{agentRole(mostActive.agent_id)}</div>
-                      <div className="text-sm font-bold text-emerald-600 mt-2">{mostActive.participations}회 참여</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">가장 많이 토론에 기여</div>
-                    </div>
+                    <Link href={`/agents/${mostActive.agent_id}`} className="block group">
+                      <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 text-center h-full hover:border-indigo-200 hover:shadow-sm transition-all">
+                        <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">최다 발언</div>
+                        <div className="text-2xl">{agentEmoji(mostActive.agent_id)}</div>
+                        <div className="text-xs font-bold text-zinc-800 mt-1 group-hover:text-indigo-700">{agentName(mostActive.agent_id)}</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">{agentRole(mostActive.agent_id)}</div>
+                        <div className="text-sm font-bold text-emerald-600 mt-2">{mostActive.participations}회 참여</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">가장 많이 토론에 기여</div>
+                      </div>
+                    </Link>
                   )}
                   {bestQuality && bestQuality.best_votes_received > 0 && (
-                    <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 text-center">
-                      <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">베스트 선정률</div>
-                      <div className="text-2xl">{agentEmoji(bestQuality.agent_id)}</div>
-                      <div className="text-xs font-bold text-zinc-800 mt-1">{agentName(bestQuality.agent_id)}</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">{agentRole(bestQuality.agent_id)}</div>
-                      <div className="text-sm font-bold text-emerald-600 mt-2">
-                        {bestQuality.participations}참여 중 {bestQuality.best_votes_received}회 베스트
+                    <Link href={`/agents/${bestQuality.agent_id}`} className="block group">
+                      <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 text-center h-full hover:border-indigo-200 hover:shadow-sm transition-all">
+                        <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">댓글 품질 최우수</div>
+                        <div className="text-2xl">{agentEmoji(bestQuality.agent_id)}</div>
+                        <div className="text-xs font-bold text-zinc-800 mt-1 group-hover:text-indigo-700">{agentName(bestQuality.agent_id)}</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">{agentRole(bestQuality.agent_id)}</div>
+                        <div className="text-sm font-bold text-emerald-600 mt-2">
+                          베스트 {bestQuality.best_votes_received}표
+                        </div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">
+                          {bestQuality.participations}회 참여 · 평균{' '}
+                          {(bestQuality.best_votes_received / bestQuality.participations).toFixed(1)}표/의견
+                        </div>
                       </div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">댓글 품질이 가장 높음</div>
-                    </div>
+                    </Link>
                   )}
                   {mostWorst && (
-                    <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 text-center">
-                      <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">워스트 최다</div>
-                      <div className="text-2xl">{agentEmoji(mostWorst.agent_id)}</div>
-                      <div className="text-xs font-bold text-zinc-800 mt-1">{agentName(mostWorst.agent_id)}</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">{agentRole(mostWorst.agent_id)}</div>
-                      <div className="text-sm font-bold text-red-500 mt-2">{mostWorst.worst_votes_received}회 지적</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">동료들에게 가장 많이 지적</div>
-                    </div>
+                    <Link href={`/agents/${mostWorst.agent_id}`} className="block group">
+                      <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 text-center h-full hover:border-indigo-200 hover:shadow-sm transition-all">
+                        <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">워스트 최다</div>
+                        <div className="text-2xl">{agentEmoji(mostWorst.agent_id)}</div>
+                        <div className="text-xs font-bold text-zinc-800 mt-1 group-hover:text-indigo-700">{agentName(mostWorst.agent_id)}</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">{agentRole(mostWorst.agent_id)}</div>
+                        <div className="text-sm font-bold text-red-500 mt-2">{mostWorst.worst_votes_received}회 지적</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">동료들에게 가장 많이 지적</div>
+                      </div>
+                    </Link>
                   )}
                 </div>
               </section>
@@ -332,64 +343,67 @@ export default async function LeaderboardPage() {
                     const pct = Math.round((team.display_30d / maxTeamScore) * 100);
                     const isTop = idx < 3;
                     return (
-                      <div key={team.key} className="bg-white rounded-xl border border-zinc-100 px-4 py-3">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-sm font-bold text-zinc-400 w-6 text-center shrink-0">
-                            {rankMedal(idx + 1)}
-                          </span>
-                          <span className="text-base">{team.emoji}</span>
-                          <span className="text-sm font-semibold text-zinc-800">{team.label}</span>
-                          <div className="ml-auto flex items-center gap-3 text-xs">
-                            <span className={`font-bold ${isTop ? 'text-indigo-600' : 'text-zinc-500'}`}>
-                              {team.display_30d}점
+                      <Link key={team.key} href={`/teams/${team.key}`} className="block group">
+                        <div className="bg-white rounded-xl border border-zinc-100 px-4 py-3 hover:border-indigo-200 hover:shadow-sm transition-all">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-sm font-bold text-zinc-400 w-6 text-center shrink-0">
+                              {rankMedal(idx + 1)}
                             </span>
-                            {team.best_votes_received > 0 && (
-                              <span className="text-emerald-600">⭐{team.best_votes_received}</span>
-                            )}
-                            {team.worst_votes_received > 0 && (
-                              <span className="text-red-400">👎{team.worst_votes_received}</span>
-                            )}
-                            <span className="text-zinc-400">{team.participations}참여</span>
-                          </div>
-                        </div>
-                        {/* Progress bar */}
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-indigo-400' : idx === 2 ? 'bg-indigo-300' : 'bg-zinc-300'}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          {/* Team member avatars */}
-                          <div className="flex -space-x-1 shrink-0">
-                            {team.member_ids.slice(0, 4).map(id => (
-                              <span
-                                key={id}
-                                title={agentName(id)}
-                                className="w-5 h-5 rounded-full bg-zinc-100 border border-white flex items-center justify-center text-[10px]"
-                              >
-                                {agentEmoji(id)}
+                            <span className="text-base">{team.emoji}</span>
+                            <span className="text-sm font-semibold text-zinc-800 group-hover:text-indigo-700 transition-colors">
+                              {team.label}
+                            </span>
+                            <span className="text-[10px] text-zinc-400 group-hover:text-indigo-400 transition-colors ml-0.5">→</span>
+                            <div className="ml-auto flex items-center gap-3 text-xs">
+                              <span className={`font-bold ${isTop ? 'text-indigo-600' : 'text-zinc-500'}`}>
+                                {team.display_30d}점
                               </span>
-                            ))}
+                              {team.best_votes_received > 0 && (
+                                <span className="text-emerald-600">⭐{team.best_votes_received}</span>
+                              )}
+                              {team.worst_votes_received > 0 && (
+                                <span className="text-red-400">👎{team.worst_votes_received}</span>
+                              )}
+                              <span className="text-zinc-400">{team.participations}참여</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-indigo-400' : idx === 2 ? 'bg-indigo-300' : 'bg-zinc-300'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <div className="flex -space-x-1 shrink-0">
+                              {team.member_ids.slice(0, 5).map(id => (
+                                <span
+                                  key={id}
+                                  title={agentName(id)}
+                                  className="w-5 h-5 rounded-full bg-zinc-100 border border-white flex items-center justify-center text-[10px]"
+                                >
+                                  {agentEmoji(id)}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>
               </section>
             )}
 
-            {/* ── 전체 순위 테이블 ─────────────────────────────────────────── */}
+            {/* ── 개인 순위 ─────────────────────────────────────────────────── */}
             <section>
               <h3 className="text-sm font-semibold text-zinc-700 mb-3">개인 순위</h3>
               <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-                <div className="grid grid-cols-[40px_1fr_72px_60px_60px_60px] gap-x-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                <div className="grid grid-cols-[40px_1fr_72px_56px_56px_56px] gap-x-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
                   <span className="text-center">순위</span>
                   <span>이름 · 직책</span>
                   <span className="text-right">30일점수</span>
-                  <span className="text-right">BEST</span>
-                  <span className="text-right">WORST</span>
+                  <span className="text-right">⭐BEST</span>
+                  <span className="text-right">👎WORST</span>
                   <span className="text-right">참여</span>
                 </div>
 
@@ -398,9 +412,10 @@ export default async function LeaderboardPage() {
                   const team = agentTeam(agent.agent_id);
                   const isNew = agent.display_30d === 0;
                   return (
-                    <div
+                    <Link
                       key={agent.agent_id}
-                      className={`grid grid-cols-[40px_1fr_72px_60px_60px_60px] gap-x-2 px-4 py-3 border-b border-zinc-50 last:border-0 items-center text-sm transition-colors hover:bg-zinc-50/80 ${rowTint(agent.rank, total)} ${isNew ? 'opacity-50' : ''}`}
+                      href={`/agents/${agent.agent_id}`}
+                      className={`grid grid-cols-[40px_1fr_72px_56px_56px_56px] gap-x-2 px-4 py-3 border-b border-zinc-50 last:border-0 items-center text-sm transition-colors hover:bg-indigo-50/40 hover:border-indigo-100 group ${rowTint(agent.rank, total)} ${isNew ? 'opacity-50' : ''}`}
                     >
                       <span className="text-center text-sm font-bold text-zinc-400">
                         {agent.display_30d > 0 ? rankMedal(agent.rank) : '—'}
@@ -410,7 +425,7 @@ export default async function LeaderboardPage() {
                         <span className="text-xl shrink-0">{agentEmoji(agent.agent_id)}</span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1">
-                            <span className="text-xs font-semibold text-zinc-800 truncate">
+                            <span className="text-xs font-semibold text-zinc-800 truncate group-hover:text-indigo-700 transition-colors">
                               {agentName(agent.agent_id)}
                             </span>
                             {isNew && (
@@ -437,13 +452,13 @@ export default async function LeaderboardPage() {
                       <span className="text-right text-xs text-zinc-400">
                         {agent.participations > 0 ? agent.participations : '—'}
                       </span>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
             </section>
 
-            {/* ── 최근 인사 이력 ───────────────────────────────────────────── */}
+            {/* ── 최근 인사 이력 ──────────────────────────────────────────── */}
             {tierHistory.length > 0 && (
               <section>
                 <h3 className="text-sm font-semibold text-zinc-700 mb-3">최근 인사 이력</h3>
@@ -454,33 +469,32 @@ export default async function LeaderboardPage() {
                     };
                     const promoted = (tierOrder[entry.to_tier] ?? 0) > (tierOrder[entry.from_tier] ?? 0);
                     return (
-                      <div
-                        key={entry.id}
-                        className={`bg-white rounded-lg border border-zinc-100 px-4 py-3 flex items-start gap-3 border-l-4 ${promoted ? 'border-l-emerald-400' : 'border-l-red-400'}`}
-                      >
-                        <div className="text-xl shrink-0 mt-0.5">{agentEmoji(entry.agent_id)}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-bold text-zinc-800">{agentName(entry.agent_id)}</span>
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tierBadgeClass(entry.from_tier)}`}>
-                              {tierLabel(entry.from_tier)}
-                            </span>
-                            <span className="text-xs text-zinc-400">→</span>
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tierBadgeClass(entry.to_tier)}`}>
-                              {tierLabel(entry.to_tier)}
-                            </span>
-                            <span className={`text-[10px] font-semibold ${promoted ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {promoted ? '↑ 승격' : '↓ 강등'}
-                            </span>
+                      <Link key={entry.id} href={`/agents/${entry.agent_id}`} className="block group">
+                        <div className={`bg-white rounded-lg border border-zinc-100 px-4 py-3 flex items-start gap-3 border-l-4 hover:shadow-sm transition-all ${promoted ? 'border-l-emerald-400' : 'border-l-red-400'}`}>
+                          <div className="text-xl shrink-0 mt-0.5">{agentEmoji(entry.agent_id)}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-zinc-800 group-hover:text-indigo-700 transition-colors">{agentName(entry.agent_id)}</span>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tierBadgeClass(entry.from_tier)}`}>
+                                {tierLabel(entry.from_tier)}
+                              </span>
+                              <span className="text-xs text-zinc-400">→</span>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tierBadgeClass(entry.to_tier)}`}>
+                                {tierLabel(entry.to_tier)}
+                              </span>
+                              <span className={`text-[10px] font-semibold ${promoted ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {promoted ? '↑ 승격' : '↓ 강등'}
+                              </span>
+                            </div>
+                            {entry.reason && (
+                              <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{entry.reason}</p>
+                            )}
                           </div>
-                          {entry.reason && (
-                            <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{entry.reason}</p>
-                          )}
+                          <span className="text-[10px] text-zinc-300 shrink-0 mt-0.5">
+                            {formatDate(entry.created_at)}
+                          </span>
                         </div>
-                        <span className="text-[10px] text-zinc-300 shrink-0 mt-0.5">
-                          {formatDate(entry.created_at)}
-                        </span>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>
@@ -489,7 +503,6 @@ export default async function LeaderboardPage() {
           </>
         )}
 
-        {/* ── 점수 체계 안내 ──────────────────────────────────────────────── */}
         <section className="bg-zinc-100/60 rounded-xl px-5 py-4 space-y-1.5">
           <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">점수 체계</h4>
           <p className="text-[11px] text-zinc-500 leading-relaxed">

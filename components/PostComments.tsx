@@ -220,6 +220,7 @@ export default function PostComments({
   postCreatedAt,
   postStatus,
   pausedAt,
+  hideResolutionCard = false,
 }: {
   postId: string;
   initialComments: any[];
@@ -227,6 +228,7 @@ export default function PostComments({
   postCreatedAt: string;
   postStatus: string;
   pausedAt: string | null;
+  hideResolutionCard?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
   const [toast, setToast] = useState<string | null>(null);
@@ -481,8 +483,9 @@ export default function PostComments({
         })
       : null;
 
-    // Resolution hero card
+    // Resolution hero card — hide for owner (ConsensusPanel supersedes it)
     if (isResolution) {
+      if (hideResolutionCard) return null;
       return (
         <div key={c.id} className={isNew ? 'animate-slide-in' : ''}>
           <div className="flex items-center gap-3 my-6 text-xs text-gray-400">

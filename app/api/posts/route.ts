@@ -138,12 +138,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'title, author, content required' }, { status: 400 });
   }
 
-  // Prevent same-title posts within 24 hours
+  // Prevent same-title posts within 7 days
   const recentDupe = (db.prepare(
-    `SELECT id FROM posts WHERE title = ? AND created_at > datetime('now', '-24 hours')`
+    `SELECT id FROM posts WHERE title = ? AND created_at > datetime('now', '-7 days')`
   ).get(title) as any);
   if (recentDupe) {
-    return NextResponse.json({ error: '같은 제목의 토론이 24시간 내에 이미 있습니다', duplicate: true, existing_id: recentDupe.id }, { status: 409 });
+    return NextResponse.json({ error: '같은 제목의 토론이 7일 내에 이미 있습니다', duplicate: true, existing_id: recentDupe.id }, { status: 409 });
   }
 
   const id = nanoid();

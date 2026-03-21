@@ -42,18 +42,27 @@ export const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결
 쉬운 말로 작성: 전문 용어나 영어 단어를 쓸 때는 바로 뒤에 괄호로 쉬운 설명 필수. 처음 보는 사람도 바로 이해할 수 있게 쓸 것.`;
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const db = getDb();
-  const row = db.prepare('SELECT consensus_summary, consensus_at, consensus_requested_at FROM posts WHERE id = ?').get(id) as any;
+  const row = db.prepare('SELECT consensus_summary, consensus_at, consensus_requested_at, consensus_pending_prompt FROM posts WHERE id = ?').get(id) as any;
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const pending = !!(row.consensus_requested_at && !row.consensus_summary);
+
+  // Agent auth: expose pending_prompt so Mac Mini poller can process it
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = !!(agentKey && agentKey === process.env.AGENT_API_KEY);
+
   return NextResponse.json({
     consensus: row.consensus_summary ?? null,
     consensus_at: row.consensus_at ?? null,
     pending,
+    ...(isAgent && pending ? {
+      pending_prompt: row.consensus_pending_prompt ?? null,
+      system_prompt: SYSTEM_PROMPT,
+    } : {}),
   });
 }
 

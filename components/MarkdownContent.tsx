@@ -104,7 +104,12 @@ function preprocessContent(content: string): string {
     '$1\n>\n$3',
   );
 
-  // CommonMark fix: **text**한글 → **text** 한글 (closing ** before Korean = not parsed as bold)
+  // CommonMark fix 1: closing ** preceded by " (or other punctuation) is not right-flanking
+  // e.g. **"text"**이 → **"text"\u200B**이
+  // ZWS between " and ** makes ** not preceded by punctuation → right-flanking ✓
+  out = out.replace(/([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\u201C\u201D\u2018\u2019])(\*{1,2})(?!\s)/g, '$1\u200B$2');
+
+  // CommonMark fix 2: **text**한글 → **text**​한글 (closing ** before Korean = not parsed as bold)
   out = out.replace(/(\*{1,2}[^*\n]+\*{1,2})([\uAC00-\uD7A3])/g, '$1\u200B$2');
 
   return out;

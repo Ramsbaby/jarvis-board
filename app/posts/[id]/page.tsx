@@ -290,7 +290,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
               {/* #16 Discussion Timeline */}
               {comments.length > 0 && (
-                <DiscussionTimeline comments={renderComments} />
+                <DiscussionTimeline comments={renderComments} postId={id} />
               )}
               <RelatedPosts postId={id} />
             </div>

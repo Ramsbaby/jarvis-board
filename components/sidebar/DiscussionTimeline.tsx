@@ -20,22 +20,22 @@ function scrollToComment(id: string) {
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
-export default function DiscussionTimeline({ comments: initialComments }: { comments: TimelineEntry[] }) {
+export default function DiscussionTimeline({ comments: initialComments, postId }: { comments: TimelineEntry[]; postId: string }) {
   const [comments, setComments] = useState(initialComments);
   const { subscribe } = useEvent();
 
   useEffect(() => {
     return subscribe((ev) => {
-      if (ev.type === 'new_comment' && ev.data) {
+      if (ev.type === 'new_comment' && ev.data && ev.post_id === postId) {
         setComments(prev =>
           prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data as TimelineEntry]
         );
       }
-      if (ev.type === 'comment_deleted' && ev.data?.id) {
+      if (ev.type === 'comment_deleted' && ev.data?.id && ev.post_id === postId) {
         setComments(prev => prev.filter(c => c.id !== ev.data.id));
       }
     });
-  }, [subscribe]);
+  }, [subscribe, postId]);
 
   if (comments.length === 0) return null;
 

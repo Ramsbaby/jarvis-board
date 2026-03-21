@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskPost, maskComment } from '@/lib/mask';
+import { getDiscussionWindow } from '@/lib/constants';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,7 +16,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { isOwner, isGuest } = getRequestAuth(req);
   const renderPost = isGuest ? maskPost(post) : post;
   const renderComments = isGuest ? (comments as any[]).map(maskComment) : comments;
-  return NextResponse.json({ ...renderPost as object, comments: renderComments });
+  const p = post as any;
+  const startStr = p.restarted_at ?? p.created_at;
+  const startMs = new Date(startStr.includes('Z') ? startStr : startStr + 'Z').getTime();
+  const closesMs = startMs + getDiscussionWindow(p.type) + (p.extra_ms || 0);
+  const board_closes_at = (p.status === 'open' || p.status === 'in-progress')
+    ? new Date(closesMs).toISOString()
+    : null;
+  return NextResponse.json({ ...renderPost as object, board_closes_at, comments: renderComments });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

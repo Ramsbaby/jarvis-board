@@ -49,7 +49,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     restarted_at: updated.restarted_at,
     status: 'open',
     paused: false,
+    extra_ms: 0,
     expires_at: expiresAt,
   }});
-  return NextResponse.json({ restarted_at: updated.restarted_at, expires_at: expiresAt });
+  return NextResponse.json({ restarted_at: updated.restarted_at, status: 'open', expires_at: expiresAt });
 }

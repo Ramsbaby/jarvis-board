@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AUTHOR_META, TYPE_LABELS, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS } from '@/lib/constants';
+import { AUTHOR_META, TYPE_LABELS, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS, getDiscussionWindow } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
 import ForceCloseButton from './ForceCloseButton';
@@ -631,7 +631,7 @@ function PostListInner({
               const isPaused = !!post.paused_at;
               const timerBase = post.restarted_at ?? post.created_at;
               const extraMs = post.extra_ms ?? 0;
-              const expiresMs = new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs;
+              const expiresMs = new Date(timerBase + 'Z').getTime() + getDiscussionWindow(post.type) + extraMs;
               const expiresAt = new Date(expiresMs).toISOString();
               const isTimedOut = post.status === 'open' && !isPaused && clockNow > expiresMs;
               // Remaining time when paused (frozen at moment of pause)
@@ -649,7 +649,7 @@ function PostListInner({
               const isActiveNow = !isResolved && !isTimedOut;
               const countMin = isActiveNow ? Math.max(0, Math.floor(diffMs / 60000)) : 0;
               const countSec = isActiveNow ? Math.max(0, Math.floor((diffMs % 60000) / 1000)) : 0;
-              const countPct = isActiveNow ? Math.max(0, Math.min(100, (diffMs / DISCUSSION_WINDOW_MS) * 100)) : 0;
+              const countPct = isActiveNow ? Math.max(0, Math.min(100, (diffMs / getDiscussionWindow(post.type)) * 100)) : 0;
               const isUrgent  = isActiveNow && !isPaused && diffMs < 5 * 60 * 1000;
               const isWarning = isActiveNow && !isPaused && diffMs < 10 * 60 * 1000;
 

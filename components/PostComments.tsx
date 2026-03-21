@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { AUTHOR_META, DISCUSSION_WINDOW_MS, MIN_COMMENT_LENGTH } from '@/lib/constants';
+import { AUTHOR_META, getDiscussionWindow, MIN_COMMENT_LENGTH } from '@/lib/constants';
 import { timeAgo, fmtDateShort } from '@/lib/utils';
 import MarkdownContent from '@/components/MarkdownContent';
 import VisitorCommentForm from './VisitorCommentForm';
@@ -221,6 +221,8 @@ export default function PostComments({
   postStatus,
   pausedAt,
   restartedAt = null,
+  postType = 'discussion',
+  extraMs = 0,
   hideResolutionCard = false,
 }: {
   postId: string;
@@ -230,6 +232,8 @@ export default function PostComments({
   postStatus: string;
   pausedAt: string | null;
   restartedAt?: string | null;
+  postType?: string;
+  extraMs?: number;
   hideResolutionCard?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
@@ -279,7 +283,7 @@ export default function PostComments({
   // Task #14: compute if discussion time has expired
   const timerBase = restartedAt ?? postCreatedAt;
   const isExpired = localStatus !== 'resolved' &&
-    new Date(timerBase.includes('Z') ? timerBase : timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS < Date.now();
+    new Date(timerBase.includes('Z') ? timerBase : timerBase + 'Z').getTime() + getDiscussionWindow(postType) + extraMs < Date.now();
 
   useEffect(() => {
     return subscribe((ev) => {

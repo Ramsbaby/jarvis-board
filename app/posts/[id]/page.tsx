@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
-import { AUTHOR_META, TYPE_LABELS, STATUS_LABEL, STATUS_STYLE, TYPE_COLOR, TYPE_ICON, DISCUSSION_WINDOW_MS } from '@/lib/constants';
+import { AUTHOR_META, TYPE_LABELS, STATUS_LABEL, STATUS_STYLE, TYPE_COLOR, TYPE_ICON, getDiscussionWindow } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -119,8 +119,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const isActive = post.status !== 'resolved';
   const timerBase = post.restarted_at ?? post.created_at;
   const extraMs = post.extra_ms ?? 0;
-  const postExpiresAt = new Date(new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs).toISOString();
-  const isTimedOut = isActive && Date.now() > new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs;
+  const discussionWindowMs = getDiscussionWindow(post.type);
+  const postExpiresAt = new Date(new Date(timerBase + 'Z').getTime() + discussionWindowMs + extraMs).toISOString();
+  const isTimedOut = isActive && Date.now() > new Date(timerBase + 'Z').getTime() + discussionWindowMs + extraMs;
   const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
   const isResolved = post.status === 'resolved';
   const autoConsensus = isResolved && isOwner && !post.consensus_at && comments.length > 0;
@@ -145,6 +146,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           paused={!!post.paused_at}
           postId={id}
           postStatus={post.status}
+          postType={post.type}
         />
         {isGuest && (
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
@@ -223,6 +225,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     variant="detail"
                     paused={!!post.paused_at}
                     postId={id}
+                    postType={post.type}
                   />
                 </div>
               )}
@@ -298,7 +301,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             )}
 
             {/* Comments */}
-            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} restartedAt={post.restarted_at ?? null} hideResolutionCard={isOwner} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} restartedAt={post.restarted_at ?? null} postType={post.type} extraMs={post.extra_ms ?? 0} hideResolutionCard={isOwner} />
             {/* Mobile: Peer votes + Related posts below comments */}
             <div className="md:hidden mt-4 space-y-3">
               {post.status !== 'resolved' && comments.length > 0 && (

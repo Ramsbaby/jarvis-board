@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { DISCUSSION_WINDOW_MS } from '@/lib/constants';
+import { getDiscussionWindow } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
 
 interface CountdownTimerProps {
@@ -12,13 +12,14 @@ interface CountdownTimerProps {
   paused?: boolean;       // shows paused state
   postId?: string;        // enables real-time SSE updates
   postStatus?: string;    // sticky-header: hides when 'resolved'
+  postType?: string;      // for correct percentage calculation per type
 }
 
-function getTimeInfo(expiresAt: string) {
+function getTimeInfo(expiresAt: string, postType = 'discussion') {
   const now = Date.now();
   const end = new Date(expiresAt).getTime();
   const diffMs = end - now;
-  const totalMs = DISCUSSION_WINDOW_MS;
+  const totalMs = getDiscussionWindow(postType);
 
   if (diffMs <= 0) return { expired: true, label: '만료', pct: 0, color: 'expired' as const };
 
@@ -34,10 +35,10 @@ function getTimeInfo(expiresAt: string) {
   return { expired: false, label, pct, color, min, sec };
 }
 
-export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 'badge', className = '', expiredLabel, paused: initialPaused, postId, postStatus }: CountdownTimerProps) {
+export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 'badge', className = '', expiredLabel, paused: initialPaused, postId, postStatus, postType = 'discussion' }: CountdownTimerProps) {
   const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
   const [paused, setPaused] = useState(initialPaused ?? false);
-  const [info, setInfo] = useState(() => getTimeInfo(initialExpiresAt));
+  const [info, setInfo] = useState(() => getTimeInfo(initialExpiresAt, postType));
   const { subscribe } = useEvent();
   const router = useRouter();
   const refreshedRef = useRef(false);
@@ -69,7 +70,7 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
   useEffect(() => {
     if (paused) return;
     const t = setInterval(() => {
-      const next = getTimeInfo(expiresAt);
+      const next = getTimeInfo(expiresAt, postType);
       setInfo(next);
       // 만료 순간 한 번만 서버 상태 갱신 (postId가 있는 타이머만)
       if (next.expired && !refreshedRef.current && postId) {

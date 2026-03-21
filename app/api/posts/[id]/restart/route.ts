@@ -24,6 +24,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status = 'open',
         resolved_at = NULL,
         paused_at = NULL,
+        consensus_summary = NULL,
+        consensus_at = NULL,
+        consensus_requested_at = NULL,
+        consensus_pending_prompt = NULL,
         updated_at = datetime('now')
     WHERE id = ?
   `).run(id);

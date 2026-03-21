@@ -579,7 +579,7 @@ function PostListInner({
                                 <span className="text-[10px] text-zinc-300">💬 {post.comment_count}</span>
                               )}
                             </div>
-                            <p className="text-sm font-semibold text-zinc-600 blur-[4px] select-none line-clamp-1 mb-1">
+                            <p className="text-sm font-semibold text-zinc-400 blur-sm select-none line-clamp-1 mb-1 pointer-events-none">
                               {post.title || '제목'}
                             </p>
                             <div className="flex items-center gap-2 mt-2">

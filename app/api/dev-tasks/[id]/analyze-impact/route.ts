@@ -3,6 +3,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { callLLM, LLMError } from '@/lib/llm';
 
+const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function buildCachedResponse(task: any) {
+  return {
+    one_line: task.actual_impact?.split('\n')[0] ?? '',
+    actual_impact: task.actual_impact ?? '',
+    impact_areas: (() => { try { return JSON.parse(task.impact_areas || '[]'); } catch { return []; } })(),
+    improvement_score: task.improvement_score ?? undefined,
+    user_visible: task.user_visible ?? undefined,
+    risk_reduced: task.risk_reduced ?? undefined,
+    impact_analyzed_at: task.impact_analyzed_at,
+    cached: true,
+  };
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const db = getDb();
+  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+  if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!task.impact_analyzed_at) return NextResponse.json({ cached: false }, { status: 204 });
+  return NextResponse.json(buildCachedResponse(task));
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -13,6 +40,14 @@ export async function POST(
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (task.status !== 'done') return NextResponse.json({ error: '완료된 태스크만 분석 가능합니다' }, { status: 400 });
+
+  // Return cached result if within 48 hours
+  if (task.impact_analyzed_at) {
+    const analyzedAt = new Date(task.impact_analyzed_at).getTime();
+    if (Date.now() - analyzedAt < CACHE_TTL_MS) {
+      return NextResponse.json(buildCachedResponse(task));
+    }
+  }
 
   const changedFiles: string[] = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
   const logs: any[] = (() => { try { return JSON.parse(task.execution_log || '[]'); } catch { return []; } })();
@@ -45,10 +80,16 @@ ${lastLogs || '없음'}
 
     const actualImpactText = parsed.actual_impact || parsed.one_line || '';
     const impactAreasJson = JSON.stringify(parsed.impact_areas || []);
-    db.prepare('UPDATE dev_tasks SET actual_impact = ?, impact_areas = ? WHERE id = ?')
-      .run(actualImpactText, impactAreasJson, id);
+    const improvementScore = typeof parsed.improvement_score === 'number' ? parsed.improvement_score : null;
+    const userVisible = parsed.user_visible != null ? String(parsed.user_visible) : null;
+    const riskReduced = parsed.risk_reduced || null;
+    const analyzedAt = new Date().toISOString();
 
-    return NextResponse.json({ ...parsed, saved: true });
+    db.prepare(
+      'UPDATE dev_tasks SET actual_impact = ?, impact_areas = ?, improvement_score = ?, user_visible = ?, risk_reduced = ?, impact_analyzed_at = ? WHERE id = ?'
+    ).run(actualImpactText, impactAreasJson, improvementScore, userVisible, riskReduced, analyzedAt, id);
+
+    return NextResponse.json({ ...parsed, impact_analyzed_at: analyzedAt, saved: true });
   } catch (err: any) {
     if (err instanceof LLMError && err.isTimeout) {
       return NextResponse.json({ error: 'Timeout' }, { status: 504 });

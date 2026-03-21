@@ -101,7 +101,7 @@ export async function PATCH(
     newStatus: string,
     _now: string,
   ): TransitionResult => {
-    const current = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(taskId) as any;
+    const current = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(taskId) as any;
     if (!current) return { ok: false, code: 404, error: 'Not found' };
 
     const allowedFrom = validTransitions[current.status] ?? [];
@@ -142,7 +142,20 @@ export async function PATCH(
           taskId,
       );
     } else if (newStatus === 'pending') {
-      db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]' WHERE id = ?`).run(taskId);
+      const existingHistory: any[] = (() => { try { return JSON.parse(current.attempt_history || '[]'); } catch { return []; } })();
+      const prevLogs: any[] = (() => { try { return JSON.parse(current.execution_log || '[]'); } catch { return []; } })();
+      const historyEntry = {
+        attempt: existingHistory.length + 1,
+        timestamp: _now,
+        previous_status: current.status,
+        rejection_note: current.rejection_note ?? null,
+        result_summary: current.result_summary ?? null,
+        started_at: current.started_at ?? null,
+        completed_at: current.completed_at ?? null,
+        log_count: prevLogs.length,
+      };
+      const newHistory = JSON.stringify([...existingHistory, historyEntry]);
+      db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]', attempt_history = ? WHERE id = ?`).run(newHistory, taskId);
     } else {
       db.prepare('UPDATE dev_tasks SET status = ? WHERE id = ?').run(newStatus, taskId);
     }

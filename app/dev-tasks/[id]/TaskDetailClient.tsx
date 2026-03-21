@@ -38,16 +38,33 @@ interface DevTask {
   expected_impact?: string;
   actual_impact?: string;
   impact_areas?: string; // JSON array
+  improvement_score?: number;
+  user_visible?: string;
+  risk_reduced?: string;
+  impact_analyzed_at?: string;
   estimated_minutes?: number;
   difficulty?: string;
   post_id?: string;
+  attempt_history?: string; // JSON array of AttemptEntry
+}
+
+interface AttemptEntry {
+  attempt: number;
+  timestamp: string;
+  previous_status: string;
+  rejection_note: string | null;
+  result_summary: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  log_count: number;
 }
 
 interface ImpactAnalysis {
   improvement_score?: number;
   user_visible?: string;
   risk_reduced?: string;
-  summary?: string;
+  impact_analyzed_at?: string;
+  cached?: boolean;
 }
 
 // ── Config maps ─────────────────────────────────────────────────────────────
@@ -282,8 +299,18 @@ export default function TaskDetailClient({
   const [retryNote, setRetryNote] = useState('');
   const [runningElapsed, setRunningElapsed] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(null);
+  const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(() => {
+    if (!initialTask.impact_analyzed_at) return null;
+    return {
+      improvement_score: initialTask.improvement_score,
+      user_visible: initialTask.user_visible,
+      risk_reduced: initialTask.risk_reduced ?? undefined,
+      impact_analyzed_at: initialTask.impact_analyzed_at,
+      cached: true,
+    };
+  });
   const [loadingImpact, setLoadingImpact] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const { subscribe, connected } = useEvent();
 
@@ -468,6 +495,16 @@ export default function TaskDetailClient({
       if (res.ok) {
         const data = await res.json();
         setImpactAnalysis(data);
+        // Sync persisted fields into local task state
+        setTask(prev => ({
+          ...prev,
+          actual_impact: data.actual_impact ?? prev.actual_impact,
+          impact_areas: data.impact_areas ? JSON.stringify(data.impact_areas) : prev.impact_areas,
+          improvement_score: data.improvement_score ?? prev.improvement_score,
+          user_visible: data.user_visible != null ? String(data.user_visible) : prev.user_visible,
+          risk_reduced: data.risk_reduced ?? prev.risk_reduced,
+          impact_analyzed_at: data.impact_analyzed_at ?? prev.impact_analyzed_at,
+        }));
       }
     } catch {
       // silently fail — analysis is optional
@@ -482,6 +519,7 @@ export default function TaskDetailClient({
   const logs: LogEntry[] = (() => { try { return JSON.parse(task.execution_log || '[]'); } catch { return []; } })();
   const changedFiles: string[] = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
   const impactAreas: string[] = (() => { try { return JSON.parse(task.impact_areas || '[]'); } catch { return []; } })();
+  const attemptHistory: AttemptEntry[] = (() => { try { return JSON.parse(task.attempt_history || '[]'); } catch { return []; } })();
 
   const waitTime  = elapsed(task.created_at, task.approved_at ?? task.rejected_at);
   const workTime  = elapsed(task.started_at, task.completed_at);
@@ -1071,6 +1109,36 @@ export default function TaskDetailClient({
           </div>
         </div>
 
+        {/* ── Attempt history ── */}
+        {attemptHistory.length > 0 && (
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+            <button
+              onClick={() => setHistoryExpanded(v => !v)}
+              className="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-600 transition-colors w-full text-left"
+            >
+              <span className={`transition-transform duration-200 ${historyExpanded ? 'rotate-90' : ''}`}>▶</span>
+              이전 시도 기록 ({attemptHistory.length}회)
+            </button>
+            {historyExpanded && (
+              <div className="mt-3 space-y-2">
+                {attemptHistory.map((entry) => (
+                  <div key={entry.attempt} className="text-xs border border-zinc-100 rounded-lg p-3 bg-zinc-50">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-zinc-600">#{entry.attempt}회 시도</span>
+                      <span className="text-zinc-400 tabular-nums">{fmt(entry.timestamp)}</span>
+                    </div>
+                    <div className="text-zinc-500 space-y-0.5">
+                      <p>이전 상태: <span className="font-medium text-zinc-700">{entry.previous_status}</span> · 로그 {entry.log_count}건</p>
+                      {entry.rejection_note && <p className="text-red-500">반려 사유: {entry.rejection_note}</p>}
+                      {entry.result_summary && <p className="text-emerald-600">결과: {entry.result_summary.slice(0, 80)}{entry.result_summary.length > 80 ? '…' : ''}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Execution log ── */}
         {(logs.length > 0 || isLive) && (
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-sm">
@@ -1244,7 +1312,16 @@ export default function TaskDetailClient({
                 ) : (
                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">AI 임팩트 분석 결과</p>
+                      <div>
+                        <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">
+                          {impactAnalysis?.cached ? '이전 분석 결과' : 'AI 임팩트 분석 결과'}
+                        </p>
+                        {impactAnalysis?.impact_analyzed_at && (
+                          <p className="text-[10px] text-indigo-400 mt-0.5">
+                            {fmt(impactAnalysis.impact_analyzed_at)} 분석
+                          </p>
+                        )}
+                      </div>
                       <button
                         onClick={handleAnalyzeImpact}
                         disabled={loadingImpact}
@@ -1270,12 +1347,6 @@ export default function TaskDetailClient({
                       <div>
                         <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">리스크 감소</p>
                         <p className="text-sm text-zinc-700 leading-relaxed">{impactAnalysis.risk_reduced}</p>
-                      </div>
-                    )}
-                    {impactAnalysis.summary && (
-                      <div>
-                        <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">종합 평가</p>
-                        <p className="text-sm text-zinc-700 leading-relaxed">{impactAnalysis.summary}</p>
                       </div>
                     )}
                   </div>

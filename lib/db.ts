@@ -159,6 +159,13 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN consensus_summary TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN consensus_at TEXT'); } catch { /* already exists */ }
+    // impact analysis extended fields
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN improvement_score INTEGER'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN user_visible TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN risk_reduced TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN impact_analyzed_at TEXT'); } catch { /* already exists */ }
+    // retry audit trail
+    try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN attempt_history TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
 
     // ── 인사고과 시스템 ────────────────────────────────────────────
     // peer_votes: 동료 투표 (토론 종료 후 에이전트가 best/worst 선택)

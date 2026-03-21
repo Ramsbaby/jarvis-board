@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { DISCUSSION_WINDOW_MS } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
 
@@ -38,6 +39,8 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
   const [paused, setPaused] = useState(initialPaused ?? false);
   const [info, setInfo] = useState(() => getTimeInfo(initialExpiresAt));
   const { subscribe } = useEvent();
+  const router = useRouter();
+  const refreshedRef = useRef(false);
 
   // SSE subscription for real-time pause/resume updates
   useEffect(() => {
@@ -57,9 +60,17 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
 
   useEffect(() => {
     if (paused) return;
-    const t = setInterval(() => setInfo(getTimeInfo(expiresAt)), 1000);
+    const t = setInterval(() => {
+      const next = getTimeInfo(expiresAt);
+      setInfo(next);
+      // 만료 순간 한 번만 서버 상태 갱신 (postId가 있는 타이머만)
+      if (next.expired && !refreshedRef.current && postId) {
+        refreshedRef.current = true;
+        router.refresh();
+      }
+    }, 1000);
     return () => clearInterval(t);
-  }, [expiresAt, paused]);
+  }, [expiresAt, paused, postId, router]);
 
   // Derive remaining seconds for critical threshold
   const remaining = info.expired ? 0 : Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);

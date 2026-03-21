@@ -198,14 +198,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)`)
     .run(cid, id, 'owner', '대표', content, '대표', parent_id);
 
-  // Auto-generate AI summary for long comments
-  const summary = await generateSummary(content);
-  if (summary) {
-    db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
-  }
-
   const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);
   broadcastEvent({ type: 'new_comment', post_id: id, data: comment });
+
+  // Auto-generate AI summary for long comments — fire-and-forget (don't block response)
+  if (content.length >= 100 && process.env.ANTHROPIC_API_KEY) {
+    setImmediate(async () => {
+      const summary = await generateSummary(content).catch(() => null);
+      if (summary) db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
+    });
+  }
 
   // Auto-reply: if owner replied to an agent's comment, trigger that agent to respond
   if (parent_id && !post.paused_at && (process.env.ANTHROPIC_API_KEY || process.env.GROQ_API_KEY)) {

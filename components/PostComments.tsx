@@ -453,20 +453,15 @@ export default function PostComments({
   // #18 AI vs 인간 탭
   const [viewTab, setViewTab] = useState<'all' | 'ai' | 'human'>('all');
 
-  // Ranked comments float to top — memoized to prevent re-sort on unrelated state changes
+  // Keep chronological order — ranked leaderboard shown separately at top
   const rootComments = useMemo(() => {
-    const base = comments.filter(c => {
+    return comments.filter(c => {
       if (c.parent_id) return false;
       if (viewTab === 'ai') return !c.is_visitor;
       if (viewTab === 'human') return !!c.is_visitor;
       return true;
     });
-    return [...base].sort((a, b) => {
-      const ra = rankMap[a.id] ?? 99;
-      const rb = rankMap[b.id] ?? 99;
-      return ra - rb;
-    });
-  }, [comments, viewTab, rankMap]);
+  }, [comments, viewTab]);
 
   const agentComments = comments.filter(c => !c.is_visitor);
   const humanComments = comments.filter(c => c.is_visitor);

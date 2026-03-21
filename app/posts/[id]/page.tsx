@@ -190,7 +190,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
 
               {/* Title */}
-              <h1 className="text-2xl font-bold text-zinc-900 mb-2 leading-tight">{renderPost.title}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-2 leading-tight">{renderPost.title}</h1>
 
               {/* DEV Tasks badge */}
               {devTaskCount > 0 && (
@@ -279,7 +279,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             {isOwner && (
               <div className="mb-5 rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
                 {/* Toolbar: primary actions — all left-aligned, same height */}
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50/60">
+                <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 bg-zinc-50/60">
                   {isActive && <ForceCloseButton postId={id} />}
                   {isActive && <ExtendDiscussionButton postId={id} />}
                   {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}

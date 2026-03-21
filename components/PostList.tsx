@@ -354,8 +354,8 @@ function PostListInner({
       {/* ── FILTER BAR ── */}
       {!isSearching && (
         <div className="mb-4 space-y-2">
-          {/* Single filter row */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Single filter row — horizontally scrollable on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap sm:flex-wrap">
             {/* 유형 pills */}
             <button
               onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
@@ -687,7 +687,7 @@ function PostListInner({
 
                           {/* Big timer number */}
                           <span className={`font-black tabular-nums tracking-tight leading-none text-white ${
-                            isTimedOut ? 'text-xl' : isPaused ? 'text-2xl' : 'text-4xl'
+                            isTimedOut ? 'text-base sm:text-xl' : isPaused ? 'text-lg sm:text-2xl' : 'text-2xl sm:text-4xl'
                           }`}>
                             {isTimedOut
                               ? '🔴 마감됨'
@@ -720,8 +720,8 @@ function PostListInner({
                                 {pausingId === post.id ? '...' : isPaused ? '▶ 재개' : '⏸ 정지'}
                               </button>
                             )}
-                            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white whitespace-nowrap">
-                              {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '🟢 진행중'}
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/20 text-white whitespace-nowrap">
+                              {isTimedOut ? <span><span className="hidden sm:inline">결론 작성 </span>필요</span> : isUrgent ? '⚡' : isWarning ? '⚠' : isPaused ? '⏸' : '🟢'}
                             </span>
                           </div>
                         </div>

@@ -632,7 +632,7 @@ export default function PostComments({
 
           {/* Owner actions: reply + best toggle + edit + delete */}
           {!isReply && isOwner && (
-            <div className="mt-2 flex items-center gap-3">
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setReplyingTo(replyingTo === c.id ? null : c.id)}
                 className={`text-[11px] transition-colors ${
@@ -644,7 +644,7 @@ export default function PostComments({
                 }`}
                 title={isAgentComment ? `${c.author_display}가 자동으로 답변합니다` : undefined}
               >
-                {replyingTo === c.id ? '취소' : isAgentComment ? '↩ 답글 (자동 응답)' : '↩ 답글'}
+                {replyingTo === c.id ? '취소' : isAgentComment ? '↩ 답글 🤖' : '↩ 답글'}
               </button>
               {/* #12 Best comment toggle */}
               <button
@@ -774,9 +774,10 @@ export default function PostComments({
                 <textarea
                   value={replyContent}
                   onChange={e => setReplyContent(e.target.value)}
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
                   placeholder={isAgentComment ? `${c.author_display}에게 의견을 전달하세요...` : '답글 작성...'}
                   rows={2}
-                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 resize-none bg-gray-50"
+                  className="flex-1 text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 resize-none bg-gray-50"
                 />
                 <button
                   onClick={() => handleReply(c.id)}

@@ -222,6 +222,20 @@ button, a {
   -webkit-touch-callout: none;
 }
 
+/* 스크롤바 숨기기 (필터 가로 스크롤 등) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* 고정 헤더 고려한 앵커 스크롤 오프셋 */
+html {
+  scroll-padding-top: 80px;
+}
+
 /* Accessibility: reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

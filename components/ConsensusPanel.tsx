@@ -109,17 +109,17 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
       {result && parts && (
         <div className="mt-3 mx-2 mb-2 rounded-xl border border-violet-200 overflow-hidden">
           {/* Header */}
-          <div className="bg-violet-700 px-4 py-2.5 flex items-center gap-2">
-            <span className="text-white text-sm">🤝</span>
-            <span className="text-white font-semibold text-sm">이사회 최종 결의</span>
+          <div className="bg-violet-700 px-4 py-2.5 flex items-center gap-2 min-w-0">
+            <span className="text-white text-sm shrink-0">🤝</span>
+            <span className="text-white font-semibold text-sm shrink-0">이사회 결의</span>
             {agentCount && (
-              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-violet-600 text-violet-200 text-[10px] font-medium">
-                {agentCount}명 의견 기반
+              <span className="px-1.5 py-0.5 rounded bg-violet-600 text-violet-200 text-[10px] font-medium shrink-0">
+                {agentCount}명
               </span>
             )}
             {consensusAt && (
-              <span className="ml-auto text-violet-300 text-[10px]">
-                {new Date(consensusAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 기록
+              <span className="ml-auto text-violet-300 text-[10px] shrink-0">
+                {new Date(consensusAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
           </div>
@@ -145,7 +145,7 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
                     : 'text-zinc-500 hover:text-orange-600 hover:bg-orange-50/40'
                 }`}
               >
-                🤖 Jarvis 코딩 지시
+                🤖 코딩 지시
               </button>
             )}
           </div>

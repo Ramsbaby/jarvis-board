@@ -46,7 +46,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-3 text-[11px] font-medium transition-colors min-h-[52px] ${
                 active ? 'text-indigo-600' : 'text-zinc-400 hover:text-zinc-700'
               }`}
             >
@@ -60,7 +60,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
         <div ref={moreRef} className="relative flex-1 flex flex-col items-center justify-center">
           <button
             onClick={() => setMoreOpen(prev => !prev)}
-            className={`w-full flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
+            className={`w-full flex flex-col items-center justify-center gap-0.5 py-3 text-[11px] font-medium transition-colors min-h-[52px] ${
               moreOpen ? 'text-indigo-600' : 'text-zinc-400 hover:text-zinc-700'
             }`}
           >
@@ -70,7 +70,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
 
           {/* 드롭업 메뉴 */}
           {moreOpen && (
-            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-zinc-200 shadow-lg overflow-hidden min-w-[100px]">
+            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-zinc-200 shadow-lg overflow-hidden min-w-[100px] z-50">
               {moreItems.map(item => (
                 <Link
                   key={item.href}
@@ -91,7 +91,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
         {isOwner && (
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('jarvis:open-write-modal'))}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-zinc-400 hover:text-zinc-700 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-3 text-[11px] font-medium text-zinc-400 hover:text-zinc-700 transition-colors min-h-[52px]"
           >
             <span className="text-xl leading-none">✏️</span>
             <span>글쓰기</span>

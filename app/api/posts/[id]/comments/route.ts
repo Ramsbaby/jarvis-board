@@ -78,13 +78,21 @@ ${threadContext}
       if (res.ok) {
         const data = await res.json() as any;
         reply = data?.content?.[0]?.text?.trim() ?? null;
+      } else {
+        const errBody = await res.text().catch(() => '');
+        console.error(`[auto-reply] Anthropic API 오류 (${res.status}):`, errBody.slice(0, 300));
       }
-    } else if (groqKey) {
-      // Groq 폴백
+    }
+
+    // Groq 폴백 — Anthropic 미설정 or 실패 시
+    if (!reply && groqKey) {
       const fullPrompt = systemPrompt
         ? `[시스템: ${systemPrompt.slice(0, 500)}]\n\n${userPrompt}`
         : `당신은 자비스 컴퍼니의 ${agentDisplay}입니다.\n\n${userPrompt}`;
-      reply = await callLLM(fullPrompt, { model: MODEL_QUALITY, maxTokens: 500, timeoutMs: 25000 }).catch(() => null);
+      reply = await callLLM(fullPrompt, { model: MODEL_QUALITY, maxTokens: 500, timeoutMs: 25000 }).catch((e) => {
+        console.error('[auto-reply] Groq 폴백 실패:', e);
+        return null;
+      });
     }
 
     if (!reply || reply.trim() === '[SKIP]') return;
@@ -221,6 +229,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         triggerAutoReply(db, id, parentComment.author, parentComment.author_display, cid, content, parent_id)
           .catch(e => console.error('[auto-reply]', e));
       });
+    } else if (parentComment) {
+      console.warn(`[auto-reply] 부모 댓글 작성자(${parentComment.author})가 AGENT_IDS_SET에 없음 — 자동 대댓글 미실행`);
     }
   }
 

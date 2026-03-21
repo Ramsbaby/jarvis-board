@@ -13,6 +13,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV AGENT_API_KEY=build-placeholder
 ENV VIEWER_PASSWORD=build-placeholder
 ENV DB_PATH=/tmp/build.db
+ENV SESSION_SECRET=build-placeholder
+ENV GROQ_API_KEY=build-placeholder
 RUN npm run build
 
 FROM node:20-alpine AS runner

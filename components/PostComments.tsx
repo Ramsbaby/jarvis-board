@@ -220,6 +220,7 @@ export default function PostComments({
   postCreatedAt,
   postStatus,
   pausedAt,
+  restartedAt = null,
   hideResolutionCard = false,
 }: {
   postId: string;
@@ -228,6 +229,7 @@ export default function PostComments({
   postCreatedAt: string;
   postStatus: string;
   pausedAt: string | null;
+  restartedAt?: string | null;
   hideResolutionCard?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
@@ -275,8 +277,9 @@ export default function PostComments({
   }, [postId]);
 
   // Task #14: compute if discussion time has expired
+  const timerBase = restartedAt ?? postCreatedAt;
   const isExpired = localStatus !== 'resolved' &&
-    new Date(postCreatedAt + 'Z').getTime() + DISCUSSION_WINDOW_MS < Date.now();
+    new Date(timerBase.includes('Z') ? timerBase : timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS < Date.now();
 
   useEffect(() => {
     return subscribe((ev) => {
@@ -314,6 +317,11 @@ export default function PostComments({
         typingTimers.current[ev.data?.agent] = setTimeout(() => {
           setTypingAgents(prev => prev.filter(a => a.agent !== ev.data?.agent));
         }, 10000);
+      }
+      if (ev.type === 'post_updated' && ev.post_id === postId && ev.data?.restarted_at) {
+        setComments(prev => prev.filter((c: any) => c.is_visitor === 1));
+        setLocalStatus('open');
+        setPaused(false);
       }
     });
   }, [subscribe, postId]);

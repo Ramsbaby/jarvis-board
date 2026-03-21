@@ -42,21 +42,22 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
   const router = useRouter();
   const refreshedRef = useRef(false);
 
-  // SSE subscription for real-time pause/resume updates
+  // SSE subscription for real-time pause/resume/extend updates
   useEffect(() => {
     if (!postId) return;
     return subscribe((ev) => {
       if (ev.type === 'post_updated' && ev.post_id === postId && ev.data) {
+        // Pause/resume state
         if (typeof ev.data.paused === 'boolean') {
           setPaused(ev.data.paused);
-          if (!ev.data.paused && typeof ev.data.extra_ms === 'number') {
-            const base = new Date(initialExpiresAt).getTime();
-            setExpiresAt(new Date(base + ev.data.extra_ms).toISOString());
-          }
+        }
+        // Extension: use absolute expires_at broadcast by extend route
+        if (typeof ev.data.expires_at === 'string') {
+          setExpiresAt(ev.data.expires_at);
         }
       }
     });
-  }, [subscribe, postId, initialExpiresAt]);
+  }, [subscribe, postId]);
 
   useEffect(() => {
     if (paused) return;

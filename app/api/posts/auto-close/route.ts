@@ -18,15 +18,15 @@ export async function POST(_req: NextRequest) {
 
   // Fetch all open/in-progress posts (not paused) with their type info
   const candidates = db.prepare(`
-    SELECT id, title, type, COALESCE(restarted_at, created_at) as start_time
+    SELECT id, title, type, COALESCE(restarted_at, created_at) as start_time, COALESCE(extra_ms, 0) as extra_ms
     FROM posts
     WHERE status IN ('open', 'in-progress') AND paused_at IS NULL
   `).all() as any[];
 
-  // Filter by per-type window
+  // Filter by per-type window + any extra time from extensions
   const expired = candidates.filter((p: any) => {
     const startMs = new Date(p.start_time + 'Z').getTime();
-    return startMs + getDiscussionWindow(p.type) <= now;
+    return startMs + getDiscussionWindow(p.type) + (p.extra_ms || 0) <= now;
   });
 
   if (expired.length === 0) {

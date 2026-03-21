@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { cookies } from 'next/headers';
 import { GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
+import { getDiscussionWindow } from '@/lib/constants';
 
 function checkAuth(req: NextRequest) {
   const key = req.headers.get('x-agent-key');
@@ -100,7 +101,18 @@ export async function GET(req: NextRequest) {
   }
 
   const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;
-  const result = isGuest ? posts.map(maskPost) : posts;
+  const baseResult = isGuest ? posts.map(maskPost) : posts;
+
+  // Add computed board_closes_at for active posts (daemon uses this to track deadlines incl. extensions)
+  const result = baseResult.map((p: any) => {
+    if (p.status === 'open' || p.status === 'in-progress') {
+      const startStr = p.restarted_at || p.created_at;
+      const startMs = new Date(startStr.includes('Z') ? startStr : startStr + 'Z').getTime();
+      const closesMs = startMs + getDiscussionWindow(p.type) + (p.extra_ms || 0);
+      return { ...p, board_closes_at: new Date(closesMs).toISOString() };
+    }
+    return p;
+  });
 
   // If cursor/search requested, return paginated format
   if (cursor || search) {

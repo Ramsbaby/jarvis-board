@@ -1,8 +1,57 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
+
+function TaskDetail({ task, isWaiting, onDetailUpdate }: {
+  task: { id: string; title: string; detail: string };
+  isWaiting: boolean;
+  onDetailUpdate: (id: string, detail: string) => void;
+}) {
+  const [explaining, setExplaining] = useState(false);
+  const [localDetail, setLocalDetail] = useState(task.detail);
+
+  const hasDetail = localDetail && localDetail.trim() !== '' && localDetail.trim() !== task.title.trim();
+
+  async function handleExplain(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setExplaining(true);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}/explain`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setLocalDetail(data.explanation);
+        onDetailUpdate(task.id, data.explanation);
+      }
+    } finally {
+      setExplaining(false);
+    }
+  }
+
+  if (hasDetail) {
+    return (
+      <div className={`text-xs text-zinc-600 leading-relaxed rounded-lg px-3 py-2 mb-2 border line-clamp-3 ${
+        isWaiting ? 'bg-white/70 border-amber-100' : 'bg-zinc-50 border-zinc-100'
+      }`}>
+        {localDetail}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleExplain}
+      disabled={explaining}
+      className="mb-2 flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-indigo-600 transition-colors disabled:opacity-50"
+    >
+      {explaining
+        ? <><span className="w-3 h-3 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" /> 설명 생성 중...</>
+        : '❓ 이게 뭔 작업이야?'}
+    </button>
+  );
+}
 
 interface DevTask {
   id: string;
@@ -384,14 +433,10 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     </svg>
                   </div>
 
-                  {/* Detail — 최대 3줄 (제목과 동일하면 숨김) */}
-                  {task.detail && task.detail.trim() !== task.title.trim() && (
-                    <div className={`text-xs text-zinc-600 leading-relaxed rounded-lg px-3 py-2 mb-2 border line-clamp-3 ${
-                      isWaiting ? 'bg-white/70 border-amber-100' : 'bg-zinc-50 border-zinc-100'
-                    }`}>
-                      {task.detail}
-                    </div>
-                  )}
+                  {/* Detail — 있으면 표시, 없으면 "쉬운 설명" 버튼 */}
+                  <TaskDetail task={task} isWaiting={isWaiting} onDetailUpdate={(id, detail) => {
+                    setTasks(prev => prev.map(t => t.id === id ? { ...t, detail } : t));
+                  }} />
 
                   {/* Impact lines */}
                   {task.expected_impact && task.status !== 'done' && (

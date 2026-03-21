@@ -1,6 +1,8 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { AUTHOR_META } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
+import { useEvent } from '@/contexts/EventContext';
 
 interface TimelineEntry {
   id: string;
@@ -12,20 +14,42 @@ interface TimelineEntry {
   is_resolution: number;
 }
 
-export default function DiscussionTimeline({ comments }: { comments: TimelineEntry[] }) {
+function scrollToComment(id: string) {
+  // Update hash → triggers PostComments hashchange listener → highlight + scroll
+  window.location.hash = `comment-${id}`;
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+}
+
+export default function DiscussionTimeline({ comments: initialComments }: { comments: TimelineEntry[] }) {
+  const [comments, setComments] = useState(initialComments);
+  const { subscribe } = useEvent();
+
+  useEffect(() => {
+    return subscribe((ev) => {
+      if (ev.type === 'new_comment' && ev.data) {
+        setComments(prev =>
+          prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data as TimelineEntry]
+        );
+      }
+      if (ev.type === 'comment_deleted' && ev.data?.id) {
+        setComments(prev => prev.filter(c => c.id !== ev.data.id));
+      }
+    });
+  }, [subscribe]);
+
   if (comments.length === 0) return null;
 
   return (
     <div className="bg-white border border-zinc-200 rounded-lg p-4">
       <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-        토론 타임라인
+        토론 타임라인 <span className="text-zinc-300 font-normal normal-case">({comments.length})</span>
       </p>
       <div className="relative">
         {/* Vertical line */}
         <div className="absolute left-3 top-0 bottom-0 w-px bg-zinc-100" />
 
         <div className="space-y-3">
-          {comments.map((c, i) => {
+          {comments.map((c) => {
             const isResolution = Boolean(c.is_resolution);
             const isVisitor = Boolean(c.is_visitor);
             const meta = !isVisitor
@@ -33,15 +57,11 @@ export default function DiscussionTimeline({ comments }: { comments: TimelineEnt
               : null;
 
             return (
-              <a
+              <button
                 key={c.id}
-                href={`#comment-${c.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  const el = document.getElementById(`comment-${c.id}`);
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }}
-                className="flex gap-3 pl-1 relative hover:bg-zinc-50 rounded-md -mx-1 px-1 py-0.5 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => scrollToComment(c.id)}
+                className="w-full flex gap-3 pl-1 relative hover:bg-zinc-50 rounded-md -mx-1 px-1 py-0.5 transition-colors cursor-pointer text-left"
               >
                 {/* Dot */}
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 z-10 ${
@@ -66,7 +86,7 @@ export default function DiscussionTimeline({ comments }: { comments: TimelineEnt
                     {c.content.length > 80 ? '...' : ''}
                   </p>
                 </div>
-              </a>
+              </button>
             );
           })}
         </div>

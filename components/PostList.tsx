@@ -294,20 +294,20 @@ function PostListInner({
     router.replace('/', { scroll: false });
   }
 
-  const [showAllTags, setShowAllTags] = useState(false);
+  const [showTagPanel, setShowTagPanel] = useState(false);
+  const [showAuthorPanel, setShowAuthorPanel] = useState(false);
 
   // Collect all tags from posts for tag cloud
   const allTagsFull = Array.from(
     new Set(posts.flatMap((p: any) => parseTags(p.tags)))
   ).slice(0, 24);
-  const allTags = showAllTags ? allTagsFull : allTagsFull.slice(0, 6);
 
   return (
     <div>
       {/* ── SEARCH BAR ── */}
-      <div className="mb-4 relative">
+      <div className="mb-3 relative">
         <div className="relative flex items-center">
-          <svg className="absolute left-3 w-4 h-4 text-zinc-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute left-4 w-5 h-5 text-zinc-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -315,65 +315,29 @@ function PostListInner({
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="제목, 내용, 태그 검색..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-zinc-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+            className="w-full pl-12 pr-10 py-3 text-sm border border-zinc-200 rounded-2xl bg-white shadow-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-zinc-400"
           />
           {searching && (
-            <div className="absolute right-3 w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+            <div className="absolute right-4 w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
           )}
           {searchQuery && !searching && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 text-zinc-400 hover:text-zinc-600" aria-label="검색어 지우기">
+            <button onClick={() => setSearchQuery('')} className="absolute right-4 text-zinc-400 hover:text-zinc-600 text-lg leading-none" aria-label="검색어 지우기">
               ×
             </button>
           )}
         </div>
-        {searchQuery && (
-          <p className="mt-1 text-[11px] text-zinc-400 pl-1">전체 텍스트 검색 · 제목, 내용, 태그</p>
-        )}
       </div>
-
-      {/* ── TAG CLOUD ── */}
-      {!isSearching && allTagsFull.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3 items-center">
-          {allTags.map(tag => (
-            <button
-              key={tag}
-              onClick={() => {
-                const next = tagFilter === tag ? '' : tag;
-                setTagFilter(next);
-                pushFilter(typeFilter, statusFilter, authorFilter, next);
-              }}
-              className={`text-[11px] px-1.5 py-0.5 rounded-full border transition-all ${
-                tagFilter === tag
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-zinc-500 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600'
-              }`}
-            >
-              #{tag}
-            </button>
-          ))}
-          {allTagsFull.length > 6 && (
-            <button
-              onClick={() => setShowAllTags(p => !p)}
-              className="text-[11px] px-1.5 py-0.5 rounded-full border border-dashed border-zinc-300 text-zinc-400 hover:text-zinc-600 hover:border-zinc-400 transition-all"
-            >
-              {showAllTags ? '접기 ↑' : `+${allTagsFull.length - 6}개 더`}
-            </button>
-          )}
-        </div>
-      )}
 
       {/* ── FILTER BAR ── */}
       {!isSearching && (
-        <div className="space-y-1.5 mb-4">
-          {/* Row 1 — 유형 */}
+        <div className="mb-4 space-y-2">
+          {/* Single filter row */}
           <div className="flex items-center gap-1.5 flex-wrap">
+            {/* 유형 pills */}
             <button
               onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
-              aria-pressed={!typeFilter}
-              className={`text-xs px-3 py-1 rounded-full font-medium transition-all ${
-                !typeFilter
-                  ? 'bg-zinc-900 text-white'
-                  : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                !typeFilter ? 'bg-zinc-900 text-white shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
               }`}
             >
               전체
@@ -381,65 +345,154 @@ function PostListInner({
             {TYPES.map(t => (
               <button
                 key={t}
-                onClick={() => {
-                  const next = typeFilter === t ? '' : t;
-                  setTypeFilter(next);
-                  pushFilter(next, statusFilter, authorFilter, tagFilter);
-                }}
-                aria-pressed={typeFilter === t}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-medium transition-all ${
-                  typeFilter === t
-                    ? 'bg-zinc-900 text-white'
-                    : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+                onClick={() => { const n = typeFilter === t ? '' : t; setTypeFilter(n); pushFilter(n, statusFilter, authorFilter, tagFilter); }}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                  typeFilter === t ? 'bg-zinc-900 text-white shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
                 }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === t ? 'bg-white' : (TYPE_DOT[t] ?? 'bg-zinc-400')}`} />
                 {TYPE_LABELS[t]}
-                {typeCounts[t] > 0 && (
-                  <span className={`${typeFilter === t ? 'opacity-70' : 'text-zinc-400'}`}>{typeCounts[t]}</span>
-                )}
+                {typeCounts[t] > 0 && <span className="opacity-60 tabular-nums">{typeCounts[t]}</span>}
               </button>
             ))}
-            {authorFilter && (
+
+            {/* Divider */}
+            <span className="w-px h-4 bg-zinc-200 mx-0.5" />
+
+            {/* 상태 pills */}
+            {STATUSES.map(s => (
               <button
-                onClick={() => { setAuthorFilter(''); pushFilter(typeFilter, statusFilter, '', tagFilter); }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-zinc-900 text-white font-medium"
+                key={s}
+                onClick={() => { const n = statusFilter === s ? '' : s; setStatusFilter(n); pushFilter(typeFilter, n, authorFilter, tagFilter); }}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all ${
+                  statusFilter === s ? 'bg-zinc-900 text-white font-medium shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
+                }`}
               >
-                {authorFilter} ×
+                <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
+                {STATUS_LABEL_KO[s]}
+              </button>
+            ))}
+
+            {/* Divider */}
+            <span className="w-px h-4 bg-zinc-200 mx-0.5" />
+
+            {/* Tag dropdown trigger */}
+            <button
+              onClick={() => { setShowTagPanel(p => !p); setShowAuthorPanel(false); }}
+              className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${
+                tagFilter || showTagPanel
+                  ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium'
+                  : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
+              }`}
+            >
+              # 태그{tagFilter && <span className="ml-0.5 font-semibold">{tagFilter}</span>}
+              <span className="ml-0.5 text-[10px] opacity-60">{showTagPanel ? '▲' : '▼'}</span>
+            </button>
+
+            {/* Author dropdown trigger */}
+            {uniqueAuthors.length > 1 && (
+              <button
+                onClick={() => { setShowAuthorPanel(p => !p); setShowTagPanel(false); }}
+                className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${
+                  authorFilter || showAuthorPanel
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium'
+                    : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
+                }`}
+              >
+                👤 작성자{authorFilter && <span className="ml-0.5">{authorMeta[authorFilter]?.emoji ?? ''}</span>}
+                <span className="ml-0.5 text-[10px] opacity-60">{showAuthorPanel ? '▲' : '▼'}</span>
               </button>
             )}
-            {tagFilter && (
-              <button
-                onClick={() => { setTagFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, ''); }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-indigo-600 text-white font-medium"
-              >
-                #{tagFilter} ×
-              </button>
-            )}
+
+            {/* Active filter chips */}
             {channelFilter && (
-              <button
-                onClick={() => { setChannelFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, tagFilter, ''); }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-zinc-700 text-white font-medium"
-              >
-                #{channelFilter} ×
+              <button onClick={() => { setChannelFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, tagFilter, ''); }}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-zinc-700 text-white font-medium">
+                {channelFilter} ×
               </button>
             )}
+
+            {/* Right utilities */}
+            <div className="ml-auto flex items-center gap-1.5">
+              {hasFilter && (
+                <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-red-400 transition-colors px-1.5 py-1 rounded-lg hover:bg-red-50">
+                  초기화
+                </button>
+              )}
+              <button
+                onClick={() => setShowBookmarksOnly(p => !p)}
+                className={`text-xs px-2.5 py-1.5 rounded-full border transition-all ${
+                  showBookmarksOnly ? 'bg-amber-500 text-white border-amber-500' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+                }`}
+                title="북마크 필터"
+              >
+                🔖{showBookmarksOnly && ` ${bookmarks.size}`}
+              </button>
+              {notifPerm === 'default' && (
+                <button
+                  onClick={async () => { const p = await Notification.requestPermission(); setNotifPerm(p); }}
+                  className="text-xs px-2.5 py-1.5 rounded-full border border-zinc-200 text-zinc-500 hover:bg-zinc-50 transition-all"
+                >
+                  🔔
+                </button>
+              )}
+              <select
+                value={sortBy}
+                onChange={e => { setSortBy(e.target.value as any); setVisibleCount(10); }}
+                className="text-xs border border-zinc-200 rounded-xl px-2.5 py-1.5 bg-white text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all cursor-pointer"
+              >
+                <option value="newest">최신순</option>
+                <option value="oldest">오래된순</option>
+                <option value="comments">댓글순</option>
+                <option value="priority">우선순위순</option>
+              </select>
+            </div>
           </div>
 
-          {/* Row 1b — Agent filter chips (only shown when multiple authors exist) */}
-          {uniqueAuthors.length > 1 && (
-            <div className="flex gap-1.5 flex-wrap">
-              {uniqueAuthors.slice(0, 8).map((author: string) => {
+          {/* Tag panel dropdown */}
+          {showTagPanel && allTagsFull.length > 0 && (
+            <div className="p-3 bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-wrap gap-1.5">
+              {allTagsFull.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    const next = tagFilter === tag ? '' : tag;
+                    setTagFilter(next);
+                    pushFilter(typeFilter, statusFilter, authorFilter, next);
+                    if (next) setShowTagPanel(false);
+                  }}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
+                    tagFilter === tag
+                      ? 'bg-indigo-600 text-white border-indigo-600 font-medium'
+                      : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Author panel dropdown */}
+          {showAuthorPanel && uniqueAuthors.length > 1 && (
+            <div className="p-3 bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-wrap gap-1.5">
+              {uniqueAuthors.map((author: string) => {
                 const meta = authorMeta[author];
                 if (!meta) return null;
                 return (
                   <button
                     key={author}
-                    onClick={() => { setAuthorFilter(authorFilter === author ? '' : author); pushFilter(typeFilter, statusFilter, authorFilter === author ? '' : author, tagFilter); setVisibleCount(10); }}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+                    onClick={() => {
+                      const next = authorFilter === author ? '' : author;
+                      setAuthorFilter(next);
+                      pushFilter(typeFilter, statusFilter, next, tagFilter);
+                      setVisibleCount(10);
+                      if (next) setShowAuthorPanel(false);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-all ${
                       authorFilter === author
-                        ? 'bg-indigo-100 border-indigo-300 text-indigo-700'
-                        : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-300'
+                        ? 'bg-indigo-600 text-white border-indigo-600 font-medium'
+                        : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'
                     }`}
                   >
                     {meta.emoji} {meta.label}
@@ -448,72 +501,6 @@ function PostListInner({
               })}
             </div>
           )}
-
-          {/* Row 2 — 상태 + 정렬/알림/북마크 */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {STATUSES.map(s => (
-              <button
-                key={s}
-                onClick={() => {
-                  const next = statusFilter === s ? '' : s;
-                  setStatusFilter(next);
-                  pushFilter(typeFilter, next, authorFilter, tagFilter);
-                }}
-                aria-pressed={statusFilter === s}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all ${
-                  statusFilter === s
-                    ? 'bg-zinc-900 text-white font-medium'
-                    : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
-                {STATUS_LABEL_KO[s]}
-              </button>
-            ))}
-            {hasFilter && (
-              <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors px-1">
-                초기화 ×
-              </button>
-            )}
-            <div className="ml-auto flex items-center gap-1.5">
-              {/* Bookmark filter */}
-              <button
-                onClick={() => setShowBookmarksOnly(p => !p)}
-                aria-pressed={showBookmarksOnly}
-                aria-label={showBookmarksOnly ? '북마크 필터 해제' : '북마크 필터'}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all ${
-                  showBookmarksOnly
-                    ? 'bg-amber-500 text-white border-amber-500'
-                    : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
-                }`}
-                title="북마크 필터"
-              >
-                🔖 {showBookmarksOnly ? bookmarks.size : ''}
-              </button>
-              {notifPerm === 'default' && (
-                <button
-                  onClick={async () => {
-                    const perm = await Notification.requestPermission();
-                    setNotifPerm(perm);
-                  }}
-                  aria-label="알림 권한 요청"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-all"
-                >
-                  🔔
-                </button>
-              )}
-              <select
-                value={sortBy}
-                onChange={e => { setSortBy(e.target.value as any); setVisibleCount(10); }}
-                className="text-xs border border-zinc-200 rounded-lg px-2 py-1 bg-white text-zinc-600 focus:outline-none hover:border-zinc-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all cursor-pointer"
-              >
-                <option value="newest">최신순</option>
-                <option value="oldest">오래된순</option>
-                <option value="comments">댓글 많은순</option>
-                <option value="priority">우선순위순</option>
-              </select>
-            </div>
-          </div>
         </div>
       )}
 

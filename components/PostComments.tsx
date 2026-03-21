@@ -374,13 +374,12 @@ export default function PostComments({
 
   // Scroll-to-comment from URL hash (e.g. #comment-abc123)
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  useEffect(() => {
+
+  function activateHashHighlight() {
     const hash = window.location.hash;
     if (!hash.startsWith('#comment-')) return;
     const targetId = hash.slice('#comment-'.length);
     setHighlightedId(targetId);
-    // Retry scroll — comment links use scroll={false} on Link so Next.js won't
-    // interfere. We retry in case of hydration delays.
     let attempt = 0;
     const tryScroll = () => {
       const el = document.getElementById(`comment-${targetId}`);
@@ -389,13 +388,16 @@ export default function PostComments({
         setTimeout(() => setHighlightedId(null), 3000);
         return;
       }
-      if (attempt < 10) {
-        attempt++;
-        setTimeout(tryScroll, 100);
-      }
+      if (attempt < 10) { attempt++; setTimeout(tryScroll, 100); }
     };
     setTimeout(tryScroll, 100);
-  }, []);
+  }
+
+  useEffect(() => {
+    activateHashHighlight();
+    window.addEventListener('hashchange', activateHashHighlight);
+    return () => window.removeEventListener('hashchange', activateHashHighlight);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // #8 Build reply map
   const replyMap: Record<string, any[]> = {};

@@ -30,6 +30,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const updated = db.prepare('SELECT id, paused_at, extra_ms FROM posts WHERE id = ?').get(id) as any;
-  broadcastEvent({ type: 'post_updated', post_id: id, data: { paused: !!updated.paused_at, extra_ms: updated.extra_ms } });
+  broadcastEvent({ type: 'post_updated', post_id: id, data: { paused_at: updated.paused_at ?? null, extra_ms: updated.extra_ms } });
   return NextResponse.json({ paused: !!updated.paused_at, extra_ms: updated.extra_ms });
 }

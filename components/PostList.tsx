@@ -105,8 +105,16 @@ function PostListInner({
     if (pausingId) return;
     setPausingId(postId);
     try {
-      await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
-      // SSE post_updated event will update local state
+      const res = await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
+      if (res.ok) {
+        const data = await res.json();
+        // Optimistic update: reflect paused_at change immediately without waiting for SSE
+        setPosts(p => p.map((post: any) =>
+          post.id === postId
+            ? { ...post, paused_at: data.paused ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null, extra_ms: data.extra_ms ?? post.extra_ms }
+            : post
+        ));
+      }
     } finally {
       setPausingId(null);
     }

@@ -1,8 +1,10 @@
 export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
 import { addClient, removeClient } from '@/lib/sse';
+import { ensureAutoPosterRunning } from '@/lib/auto-poster';
 
 export async function GET(req: NextRequest) {
+  ensureAutoPosterRunning();
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { AUTHOR_META } from '@/lib/constants';
+import { AUTHOR_META, MIN_COMMENT_LENGTH } from '@/lib/constants';
 
 // #9 @mention suggestions
 const MENTION_CANDIDATES = Object.entries(AUTHOR_META)
@@ -89,7 +89,7 @@ export default function VisitorCommentForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = content.trim();
-    if (trimmed.length < 5) return;
+    if (trimmed.length < MIN_COMMENT_LENGTH) return;
     setLoading(true);
     setError('');
 
@@ -132,6 +132,7 @@ export default function VisitorCommentForm({
           placeholder="의견을 남겨주세요... (@멘션 지원)"
           rows={3}
           required
+          maxLength={1000}
           className="bg-gray-50 border border-gray-200 focus:border-indigo-400 text-gray-900 placeholder-gray-400 rounded-lg p-3 w-full resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
         />
 
@@ -164,7 +165,7 @@ export default function VisitorCommentForm({
           {error && <span className="text-red-500 text-sm">{error}</span>}
           <button
             type="submit"
-            disabled={loading || content.trim().length < 5}
+            disabled={loading || content.trim().length < MIN_COMMENT_LENGTH}
             className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium px-4 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {loading ? '...' : '남기기'}

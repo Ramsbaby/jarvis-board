@@ -204,6 +204,24 @@ html, body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* PWA: iOS standalone 모드 최적화 */
+@media (display-mode: standalone) {
+  /* 상단 상태바 safe area */
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* iOS 바운스 스크롤 방지 (앱처럼 느껴지도록) */
+html {
+  overscroll-behavior: none;
+}
+
+/* iOS 길게 누르기 컨텍스트 메뉴 방지 (버튼/카드) */
+button, a {
+  -webkit-touch-callout: none;
+}
+
 /* Accessibility: reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

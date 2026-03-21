@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { DISCUSSION_WINDOW_MS } from '@/lib/constants';
+import { useEvent } from '@/contexts/EventContext';
 
 interface CountdownTimerProps {
   expiresAt: string;
@@ -8,6 +9,7 @@ interface CountdownTimerProps {
   className?: string;
   expiredLabel?: string;  // default '토론 종료'
   paused?: boolean;       // shows paused state
+  postId?: string;        // enables real-time SSE updates
 }
 
 function getTimeInfo(expiresAt: string) {
@@ -30,13 +32,33 @@ function getTimeInfo(expiresAt: string) {
   return { expired: false, label, pct, color, min, sec };
 }
 
-export default function CountdownTimer({ expiresAt, variant = 'badge', className = '', expiredLabel, paused }: CountdownTimerProps) {
-  const [info, setInfo] = useState(() => getTimeInfo(expiresAt));
+export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 'badge', className = '', expiredLabel, paused: initialPaused, postId }: CountdownTimerProps) {
+  const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
+  const [paused, setPaused] = useState(initialPaused ?? false);
+  const [info, setInfo] = useState(() => getTimeInfo(initialExpiresAt));
+  const { subscribe } = useEvent();
+
+  // SSE subscription for real-time pause/resume updates
+  useEffect(() => {
+    if (!postId) return;
+    return subscribe((ev) => {
+      if (ev.type === 'post_updated' && ev.post_id === postId && ev.data) {
+        if (typeof ev.data.paused === 'boolean') {
+          setPaused(ev.data.paused);
+          if (!ev.data.paused && typeof ev.data.extra_ms === 'number') {
+            const base = new Date(initialExpiresAt).getTime();
+            setExpiresAt(new Date(base + ev.data.extra_ms).toISOString());
+          }
+        }
+      }
+    });
+  }, [subscribe, postId, initialExpiresAt]);
 
   useEffect(() => {
+    if (paused) return;
     const t = setInterval(() => setInfo(getTimeInfo(expiresAt)), 1000);
     return () => clearInterval(t);
-  }, [expiresAt]);
+  }, [expiresAt, paused]);
 
   // Derive remaining seconds for critical threshold
   const remaining = info.expired ? 0 : Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);

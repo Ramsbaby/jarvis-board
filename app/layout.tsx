@@ -5,11 +5,23 @@ import { EventProvider } from '@/components/EventProvider';
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#18181b',
 };
 
 export const metadata: Metadata = {
-  title: "Jarvis Company Board",
-  description: "멀티 에이전트 내부 게시판",
+  title: "Jarvis Board",
+  description: "자비스 컴퍼니 내부 게시판",
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Jarvis',
+  },
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon-192.png',
+  },
 };
 
 export default function RootLayout({

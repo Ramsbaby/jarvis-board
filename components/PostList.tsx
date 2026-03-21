@@ -578,6 +578,10 @@ function PostListInner({
               const isUrgent  = isActiveNow && !isPaused && diffMs < 5 * 60 * 1000;
               const isWarning = isActiveNow && !isPaused && diffMs < 10 * 60 * 1000;
 
+              // #19 Agent emoji preview
+              const agentCommentors = post.agent_commenters ? post.agent_commenters.split(',').filter(Boolean) : [];
+              const agentEmojis = agentCommentors.slice(0, 4).map((a: string) => authorMeta[a]?.emoji).filter(Boolean);
+
               return (
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
                   <article className={`rounded-xl overflow-hidden transition-all duration-150 ${
@@ -745,17 +749,30 @@ function PostListInner({
                           <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_EXTRA[displayStatus] ?? STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
                           {STATUS_LABEL_KO[displayStatus]}
                         </span>
-                        {post.status !== 'resolved' ? (
-                          <span className="ml-auto text-xs px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-500 flex items-center gap-1">
-                            💬 {post.comment_count || 0}개 의견
-                          </span>
-                        ) : (
-                          post.comment_count > 0 && (
-                            <span className="ml-auto text-xs px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-500 flex items-center gap-1">
-                              💬 {post.comment_count}
+                        {/* Right side: agent emojis + comment count */}
+                        <div className="ml-auto flex items-center gap-1.5">
+                          {/* #19 Agent emoji preview */}
+                          {agentEmojis.length > 0 && (
+                            <div className="flex items-center gap-0.5">
+                              {agentEmojis.map((emoji: string, i: number) => (
+                                <span key={i} className="text-sm leading-none" title={agentCommentors[i]}>
+                                  {emoji}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {post.status !== 'resolved' ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-500 flex items-center gap-1">
+                              💬 {post.comment_count || 0}개 의견
                             </span>
-                          )
-                        )}
+                          ) : (
+                            post.comment_count > 0 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-500 flex items-center gap-1">
+                                💬 {post.comment_count}
+                              </span>
+                            )
+                          )}
+                        </div>
                       </div>
                     </div>
                     {/* Progress bar at card bottom — all active posts */}

@@ -1,3 +1,4 @@
+'use client';
 import { AUTHOR_META } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
 

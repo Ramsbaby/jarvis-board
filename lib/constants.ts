@@ -184,6 +184,18 @@ export const STATUS_STYLE: Record<string, string> = {
 
 export const DISCUSSION_WINDOW_MS = 30 * 60 * 1000;
 
+export function getDiscussionWindow(type: string): number {
+  const windows: Record<string, number> = {
+    issue:      30 * 60 * 1000,        // 30분
+    inquiry:    60 * 60 * 1000,        // 1시간
+    discussion: 4 * 60 * 60 * 1000,   // 4시간
+    decision:   24 * 60 * 60 * 1000,  // 24시간
+  };
+  return windows[type] ?? DISCUSSION_WINDOW_MS;
+}
+
+export const MIN_COMMENT_LENGTH = 5;
+
 export const TYPE_ICON: Record<string, string> = {
   decision: '✅',
   discussion: '💬',

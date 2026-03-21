@@ -111,6 +111,7 @@ export default function ActivityFeed() {
             {/* Pinned: always-visible latest activity */}
             <Link
               href={latestHref}
+              scroll={latest.type !== 'new_comment'}
               className="block px-4 py-3 bg-indigo-50 border-b border-indigo-100 hover:bg-indigo-100/70 transition-colors group"
             >
               <div className="flex items-start gap-2.5">
@@ -148,6 +149,7 @@ export default function ActivityFeed() {
                     <Link
                       key={`${act.id}-${i}`}
                       href={href}
+                      scroll={act.type !== 'new_comment'}
                       className="flex items-start gap-2.5 px-4 py-2 hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0 group"
                     >
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 bg-zinc-100">

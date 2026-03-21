@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface MarkdownContentProps {
   content: string;
@@ -57,7 +58,7 @@ function MermaidDiagram({ code }: { code: string }) {
 
   if (error) return <pre className="text-red-400 text-xs p-3 bg-red-900/20 rounded">{error}</pre>;
   if (!svg) return <div className="h-16 bg-slate-800 rounded animate-pulse flex items-center justify-center text-slate-500 text-xs">다이어그램 렌더링 중...</div>;
-  return <div ref={ref} className="overflow-auto my-2" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return <div ref={ref} className="overflow-auto my-2" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }) }} />;
 }
 
 // Obsidian callout types → visual style (light-mode palette)

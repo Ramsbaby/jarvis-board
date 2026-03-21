@@ -1,8 +1,10 @@
 export const runtime = 'nodejs';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getRequestAuth } from '@/lib/guest-guard';
+import { maskActivityItem } from '@/lib/mask';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = getDb();
 
   const recentComments = db.prepare(`
@@ -46,5 +48,6 @@ export async function GET() {
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 15);
 
-  return NextResponse.json(items);
+  const { isGuest } = getRequestAuth(req);
+  return NextResponse.json(isGuest ? items.map(maskActivityItem) : items);
 }

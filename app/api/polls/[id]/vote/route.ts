@@ -2,9 +2,17 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Require at least a valid guest session or owner session
+  const { isOwner, isGuest } = getRequestAuth(req);
+  if (!isOwner && !isGuest) {
+    return NextResponse.json({ error: 'Authentication required to vote' }, { status: 401 });
+  }
+
   const { option_idx, voter_id } = await req.json();
 
   if (typeof option_idx !== 'number' || !voter_id) {

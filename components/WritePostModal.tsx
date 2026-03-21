@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const CHANNEL_OPTIONS = [
   { value: 'general',  label: '# 일반' },
@@ -38,6 +38,8 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
   const [tags, setTags] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<Draft | null>(null);
@@ -56,13 +58,20 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
     } catch { /* ignore */ }
   }, []);
 
-  // #7 Auto-save draft to localStorage (debounced via useEffect)
+  // #7 Auto-save draft to localStorage (debounced 500ms)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (draftRestored || showDraftPrompt) return; // don't save during prompt
-    const draft: Draft = { title, type, content, tags };
-    if (title || content) {
-      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
-    }
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      const draft: Draft = { title, type, content, tags };
+      if (title || content) {
+        try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
+      }
+    }, 500);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
   }, [title, type, content, tags, draftRestored, showDraftPrompt]);
 
   function restoreDraft() {
@@ -81,6 +90,31 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
     setShowDraftPrompt(false);
     setPendingDraft(null);
+  }
+
+  function addTag(tag: string) {
+    const existing = tags.split(',').map(t => t.trim()).filter(Boolean);
+    if (existing.includes(tag)) return;
+    setTags(existing.length > 0 ? existing.join(', ') + ', ' + tag : tag);
+    setSuggestedTags(prev => prev.filter(t => t !== tag));
+  }
+
+  async function suggestTags() {
+    if (!title.trim()) return;
+    setLoadingSuggestions(true);
+    try {
+      const res = await fetch('/api/posts/suggest-tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, type }),
+      });
+      const data = await res.json();
+      setSuggestedTags(data.tags || []);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingSuggestions(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -155,7 +189,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
           <div>
             <select
               value={channel}
-              onChange={e => setChannel(e.target.value)}
+              onChange={e => { setChannel(e.target.value); setError(''); }}
               className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 bg-white"
             >
               {CHANNEL_OPTIONS.map(opt => (
@@ -170,7 +204,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => setType(opt.value)}
+                onClick={() => { setType(opt.value); setError(''); }}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
                   type === opt.value
                     ? 'bg-indigo-600 text-white border-indigo-600'
@@ -188,7 +222,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
               type="text"
               placeholder="제목"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={e => { setTitle(e.target.value); setError(''); }}
               className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
               maxLength={100}
               required
@@ -200,7 +234,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
             <textarea
               placeholder="내용 (마크다운 지원)"
               value={content}
-              onChange={e => setContent(e.target.value)}
+              onChange={e => { setContent(e.target.value); setError(''); }}
               rows={5}
               className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all resize-none font-mono text-xs"
               required
@@ -209,13 +243,38 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
 
           {/* Tags */}
           <div>
-            <input
-              type="text"
-              placeholder="태그 (쉼표로 구분, 예: jarvis, dev, 긴급)"
-              value={tags}
-              onChange={e => setTags(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="태그 (쉼표로 구분, 예: jarvis, dev, 긴급)"
+                value={tags}
+                onChange={e => { setTags(e.target.value); setError(''); }}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+              />
+              <button
+                type="button"
+                onClick={suggestTags}
+                disabled={loadingSuggestions || !title.trim()}
+                className="shrink-0 px-3 py-2.5 text-xs font-medium rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+              >
+                {loadingSuggestions ? '추천 중...' : '✨ 태그 추천'}
+              </button>
+            </div>
+            {suggestedTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[10px] text-zinc-400 self-center">추천:</span>
+                {suggestedTags.map(tag => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => addTag(tag)}
+                    className="text-[11px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-0.5 rounded hover:bg-indigo-100 transition-colors"
+                  >
+                    + {tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && <p className="text-xs text-red-500">{error}</p>}

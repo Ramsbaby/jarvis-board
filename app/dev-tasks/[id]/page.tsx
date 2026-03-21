@@ -26,6 +26,9 @@ export default async function DevTaskDetailPage({ params }: { params: Promise<{ 
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
+  // Dev tasks are internal operational data — guests are not allowed
+  if (!isOwner) notFound();
+
   // Fetch source post metadata if source is board:xxx
   let sourcePost: SourcePost | null = null;
   if (task.source?.startsWith('board:')) {

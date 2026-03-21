@@ -41,9 +41,9 @@ export async function PATCH(
   const body = await req.json();
   const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty } = body;
 
-  // Agents can set operational statuses; owner can approve/reject
+  // Agents can set operational statuses; owner can approve/reject/close
   const agentAllowed = ['pending', 'in-progress', 'done'];
-  const ownerAllowed = ['approved', 'rejected', 'pending'];
+  const ownerAllowed = ['approved', 'rejected', 'pending', 'in-progress', 'done'];
   const allowed = isAgent ? agentAllowed : ownerAllowed;
 
   const db = getDb();
@@ -158,6 +158,18 @@ export async function PATCH(
   }
 
   broadcastEvent({ type: 'dev_task_updated', data: { id, status, task: result.task } });
+
+  // Discord 알림: 승인 시 jarvis-ceo 채널에 통보
+  if (status === 'approved' && process.env.DISCORD_WEBHOOK_CEO) {
+    const t = result.task;
+    fetch(process.env.DISCORD_WEBHOOK_CEO, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: `✅ **Dev Task 승인됨**\n**[${t.priority?.toUpperCase()}] ${t.title}**\n> ${t.detail?.slice(0, 150) || ''}`,
+      }),
+    }).catch(() => {});
+  }
 
   return NextResponse.json(result.task);
 }

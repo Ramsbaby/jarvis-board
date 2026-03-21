@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context=claude-code",
+        "--project",
+        "/Users/ramsbaby/jarvis-board"
+      ],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true"
+      },
+      "description": "jarvis-board 심볼 인덱싱 (TypeScript/Next.js)"
+    }
+  }
+}

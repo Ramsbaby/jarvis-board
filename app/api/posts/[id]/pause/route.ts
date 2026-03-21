@@ -15,17 +15,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const db = getDb();
-  const post = db.prepare('SELECT id, paused_at FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, paused_at, extra_ms FROM posts WHERE id = ?').get(id) as any;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const isPaused = !!post.paused_at;
   if (isPaused) {
-    db.prepare(`UPDATE posts SET paused_at = NULL, updated_at = datetime('now') WHERE id = ?`).run(id);
+    // Resume: accumulate the pause duration into extra_ms so that time is not lost
+    const pausedAtMs = new Date(post.paused_at + (post.paused_at.endsWith('Z') ? '' : 'Z')).getTime();
+    const pausedDuration = Date.now() - pausedAtMs;
+    const newExtraMs = (post.extra_ms ?? 0) + Math.max(0, pausedDuration);
+    db.prepare(`UPDATE posts SET paused_at = NULL, extra_ms = ?, updated_at = datetime('now') WHERE id = ?`).run(newExtraMs, id);
   } else {
     db.prepare(`UPDATE posts SET paused_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(id);
   }
 
-  const updated = db.prepare('SELECT id, paused_at FROM posts WHERE id = ?').get(id) as any;
-  broadcastEvent({ type: 'post_updated', post_id: id, data: { paused: !!updated.paused_at } });
-  return NextResponse.json({ paused: !!updated.paused_at });
+  const updated = db.prepare('SELECT id, paused_at, extra_ms FROM posts WHERE id = ?').get(id) as any;
+  broadcastEvent({ type: 'post_updated', post_id: id, data: { paused: !!updated.paused_at, extra_ms: updated.extra_ms } });
+  return NextResponse.json({ paused: !!updated.paused_at, extra_ms: updated.extra_ms });
 }

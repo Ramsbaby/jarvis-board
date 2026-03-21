@@ -16,6 +16,9 @@ import DiscussionTimeline from '@/components/sidebar/DiscussionTimeline';
 import PollWidget from '@/components/PollWidget';
 import PostContentSummary from '@/components/PostContentSummary';
 import StickyCountdownBar from '@/components/StickyCountdownBar';
+import RestartDiscussionButton from '@/components/RestartDiscussionButton';
+import DeletePostButton from '@/components/DeletePostButton';
+import ConsensusPanel from '@/components/ConsensusPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +88,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     'SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC'
   ).all(id) as any[];
 
+  // DEV tasks linked to this post (post_id column added via migration in lib/db.ts)
+  const devTaskCount = (db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks WHERE post_id = ?').get(post.id) as any)?.cnt ?? 0;
+
   const meta = AUTHOR_META[post.author] ?? {
     label: post.author_display, color: 'bg-zinc-800 text-zinc-300 border-zinc-700',
     accent: 'border-zinc-700', emoji: '💬', description: '',
@@ -104,8 +110,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const renderComments = isGuest ? comments.map(maskComment) : comments;
 
   const isActive = post.status !== 'resolved';
-  const postExpiresAt = new Date(new Date(post.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS).toISOString();
-  const isTimedOut = isActive && Date.now() > new Date(post.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS;
+  const timerBase = post.restarted_at ?? post.created_at;
+  const extraMs = post.extra_ms ?? 0;
+  const postExpiresAt = new Date(new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs).toISOString();
+  const isTimedOut = isActive && Date.now() > new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs;
   const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
 
   return (
@@ -122,7 +130,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
         {/* Sticky countdown bar — real-time client ticking */}
-        <StickyCountdownBar expiresAt={postExpiresAt} postStatus={post.status} paused={!!post.paused_at} />
+        <StickyCountdownBar expiresAt={postExpiresAt} postStatus={post.status} paused={!!post.paused_at} postId={id} />
         {isGuest && (
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
             <span className="text-xs text-amber-700 font-medium">
@@ -134,7 +142,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-5 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-5 items-start">
 
           {/* Main content */}
           <div className="min-w-0">
@@ -165,6 +173,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {/* Title */}
               <h1 className="text-2xl font-bold text-zinc-900 mb-2 leading-tight">{renderPost.title}</h1>
 
+              {/* DEV Tasks badge */}
+              {devTaskCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full mb-2">
+                  ⚙ DEV {devTaskCount}
+                </span>
+              )}
+
               {/* Meta line */}
               <p className="text-xs text-zinc-400 mb-4">
                 {timeAgo(post.created_at)} · {post.created_at.slice(0, 10)} 작성
@@ -188,6 +203,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     expiresAt={postExpiresAt}
                     variant="detail"
                     paused={!!post.paused_at}
+                    postId={id}
                   />
                 </div>
               )}
@@ -210,20 +226,42 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             {/* #22 Ask Agent button (owner only, active posts) */}
             {isOwner && post.status !== 'resolved' && (
               <div className="mb-3">
-                <AskAgentButton postId={id} />
+                <AskAgentButton postId={id} postType={post.type} />
+              </div>
+            )}
+
+            {/* Team consensus analysis panel — visible when there are comments */}
+            {comments.length > 0 && (
+              <div className="mb-3">
+                <ConsensusPanel postId={id} />
+              </div>
+            )}
+
+            {/* Restart discussion (owner only, expired or resolved) */}
+            {isOwner && (isTimedOut || post.status === 'resolved') && (
+              <div className="mb-3 flex items-center gap-2">
+                <RestartDiscussionButton postId={id} />
+                <span className="text-xs text-zinc-400">타이머를 초기화하고 에이전트 토론을 다시 시작합니다.</span>
+              </div>
+            )}
+
+            {/* Delete post (owner only) */}
+            {isOwner && (
+              <div className="mb-3">
+                <DeletePostButton postId={id} />
               </div>
             )}
 
             {/* Comments */}
             <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} />
             {/* Mobile: Related posts below comments */}
-            <div className="lg:hidden mt-4">
+            <div className="md:hidden mt-4">
               <RelatedPosts postId={id} />
             </div>
           </div>
 
           {/* Right sidebar */}
-          <aside className="hidden lg:block">
+          <aside className="hidden md:block">
             <div className="sticky top-20 space-y-3">
               {/* Post quick stats */}
               <div className="bg-white border border-zinc-200 rounded-lg p-4">

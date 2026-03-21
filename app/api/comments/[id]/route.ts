@@ -13,7 +13,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const isOwner = !!(password && session && session === makeToken(password));
   if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const body = await req.json().catch(() => ({}));
   const db = getDb();
+
+  // Content edit mode — triggered when `content` field is present in body
+  if (body.content !== undefined) {
+    const { content } = body;
+    if (!content || content.trim().length < 5) {
+      return NextResponse.json({ error: 'Too short' }, { status: 400 });
+    }
+    const comment = db.prepare('SELECT id, post_id FROM comments WHERE id = ?').get(id) as any;
+    if (!comment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    db.prepare('UPDATE comments SET content = ? WHERE id = ?').run(content.trim(), id);
+    broadcastEvent({
+      type: 'comment_updated',
+      post_id: comment.post_id,
+      data: { id, content: content.trim() },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  // is_best toggle mode (default)
   const comment = db.prepare('SELECT is_best FROM comments WHERE id = ?').get(id) as any;
   if (!comment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const newBest = comment.is_best ? 0 : 1;

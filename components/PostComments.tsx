@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { AUTHOR_META, DISCUSSION_WINDOW_MS } from '@/lib/constants';
-import { timeAgo } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { AUTHOR_META, DISCUSSION_WINDOW_MS, MIN_COMMENT_LENGTH } from '@/lib/constants';
+import { timeAgo, fmtDateShort } from '@/lib/utils';
 import MarkdownContent from '@/components/MarkdownContent';
 import VisitorCommentForm from './VisitorCommentForm';
 import { useEvent } from '@/contexts/EventContext';
@@ -81,6 +82,8 @@ const PERSONA_ACCENT: Record<string, string> = {
   'board-synthesizer':'border-l-yellow-400',
   'council-team':     'border-l-yellow-400',
 };
+
+const C_SUITE_AGENTS = new Set(['kim-seonhwi', 'jung-mingi', 'lee-jihwan']);
 
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '🤔'];
 
@@ -226,6 +229,7 @@ export default function PostComments({
   const [toast, setToast] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
   const [localStatus, setLocalStatus] = useState(postStatus);
   const [paused, setPaused] = useState(!!pausedAt);
   const [pauseLoading, setPauseLoading] = useState(false);
@@ -242,6 +246,11 @@ export default function PostComments({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
+
+  // Comment edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
 
   const { subscribe } = useEvent();
 
@@ -281,6 +290,11 @@ export default function PostComments({
       }
       if (ev.type === 'comment_deleted' && ev.post_id === postId) {
         setComments(prev => prev.filter(c => c.id !== ev.data?.id));
+      }
+      if (ev.type === 'comment_updated' && ev.post_id === postId) {
+        setComments(prev => prev.map(c =>
+          c.id === ev.data?.id ? { ...c, content: ev.data.content } : c
+        ));
       }
       // #21 Typing indicator
       if (ev.type === 'agent_typing' && ev.post_id === postId) {
@@ -336,7 +350,7 @@ export default function PostComments({
   // #8 Submit reply
   async function handleReply(parentId: string) {
     const trimmed = replyContent.trim();
-    if (trimmed.length < 2) return;
+    if (trimmed.length < MIN_COMMENT_LENGTH) return;
     setReplyLoading(true);
     try {
       const res = await fetch(`/api/posts/${postId}/comments`, {
@@ -362,13 +376,22 @@ export default function PostComments({
     if (!hash.startsWith('#comment-')) return;
     const targetId = hash.slice('#comment-'.length);
     setHighlightedId(targetId);
-    const el = document.getElementById(`comment-${targetId}`);
-    if (el) {
-      setTimeout(() => {
+    // Retry scroll — comment links use scroll={false} on Link so Next.js won't
+    // interfere. We retry in case of hydration delays.
+    let attempt = 0;
+    const tryScroll = () => {
+      const el = document.getElementById(`comment-${targetId}`);
+      if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
-      setTimeout(() => setHighlightedId(null), 3000);
-    }
+        setTimeout(() => setHighlightedId(null), 3000);
+        return;
+      }
+      if (attempt < 10) {
+        attempt++;
+        setTimeout(tryScroll, 100);
+      }
+    };
+    setTimeout(tryScroll, 100);
   }, []);
 
   // #8 Build reply map
@@ -460,7 +483,7 @@ export default function PostComments({
                       {meta.emoji} {meta.label}
                     </span>
                   ) : null}
-                  <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
+                  <span className="text-gray-400 text-xs">{fmtDateShort(c.created_at)} · {timeAgo(c.created_at)}</span>
                 </div>
                 <MarkdownContent content={c.content} />
               </div>
@@ -473,6 +496,7 @@ export default function PostComments({
     const isBest = Boolean(c.is_best);
     const rank = rankMap[c.id];
     const isOwnerComment = c.author === 'owner';
+    const isCLevel = !isVisitor && !isOwnerComment && C_SUITE_AGENTS.has(c.author);
     const badgeClass = isOwnerComment
       ? 'bg-amber-50 text-amber-700 border-amber-200'
       : (PERSONA_BADGE[c.author] ?? (meta?.color?.includes('from-') ? 'bg-gray-100 text-gray-700 border-gray-200' : (meta?.color ?? 'bg-gray-100 text-gray-700 border-gray-200')));
@@ -488,10 +512,10 @@ export default function PostComments({
       <div
         id={`comment-${c.id}`}
         key={c.id}
-        className={`flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${
+        className={`scroll-mt-20 flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${isCLevel ? 'shadow-sm' : ''} ${
           isHighlighted ? 'ring-2 ring-indigo-400 ring-offset-1 bg-indigo-50/40' :
           isReply
-            ? 'ml-8 mt-2 border border-l-2 border-l-indigo-200 border-gray-100'
+            ? 'mt-1 border border-l-2 border-l-indigo-200 border-gray-100'
             : rank
             ? `border border-l-4 ${RANK_STYLE[rank]} ${rank === 1 ? 'border-l-yellow-400' : rank === 2 ? 'border-l-slate-400' : 'border-l-amber-500'}`
             : isBest
@@ -507,6 +531,12 @@ export default function PostComments({
         ) : isOwnerComment ? (
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
             {meta?.emoji || '👑'}
+          </div>
+        ) : isCLevel ? (
+          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${
+            meta?.color?.includes('from-') ? meta.color : 'from-gray-400 to-gray-500'
+          } flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-2 ring-offset-1 ring-orange-300`}>
+            {meta?.emoji || c.author_display?.charAt(0) || '?'}
           </div>
         ) : (
           <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${
@@ -526,10 +556,12 @@ export default function PostComments({
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs ${badgeClass}`}>
                   {meta.emoji} {meta.label ?? c.author_display}
-                  {meta.isAgent !== false && (
-                    <span className="ml-0.5 text-[9px] px-1 rounded bg-violet-100 text-violet-600 font-semibold border border-violet-200">AI</span>
-                  )}
                 </span>
+                {isCLevel && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-600 font-semibold">
+                    임원
+                  </span>
+                )}
                 {meta.description && meta.isAgent !== false && (
                   <span className="text-[11px] text-zinc-400">{meta.description}</span>
                 )}
@@ -568,7 +600,7 @@ export default function PostComments({
             onToggle={handleReaction}
           />
 
-          {/* Owner actions: reply + best toggle + delete */}
+          {/* Owner actions: reply + best toggle + edit + delete */}
           {!isReply && isOwner && (
             <div className="mt-2 flex items-center gap-3">
               <button
@@ -580,7 +612,7 @@ export default function PostComments({
               {/* #12 Best comment toggle */}
               <button
                 onClick={async () => {
-                  const res = await fetch(`/api/comments/${c.id}`, { method: 'PATCH' });
+                  const res = await fetch(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                   if (res.ok) {
                     const data = await res.json();
                     setComments(prev => prev.map(cm => cm.id === c.id ? { ...cm, is_best: data.is_best } : cm));
@@ -589,6 +621,20 @@ export default function PostComments({
                 className={`text-[11px] transition-colors ${c.is_best ? 'text-amber-500 hover:text-amber-600' : 'text-gray-400 hover:text-amber-400'}`}
               >
                 {c.is_best ? '⭐ 베스트' : '☆ 베스트 선정'}
+              </button>
+              {/* Comment edit button */}
+              <button
+                onClick={() => {
+                  if (editingId === c.id) {
+                    setEditingId(null);
+                  } else {
+                    setEditingId(c.id);
+                    setEditContent(c.content);
+                  }
+                }}
+                className="text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
+              >
+                {editingId === c.id ? '취소' : '✏ 수정'}
               </button>
               {/* #16 Delete comment */}
               <button
@@ -604,6 +650,50 @@ export default function PostComments({
               >
                 × 삭제
               </button>
+            </div>
+          )}
+          {/* Inline edit form */}
+          {editingId === c.id && isOwner && (
+            <div className="mt-2 flex gap-2">
+              <textarea
+                value={editContent}
+                onChange={e => setEditContent(e.target.value)}
+                rows={3}
+                className="flex-1 text-xs px-3 py-2 rounded-lg border border-blue-200 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 resize-none bg-blue-50/40"
+              />
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={async () => {
+                    if (editContent.trim().length < 5) return;
+                    setEditLoading(true);
+                    try {
+                      const res = await fetch(`/api/comments/${c.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: editContent.trim() }),
+                      });
+                      if (res.ok) {
+                        setComments(prev => prev.map(cm =>
+                          cm.id === c.id ? { ...cm, content: editContent.trim() } : cm
+                        ));
+                        setEditingId(null);
+                      }
+                    } finally {
+                      setEditLoading(false);
+                    }
+                  }}
+                  disabled={editLoading || editContent.trim().length < 5}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {editLoading ? '...' : '저장'}
+                </button>
+                <button
+                  onClick={() => setEditingId(null)}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  취소
+                </button>
+              </div>
             </div>
           )}
           {/* Reply-only delete for owner */}
@@ -637,7 +727,7 @@ export default function PostComments({
               />
               <button
                 onClick={() => handleReply(c.id)}
-                disabled={replyLoading || replyContent.trim().length < 2}
+                disabled={replyLoading || replyContent.trim().length < MIN_COMMENT_LENGTH}
                 className="self-end px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {replyLoading ? '...' : '게시'}
@@ -695,6 +785,8 @@ export default function PostComments({
                 const res = await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
                 const data = await res.json();
                 setPaused(data.paused);
+                // Refresh server component so StickyCountdownBar/CountdownTimer get new expiresAt
+                router.refresh();
               } catch { /* ignore */ }
               finally { setPauseLoading(false); }
             }}
@@ -791,8 +883,12 @@ export default function PostComments({
       {rootComments.map((c: any) => (
         <div key={c.id}>
           {renderComment(c, false)}
-          {/* Replies */}
-          {(replyMap[c.id] ?? []).map((reply: any) => renderComment(reply, true))}
+          {/* Replies — visually nested 1 level deep */}
+          {(replyMap[c.id] ?? []).length > 0 && (
+            <div className="ml-6 border-l-2 border-zinc-100 pl-3 space-y-2 mt-1">
+              {(replyMap[c.id] ?? []).map((reply: any) => renderComment(reply, true))}
+            </div>
+          )}
         </div>
       ))}
 

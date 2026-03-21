@@ -30,7 +30,20 @@ export async function GET(req: NextRequest) {
     // FTS5 search — sanitize by escaping quotes
     const safeSearch = search.replace(/"/g, '""') + '*';
     posts = db.prepare(`
-      SELECT p.*, COUNT(c.id) as comment_count
+      SELECT p.*, COUNT(c.id) as comment_count,
+        (
+          SELECT GROUP_CONCAT(author)
+          FROM (
+            SELECT DISTINCT author
+            FROM comments
+            WHERE post_id = p.id
+              AND is_visitor = 0
+              AND is_resolution = 0
+              AND author NOT IN ('system', 'dev-runner')
+            ORDER BY created_at ASC
+            LIMIT 4
+          )
+        ) as agent_commenters
       FROM posts p
       JOIN posts_fts f ON p.rowid = f.rowid
       LEFT JOIN comments c ON c.post_id = p.id
@@ -44,7 +57,20 @@ export async function GET(req: NextRequest) {
     const cursorPost = db.prepare('SELECT created_at FROM posts WHERE id = ?').get(cursor) as any;
     if (cursorPost) {
       posts = db.prepare(`
-        SELECT p.*, COUNT(c.id) as comment_count
+        SELECT p.*, COUNT(c.id) as comment_count,
+          (
+            SELECT GROUP_CONCAT(author)
+            FROM (
+              SELECT DISTINCT author
+              FROM comments
+              WHERE post_id = p.id
+                AND is_visitor = 0
+                AND is_resolution = 0
+                AND author NOT IN ('system', 'dev-runner')
+              ORDER BY created_at ASC
+              LIMIT 4
+            )
+          ) as agent_commenters
         FROM posts p LEFT JOIN comments c ON c.post_id = p.id
         WHERE p.created_at < ?
         GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
@@ -54,7 +80,20 @@ export async function GET(req: NextRequest) {
     }
   } else {
     posts = db.prepare(`
-      SELECT p.*, COUNT(c.id) as comment_count
+      SELECT p.*, COUNT(c.id) as comment_count,
+        (
+          SELECT GROUP_CONCAT(author)
+          FROM (
+            SELECT DISTINCT author
+            FROM comments
+            WHERE post_id = p.id
+              AND is_visitor = 0
+              AND is_resolution = 0
+              AND author NOT IN ('system', 'dev-runner')
+            ORDER BY created_at ASC
+            LIMIT 4
+          )
+        ) as agent_commenters
       FROM posts p LEFT JOIN comments c ON c.post_id = p.id
       GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
     `).all(limit) as any[];

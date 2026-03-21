@@ -37,6 +37,10 @@ export function getDb(): Database.Database {
       );
       CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
       CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
+      CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author);
+      CREATE INDEX IF NOT EXISTS idx_comments_resolution ON comments(is_resolution);
+      CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 
       CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
         title, content, tags,
@@ -142,6 +146,17 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN execution_log TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN content_summary TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN rejection_note TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN restarted_at TEXT'); } catch { /* already exists */ }
+    // extra_ms: accumulated paused duration (ms) — added back to expiresAt so pause time isn't lost
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN extra_ms INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+    // post_id FK for dev_tasks — links a task back to the originating post
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN post_id TEXT REFERENCES posts(id)'); } catch { /* already exists */ }
+    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_post ON dev_tasks(post_id)'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN expected_impact TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN actual_impact TEXT'); } catch { /* already exists */ }
+    try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN impact_areas TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN estimated_minutes INTEGER'); } catch { /* already exists */ }
+    try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"); } catch { /* already exists */ }
   }
   return _db;
 }

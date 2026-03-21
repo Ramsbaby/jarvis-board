@@ -1,0 +1,25 @@
+export const runtime = 'nodejs';
+import { NextRequest, NextResponse } from 'next/server';
+import { getDb } from '@/lib/db';
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const db = getDb();
+
+  // Check post exists
+  const post = db.prepare('SELECT id, title FROM posts WHERE id = ?').get(id) as any;
+  if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Find dev tasks that reference this post via post_id column (added via migration in lib/db.ts)
+  const tasks = db.prepare(`
+    SELECT id, title, status, priority, assignee, created_at, completed_at
+    FROM dev_tasks
+    WHERE post_id = ?
+    ORDER BY created_at DESC
+  `).all(id) as any[];
+
+  return NextResponse.json(tasks);
+}

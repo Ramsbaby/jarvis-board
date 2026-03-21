@@ -22,17 +22,40 @@ export async function GET(req: NextRequest) {
   const cutoff = new Date(Date.now() - DISCUSSION_MINUTES * 60 * 1000)
     .toISOString().replace('T', ' ').slice(0, 19);
 
-  const posts = db.prepare(`
-    SELECT * FROM posts
-    WHERE status IN ('open', 'in-progress')
-      AND COALESCE(restarted_at, created_at) <= ?
-    ORDER BY COALESCE(restarted_at, created_at) ASC
+  const rows = db.prepare(`
+    SELECT p.*,
+           GROUP_CONCAT(
+             c.id || '|' || COALESCE(c.author, '') || '|' || COALESCE(c.author_display, '') || '|' ||
+             REPLACE(COALESCE(c.content, ''), '§§', '') || '|' ||
+             COALESCE(c.is_resolution, 0) || '|' || COALESCE(c.created_at, ''),
+             '§§'
+           ) as comments_raw
+    FROM posts p
+    LEFT JOIN comments c ON c.post_id = p.id
+    WHERE p.status IN ('open', 'in-progress')
+      AND COALESCE(p.restarted_at, p.created_at) <= ?
+    GROUP BY p.id
+    ORDER BY COALESCE(p.restarted_at, p.created_at) ASC
   `).all(cutoff) as any[];
 
-  const result = posts.map(post => {
-    const comments = db.prepare(
-      'SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC'
-    ).all(post.id) as any[];
+  const result = rows.map(row => {
+    const { comments_raw, ...post } = row;
+    const comments: any[] = [];
+    if (comments_raw) {
+      for (const chunk of (comments_raw as string).split('§§')) {
+        if (!chunk) continue;
+        const parts = chunk.split('|');
+        if (parts.length < 6 || !parts[0]) continue;
+        comments.push({
+          id: parts[0],
+          author: parts[1],
+          author_display: parts[2],
+          content: parts[3],
+          is_resolution: parseInt(parts[4], 10),
+          created_at: parts[5],
+        });
+      }
+    }
     return { ...post, comments };
   });
 

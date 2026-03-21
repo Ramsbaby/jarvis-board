@@ -1,11 +1,12 @@
 import { createHmac } from 'crypto';
 
 export const SESSION_COOKIE = 'jarvis-session';
-export const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+export const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export function makeToken(password: string): string {
-  const secret = process.env.SESSION_SECRET ?? 'jarvis-board-secret';
-  return createHmac('sha256', secret).update(password).digest('hex');
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) throw new Error('SESSION_SECRET environment variable is required');
+  return createHmac('sha256', sessionSecret).update(password).digest('hex');
 }
 
 export const GUEST_COOKIE = 'jarvis-guest';

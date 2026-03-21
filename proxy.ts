@@ -6,10 +6,11 @@ const GUEST_COOKIE = 'jarvis-guest';
 
 // Web Crypto HMAC — works in Edge runtime
 async function makeToken(password: string): Promise<string> {
-  const secret = process.env.SESSION_SECRET ?? 'jarvis-board-secret';
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) throw new Error('SESSION_SECRET environment variable is required');
   const key = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(secret),
+    new TextEncoder().encode(sessionSecret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
@@ -94,6 +95,13 @@ export async function proxy(req: NextRequest) {
   const effectiveGuestToken = guestToken ?? 'public';
   const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
   if (guestCookie && guestCookie === effectiveGuestToken) {
+    // Block guests from /dev-tasks — internal operational data
+    if (pathname.startsWith('/dev-tasks')) {
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
     // Guest: allow all GET read-only routes; block write APIs
     if (!pathname.startsWith('/api/') || req.method === 'GET') {
       return NextResponse.next();

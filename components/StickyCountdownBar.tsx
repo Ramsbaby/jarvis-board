@@ -1,22 +1,48 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { DISCUSSION_WINDOW_MS } from '@/lib/constants';
+import { useEvent } from '@/contexts/EventContext';
 
 export default function StickyCountdownBar({
-  expiresAt,
+  expiresAt: initialExpiresAt,
   postStatus,
-  paused,
+  paused: initialPaused,
+  postId,
 }: {
   expiresAt: string;
   postStatus: string;
   paused: boolean;
+  postId?: string;
 }) {
+  const [paused, setPaused] = useState(initialPaused);
+  const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
   const [now, setNow] = useState(() => Date.now());
+  const { subscribe } = useEvent();
 
+  // Subscribe to SSE post_updated to react to pause/resume without page refresh
   useEffect(() => {
+    if (!postId) return;
+    return subscribe((ev) => {
+      if (ev.type === 'post_updated' && ev.post_id === postId && ev.data) {
+        if (typeof ev.data.paused === 'boolean') {
+          setPaused(ev.data.paused);
+          // If resuming and extra_ms provided, adjust expiresAt
+          if (!ev.data.paused && typeof ev.data.extra_ms === 'number') {
+            const base = new Date(initialExpiresAt).getTime();
+            // extra_ms difference from original
+            setExpiresAt(new Date(base + ev.data.extra_ms).toISOString());
+          }
+        }
+      }
+    });
+  }, [subscribe, postId, initialExpiresAt]);
+
+  // Only tick when NOT paused
+  useEffect(() => {
+    if (paused) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [paused]);
 
   if (postStatus === 'resolved') return null;
 
@@ -26,15 +52,15 @@ export default function StickyCountdownBar({
   const pct = expired ? 0 : Math.min(100, (diff / DISCUSSION_WINDOW_MS) * 100);
   const min = expired ? 0 : Math.floor(diff / 60000);
   const sec = expired ? 0 : Math.floor((diff % 60000) / 1000);
-  const urgent = !expired && diff < 5 * 60 * 1000;   // < 5분
-  const warning = !expired && diff < 10 * 60 * 1000; // < 10분
+  const urgent = !expired && diff < 5 * 60 * 1000;
+  const warning = !expired && diff < 10 * 60 * 1000;
 
   if (paused) {
     return (
       <div className="border-t border-amber-200 bg-amber-50">
         <div className="max-w-5xl mx-auto px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 font-medium">
           <span>⏸</span>
-          <span>토론 일시정지</span>
+          <span>토론 일시정지 — {expired ? '마감' : `${min}분 ${String(sec).padStart(2, '0')}초 남음`} (정지됨)</span>
           <div className="ml-auto h-1 w-20 bg-amber-200 rounded-full overflow-hidden">
             <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
           </div>
@@ -58,7 +84,6 @@ export default function StickyCountdownBar({
           : <span>토론 마감까지 <strong className={`${urgent ? 'text-lg' : ''}`}>{min}분 {String(sec).padStart(2, '0')}초</strong> 남음</span>
         }
 
-        {/* Mini progress bar */}
         <div className="ml-auto h-1.5 w-32 bg-white/70 rounded-full overflow-hidden border border-black/5 flex-shrink-0">
           <div
             className={`h-full rounded-full transition-all duration-1000 ${barColor} ${urgent ? 'animate-pulse' : ''}`}

@@ -1,6 +1,8 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getRequestAuth } from '@/lib/guest-guard';
+import { maskPost } from '@/lib/mask';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }).sort((a, b) => b.score - a.score).slice(0, 5);
 
   // If not enough, pad with recent resolved posts of any type
+  let result: any[] = scored;
   if (scored.length < 3) {
     const excludeIds = [id, ...scored.map((s: any) => s.id)];
     const placeholders = excludeIds.map(() => '?').join(',');
@@ -40,8 +43,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       WHERE p.id NOT IN (${placeholders}) AND p.status = 'resolved'
       GROUP BY p.id ORDER BY p.created_at DESC LIMIT 5
     `).all(...excludeIds) as any[];
-    return NextResponse.json([...scored, ...extras].slice(0, 5));
+    result = [...scored, ...extras].slice(0, 5);
   }
 
-  return NextResponse.json(scored);
+  const { isGuest } = getRequestAuth(req);
+  return NextResponse.json(isGuest ? result.map(maskPost) : result);
 }

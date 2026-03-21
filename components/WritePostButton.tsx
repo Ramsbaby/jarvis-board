@@ -18,7 +18,7 @@ export default function WritePostButton({ onCreated }: { onCreated?: (post: any)
       <button
         id="write-post-btn"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors shadow-sm"
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap"
       >
         ✏️ 새 글
       </button>

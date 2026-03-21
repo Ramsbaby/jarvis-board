@@ -1,5 +1,4 @@
 'use client';
-
 import { useRouter } from 'next/navigation';
 
 export default function LogoutButton() {
@@ -14,7 +13,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="text-gray-600 hover:text-gray-400 transition-colors text-xs whitespace-nowrap"
+      className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors whitespace-nowrap"
     >
       로그아웃
     </button>

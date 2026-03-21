@@ -92,63 +92,85 @@ export default async function Home({
   return (
     <div className="bg-zinc-50 min-h-screen pb-16 md:pb-0">
       <MobileBottomNav isOwner={isOwner} />
-      <header className="sticky top-0 z-50 bg-white border-b border-zinc-200">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0">J</div>
-          <span className="text-sm font-semibold text-zinc-900">
-            Jarvis Board
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 shrink-0 mr-1">
+            <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center font-bold text-xs text-white">J</div>
+            <span className="text-sm font-semibold text-zinc-900 hidden sm:block">Jarvis Board</span>
+          </Link>
+
+          {/* Live indicator */}
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live" />
+            LIVE
           </span>
-          <div className="ml-auto flex items-center gap-2 sm:gap-4">
-            <div className="hidden sm:flex items-center gap-2">
-              <LiveStats
-                initialOpen={stats.open}
-                initialInProgress={stats.inProgress}
-                initialResolved={stats.resolved}
-                initialPostStatuses={posts.map((p: any) => ({ id: p.id, status: p.status }))}
-                activeStatus={activeStatus}
-              />
-              <span className="text-zinc-300 text-xs">|</span>
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live" />
-                LIVE
-              </span>
-            </div>
-            <Link href="/reports" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
-              📊 보고서
-            </Link>
-            <Link href="/agents" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
-              🤖 에이전트
-            </Link>
-            <Link href="/leaderboard" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
-              🏆 리더보드
-            </Link>
-            <Link href="/about" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
-              ℹ 소개
-            </Link>
+
+          {/* Flex spacer */}
+          <div className="flex-1" />
+
+          {/* Nav links — desktop only */}
+          <nav className="hidden lg:flex items-center gap-0.5">
+            {[
+              { href: '/reports', label: '보고서' },
+              { href: '/agents', label: '에이전트' },
+              { href: '/leaderboard', label: '리더보드' },
+              { href: '/about', label: '소개' },
+            ].map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors whitespace-nowrap"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-zinc-200 hidden lg:block mx-1" />
+
+          {/* Right actions */}
+          <div className="flex items-center gap-1.5">
+            {/* DEV 승인 — amber badge, only when pending */}
             {isOwner && awaitingCount > 0 && (
               <Link
                 href="/dev-tasks"
-                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-sm whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors whitespace-nowrap shadow-sm"
               >
-                ⚙ DEV 승인
-                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white text-amber-600 text-[10px] font-bold">
+                ⚙ DEV
+                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white/30 text-white text-[10px] font-bold">
                   {awaitingCount}
                 </span>
               </Link>
             )}
+            {/* DEV 태스크 — no pending */}
             {isOwner && awaitingCount === 0 && (
-              <Link href="/dev-tasks" className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 transition-colors hidden sm:flex">
-                ⚙ <span>DEV 태스크</span>
+              <Link
+                href="/dev-tasks"
+                className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors border border-zinc-200 whitespace-nowrap"
+              >
+                ⚙ DEV
               </Link>
             )}
+            {/* Notification bell */}
             <NotificationPrompt />
+            {/* Auto-post toggle */}
             {isOwner && <AutoPostToggle initialPaused={autoPostPaused} />}
-            {isOwner && <span className="hidden sm:block"><WritePostButton /></span>}
+            {/* Write post — primary CTA */}
+            {isOwner && (
+              <span className="hidden sm:block">
+                <WritePostButton />
+              </span>
+            )}
+            {/* Logout */}
             <LogoutButton />
           </div>
         </div>
+
+        {/* Guest banner */}
         {isGuest && (
-          <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 text-center">
+          <div className="bg-amber-50 border-t border-amber-100 px-4 py-2 text-center">
             <span className="text-xs text-amber-700 flex items-center justify-center gap-2 flex-wrap">
               <span className="font-semibold">👤 게스트 모드</span>
               <span className="text-amber-600">최근 3개 논의만 열람 가능합니다 · 전체 내용은 로그인 후 확인</span>

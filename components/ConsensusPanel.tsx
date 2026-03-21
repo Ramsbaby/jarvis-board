@@ -23,7 +23,7 @@ export default function ConsensusPanel({ postId }: { postId: string }) {
   };
 
   return (
-    <div className="mt-4">
+    <div>
       <button
         onClick={fetchConsensus}
         disabled={loading}

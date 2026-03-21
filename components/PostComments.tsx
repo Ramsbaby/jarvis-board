@@ -228,7 +228,9 @@ export default function PostComments({
   const [comments, setComments] = useState(initialComments);
   const [toast, setToast] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastNewCommentIdRef = useRef<string | null>(null);
   const router = useRouter();
   const [localStatus, setLocalStatus] = useState(postStatus);
   const [paused, setPaused] = useState(!!pausedAt);
@@ -279,6 +281,7 @@ export default function PostComments({
         );
         if (ev.data?.is_resolution) setLocalStatus('resolved');
         setNewIds(prev => new Set(prev).add(ev.data.id));
+        lastNewCommentIdRef.current = ev.data.id;
         // Clear typing indicator for this agent
         if (ev.data?.author) {
           setTypingAgents(prev => prev.filter(a => a.agent !== ev.data.author));
@@ -638,14 +641,19 @@ export default function PostComments({
               </button>
               {/* #16 Delete comment */}
               <button
+                disabled={deletingIds.has(c.id)}
                 onClick={async () => {
+                  if (deletingIds.has(c.id)) return;
                   if (!confirm('댓글을 삭제하시겠습니까?')) return;
-                  const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
-                  if (res.ok) {
-                    setComments(prev => prev.filter(cm => cm.id !== c.id));
+                  setDeletingIds(prev => new Set(prev).add(c.id));
+                  try {
+                    const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
+                    if (res.ok) setComments(prev => prev.filter(cm => cm.id !== c.id));
+                  } finally {
+                    setDeletingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
                   }
                 }}
-                className="ml-auto text-[11px] text-gray-300 hover:text-red-400 transition-colors"
+                className="ml-auto text-[11px] text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40"
                 title="댓글 삭제"
               >
                 × 삭제
@@ -700,14 +708,19 @@ export default function PostComments({
           {isReply && isOwner && (
             <div className="mt-1.5 flex justify-end">
               <button
+                disabled={deletingIds.has(c.id)}
                 onClick={async () => {
+                  if (deletingIds.has(c.id)) return;
                   if (!confirm('댓글을 삭제하시겠습니까?')) return;
-                  const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
-                  if (res.ok) {
-                    setComments(prev => prev.filter(cm => cm.id !== c.id));
+                  setDeletingIds(prev => new Set(prev).add(c.id));
+                  try {
+                    const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
+                    if (res.ok) setComments(prev => prev.filter(cm => cm.id !== c.id));
+                  } finally {
+                    setDeletingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
                   }
                 }}
-                className="text-[11px] text-gray-300 hover:text-red-400 transition-colors"
+                className="text-[11px] text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40"
                 title="댓글 삭제"
               >
                 × 삭제
@@ -743,11 +756,19 @@ export default function PostComments({
     <section className="space-y-3 relative">
       {/* Toast notification */}
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 bg-white border border-gray-200 shadow-lg rounded-xl px-4 py-3 text-sm animate-slide-in-up min-w-[240px] max-w-sm">
+        <div
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-3 bg-white border border-gray-200 shadow-lg rounded-xl px-4 py-3 text-sm animate-slide-in-up min-w-[240px] max-w-sm cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={() => {
+            if (lastNewCommentIdRef.current) {
+              document.getElementById(`comment-${lastNewCommentIdRef.current}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            setToast(null);
+          }}
+        >
           <span className="text-lg shrink-0">💬</span>
-          <span className="flex-1 text-gray-700 text-xs leading-snug">{toast}</span>
+          <span className="flex-1 text-gray-700 text-xs leading-snug">{toast} <span className="text-indigo-400 font-medium">→ 이동</span></span>
           <button
-            onClick={() => setToast(null)}
+            onClick={(e) => { e.stopPropagation(); setToast(null); }}
             className="shrink-0 text-gray-400 hover:text-gray-600 transition-colors text-base leading-none"
             aria-label="알림 닫기"
           >

@@ -37,6 +37,7 @@ export default function AskAgentButton({ postId, postType, postTags }: {
   const [success, setSuccess] = useState<string | null>(null);
   const [participated, setParticipated] = useState<Set<string>>(new Set());
   const ref = useRef<HTMLDivElement>(null);
+  const inflightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetch(`/api/posts/${postId}/comments`)
@@ -59,6 +60,8 @@ export default function AskAgentButton({ postId, postType, postTags }: {
   }, []);
 
   async function ask(agent: string) {
+    if (inflightRef.current.has(agent)) return;
+    inflightRef.current.add(agent);
     setLoading(agent);
     setOpen(false);
     try {
@@ -74,6 +77,7 @@ export default function AskAgentButton({ postId, postType, postTags }: {
         setTimeout(() => setSuccess(null), 4000);
       }
     } finally {
+      inflightRef.current.delete(agent);
       setLoading(null);
     }
   }

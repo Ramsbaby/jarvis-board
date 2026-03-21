@@ -78,6 +78,7 @@ function PostListInner({
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments' | 'priority'>('newest');
   const [visibleCount, setVisibleCount] = useState(10);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
+  const [pausingId, setPausingId] = useState<string | null>(null);
 
   // Shared 1-second clock — drives all countdown cards
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -96,6 +97,19 @@ function PostListInner({
       if (stored) setBookmarks(new Set(JSON.parse(stored)));
     } catch {}
   }, []);
+
+  async function togglePause(postId: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (pausingId) return;
+    setPausingId(postId);
+    try {
+      await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
+      // SSE post_updated event will update local state
+    } finally {
+      setPausingId(null);
+    }
+  }
 
   function toggleBookmark(id: string, e: React.MouseEvent) {
     e.preventDefault();
@@ -604,9 +618,16 @@ function PostListInner({
               const preview = truncate(post.content, 140);
               const isResolved = post.status === 'resolved';
               const isPaused = !!post.paused_at;
-              const expiresMs = new Date(post.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS;
+              const timerBase = post.restarted_at ?? post.created_at;
+              const extraMs = post.extra_ms ?? 0;
+              const expiresMs = new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs;
               const expiresAt = new Date(expiresMs).toISOString();
               const isTimedOut = post.status === 'open' && !isPaused && clockNow > expiresMs;
+              // Remaining time when paused (frozen at moment of pause)
+              const pausedAtMs = isPaused ? new Date((post.paused_at as string).endsWith('Z') ? post.paused_at : post.paused_at + 'Z').getTime() : 0;
+              const pausedRemainMs = isPaused ? Math.max(0, expiresMs - pausedAtMs) : 0;
+              const pausedRemainMin = Math.floor(pausedRemainMs / 60000);
+              const pausedRemainSec = Math.floor((pausedRemainMs % 60000) / 1000);
               const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
               const hot = isHot(post);
               const tags = parseTags(post.tags);
@@ -656,12 +677,12 @@ function PostListInner({
 
                           {/* Big timer number */}
                           <span className={`font-black tabular-nums tracking-tight leading-none text-white ${
-                            isTimedOut ? 'text-xl' : 'text-4xl'
+                            isTimedOut ? 'text-xl' : isPaused ? 'text-2xl' : 'text-4xl'
                           }`}>
                             {isTimedOut
                               ? '🔴 마감됨'
                               : isPaused
-                              ? '⏸ 일시정지'
+                              ? `⏸ ${pausedRemainMin}분 ${String(pausedRemainSec).padStart(2, '0')}초`
                               : `${countMin}분 ${String(countSec).padStart(2, '0')}초`
                             }
                           </span>
@@ -669,11 +690,25 @@ function PostListInner({
                           {isActiveNow && !isPaused && (
                             <span className="text-white/80 text-sm font-semibold">남음</span>
                           )}
+                          {isPaused && (
+                            <span className="text-white/70 text-xs font-medium">남음 (일시정지)</span>
+                          )}
 
-                          {/* Right label */}
-                          <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white whitespace-nowrap">
-                            {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '🟢 진행중'}
-                          </span>
+                          {/* Right label + owner pause/resume button */}
+                          <div className="ml-auto flex items-center gap-2">
+                            {isOwner && !isTimedOut && !isResolved && (
+                              <button
+                                onClick={(e) => togglePause(post.id, e)}
+                                disabled={pausingId === post.id}
+                                className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {pausingId === post.id ? '...' : isPaused ? '▶ 재개' : '⏸ 정지'}
+                              </button>
+                            )}
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white whitespace-nowrap">
+                              {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '🟢 진행중'}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Progress bar strip */}

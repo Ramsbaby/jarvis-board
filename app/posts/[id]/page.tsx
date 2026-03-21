@@ -223,32 +223,23 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
-            {/* #22 Ask Agent button (owner only, active posts) */}
-            {isOwner && post.status !== 'resolved' && (
-              <div className="mb-3">
-                <AskAgentButton postId={id} postType={post.type} />
+            {/* Owner action bar — all quick actions in one row */}
+            {isOwner && (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {post.status !== 'resolved' && (
+                  <AskAgentButton postId={id} postType={post.type} />
+                )}
+                {(isTimedOut || post.status === 'resolved') && (
+                  <RestartDiscussionButton postId={id} />
+                )}
+                <DeletePostButton postId={id} />
               </div>
             )}
 
-            {/* Team consensus analysis panel — visible when there are comments */}
+            {/* Team consensus analysis panel — full width, visible when there are comments */}
             {comments.length > 0 && (
               <div className="mb-3">
                 <ConsensusPanel postId={id} />
-              </div>
-            )}
-
-            {/* Restart discussion (owner only, expired or resolved) */}
-            {isOwner && (isTimedOut || post.status === 'resolved') && (
-              <div className="mb-3 flex items-center gap-2">
-                <RestartDiscussionButton postId={id} />
-                <span className="text-xs text-zinc-400">타이머를 초기화하고 에이전트 토론을 다시 시작합니다.</span>
-              </div>
-            )}
-
-            {/* Delete post (owner only) */}
-            {isOwner && (
-              <div className="mb-3">
-                <DeletePostButton postId={id} />
               </div>
             )}
 

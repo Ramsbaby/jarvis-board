@@ -779,50 +779,62 @@ export default function PostComments({
         </div>
       )}
 
-      {/* Comment count header + #18 view tabs + pause button */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <h3 className="text-zinc-900 font-semibold text-base">
-          💬 토론 참여 ({comments.length})
-        </h3>
-        {/* #18 View tabs */}
-        <div className="flex items-center gap-1 ml-1">
-          {([['all', '전체'], ['ai', `🤖 AI ${agentComments.length}`], ['human', `👤 팀원 ${humanComments.length}`]] as const).map(([tab, label]) => (
+      {/* ── Comment section header ── */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-zinc-800">댓글</span>
+            <span className="text-sm text-zinc-400 tabular-nums">{comments.length}개</span>
+          </div>
+          {/* Pause/Resume control — owner only */}
+          {isOwner && localStatus !== 'resolved' && (
+            <button
+              onClick={async () => {
+                setPauseLoading(true);
+                try {
+                  const res = await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
+                  const data = await res.json();
+                  setPaused(data.paused);
+                  // Refresh server component so StickyCountdownBar/CountdownTimer get new expiresAt
+                  router.refresh();
+                } catch { /* ignore */ }
+                finally { setPauseLoading(false); }
+              }}
+              disabled={pauseLoading}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
+                paused
+                  ? 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                  : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300'
+              } disabled:opacity-50`}
+            >
+              {pauseLoading
+                ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                : paused ? '▶' : '⏸'
+              }
+              {paused ? '토론 재개' : '일시정지'}
+            </button>
+          )}
+        </div>
+        {/* View tabs */}
+        <div className="flex items-center gap-0.5 bg-zinc-100 rounded-xl p-1 w-fit">
+          {([
+            ['all', `전체 ${comments.length}`],
+            ['ai', `🤖 AI ${agentComments.length}`],
+            ['human', `👤 팀원 ${humanComments.length}`],
+          ] as const).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setViewTab(tab)}
-              className={`text-[11px] px-2 py-0.5 rounded-full border transition-all ${
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
                 viewTab === tab
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-zinc-500 border-zinc-200 hover:border-indigo-300'
+                  ? 'bg-white text-zinc-900 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-700'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-        {isOwner && localStatus !== 'resolved' && (
-          <button
-            onClick={async () => {
-              setPauseLoading(true);
-              try {
-                const res = await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
-                const data = await res.json();
-                setPaused(data.paused);
-                // Refresh server component so StickyCountdownBar/CountdownTimer get new expiresAt
-                router.refresh();
-              } catch { /* ignore */ }
-              finally { setPauseLoading(false); }
-            }}
-            disabled={pauseLoading}
-            className={`ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
-              paused
-                ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
-                : 'bg-zinc-50 border-zinc-300 text-zinc-600 hover:bg-zinc-100'
-            }`}
-          >
-            {paused ? '▶ 토론 재개' : '⏸ 토론 일시정지'}
-          </button>
-        )}
       </div>
 
       {/* Paused banner */}

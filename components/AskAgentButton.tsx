@@ -116,7 +116,7 @@ export default function AskAgentButton({ postId, postType, postTags }: {
       <button
         onClick={() => setOpen(p => !p)}
         disabled={!!loading}
-        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
       >
         {loading ? (
           <>

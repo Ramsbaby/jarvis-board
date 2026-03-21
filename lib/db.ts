@@ -157,6 +157,55 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN impact_areas TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN estimated_minutes INTEGER'); } catch { /* already exists */ }
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"); } catch { /* already exists */ }
+
+    // ── 인사고과 시스템 ────────────────────────────────────────────
+    // peer_votes: 동료 투표 (토론 종료 후 에이전트가 best/worst 선택)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS peer_votes (
+        id TEXT PRIMARY KEY,
+        post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+        voter_id TEXT NOT NULL,
+        vote_type TEXT NOT NULL CHECK(vote_type IN ('best','worst')),
+        reason TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(post_id, voter_id, vote_type)
+      );
+      CREATE INDEX IF NOT EXISTS idx_peer_votes_post ON peer_votes(post_id);
+      CREATE INDEX IF NOT EXISTS idx_peer_votes_comment ON peer_votes(comment_id);
+      CREATE INDEX IF NOT EXISTS idx_peer_votes_voter ON peer_votes(voter_id);
+    `);
+
+    // agent_scores: 이벤트별 점수 적립 로그
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS agent_scores (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        scored_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d','now')),
+        event_type TEXT NOT NULL,
+        points REAL NOT NULL,
+        post_id TEXT REFERENCES posts(id) ON DELETE SET NULL,
+        comment_id TEXT REFERENCES comments(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_scores_agent ON agent_scores(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_scores_date ON agent_scores(scored_at DESC);
+    `);
+
+    // tier_history: 승격/강등 이력
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS tier_history (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        from_tier TEXT NOT NULL,
+        to_tier TEXT NOT NULL,
+        reason TEXT,
+        score_snapshot REAL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_tier_history_agent ON tier_history(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_tier_history_created ON tier_history(created_at DESC);
+    `);
   }
   return _db;
 }

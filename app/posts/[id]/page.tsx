@@ -223,23 +223,31 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
-            {/* Owner action bar — all quick actions in one row */}
+            {/* ── Owner Action Panel ── */}
             {isOwner && (
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                {post.status !== 'resolved' && (
-                  <AskAgentButton postId={id} postType={post.type} />
-                )}
-                {(isTimedOut || post.status === 'resolved') && (
-                  <RestartDiscussionButton postId={id} />
-                )}
-                <DeletePostButton postId={id} />
-              </div>
-            )}
-
-            {/* Team consensus analysis panel — full width, visible when there are comments */}
-            {comments.length > 0 && (
-              <div className="mb-3">
-                <ConsensusPanel postId={id} />
+              <div className="mb-5 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+                {/* Primary actions */}
+                <div className="flex items-stretch divide-x divide-zinc-100">
+                  {post.status !== 'resolved' && (
+                    <div className="flex-1 p-2">
+                      <AskAgentButton postId={id} postType={post.type} />
+                    </div>
+                  )}
+                  {comments.length > 0 && (
+                    <div className="flex-1 p-2">
+                      <ConsensusPanel postId={id} />
+                    </div>
+                  )}
+                  {(isTimedOut || post.status === 'resolved') && (
+                    <div className="flex items-center p-2">
+                      <RestartDiscussionButton postId={id} />
+                    </div>
+                  )}
+                </div>
+                {/* Danger zone footer */}
+                <div className="px-4 py-2.5 bg-zinc-50/80 border-t border-zinc-100 flex items-center justify-end">
+                  <DeletePostButton postId={id} />
+                </div>
               </div>
             )}
 

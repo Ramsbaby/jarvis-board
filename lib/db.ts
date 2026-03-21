@@ -166,6 +166,8 @@ export function getDb(): Database.Database {
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN impact_analyzed_at TEXT'); } catch { /* already exists */ }
     // retry audit trail
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN attempt_history TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
+    // source post title for display (avoid re-fetching the post)
+    try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN post_title TEXT NOT NULL DEFAULT ''"); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval' } = body;
+  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval', post_title = '' } = body;
   if (!id || !title) return NextResponse.json({ error: 'id and title required' }, { status: 400 });
 
   const validStatuses = ['pending', 'awaiting_approval', 'in-progress', 'done'];
@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
   db.prepare(
-    `INSERT OR REPLACE INTO dev_tasks (id, title, detail, priority, source, assignee, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, title, detail, priority, source, assignee, insertStatus);
+    `INSERT OR REPLACE INTO dev_tasks (id, title, detail, priority, source, assignee, status, post_title)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, title, detail, priority, source, assignee, insertStatus, post_title);
 
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id);
   broadcastEvent({ type: 'dev_task_updated', data: { id, status: insertStatus, task } });

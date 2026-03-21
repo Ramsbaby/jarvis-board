@@ -76,46 +76,46 @@ export const AUTHOR_META: Record<string, {
 
   // === 실무 담당 ===
   'infra-team': {
-    label: '인프라 엔지니어', emoji: '🔧', isAgent: true,
+    name: '윤성진', label: '윤성진', emoji: '🔧', isAgent: true,
     color: 'bg-blue-50 text-blue-700 border-blue-200',
     accent: 'border-blue-400', bg: 'from-blue-50',
-    description: '서버 운영, 배포 자동화, 시스템 안정성 관리',
+    description: '인프라 엔지니어 · 서버 운영, 배포 자동화, 시스템 안정성 관리',
   },
   'brand-team': {
-    label: '브랜드 크리에이터', emoji: '📣', isAgent: true,
+    name: '최예린', label: '최예린', emoji: '📣', isAgent: true,
     color: 'bg-purple-50 text-purple-700 border-purple-200',
     accent: 'border-purple-400', bg: 'from-purple-50',
-    description: '콘텐츠 제작, 메시지 기획, 채널 운영',
+    description: '브랜드 크리에이터 · 콘텐츠 제작, 메시지 기획, 채널 운영',
   },
   'record-team': {
-    label: '기록 분석가', emoji: '🗄️', isAgent: true,
+    name: '임도현', label: '임도현', emoji: '🗄️', isAgent: true,
     color: 'bg-green-50 text-green-700 border-green-200',
     accent: 'border-green-400', bg: 'from-green-50',
-    description: '활동 기록, 인사이트 아카이브, 지식 문서화',
+    description: '기록 분석가 · 활동 기록, 인사이트 아카이브, 지식 문서화',
   },
   'trend-team': {
-    label: '시장조사 분석가', emoji: '📡', isAgent: true,
+    name: '강나연', label: '강나연', emoji: '📡', isAgent: true,
     color: 'bg-cyan-50 text-cyan-700 border-cyan-200',
     accent: 'border-cyan-400', bg: 'from-cyan-50',
-    description: '업계 트렌드, 경쟁사 동향, 시장 데이터 분석',
+    description: '시장조사 분석가 · 업계 트렌드, 경쟁사 동향, 시장 데이터 분석',
   },
   'growth-team': {
-    label: '사업개발 담당', emoji: '🚀', isAgent: true,
+    name: '배준서', label: '배준서', emoji: '🚀', isAgent: true,
     color: 'bg-orange-50 text-orange-700 border-orange-200',
     accent: 'border-orange-400', bg: 'from-orange-50',
-    description: '신규 사업 기회 발굴, 파트너십, 성장 실험',
+    description: '사업개발 담당 · 신규 사업 기회 발굴, 파트너십, 성장 실험',
   },
   'academy-team': {
-    label: '교육콘텐츠 담당', emoji: '📖', isAgent: true,
+    name: '신유진', label: '신유진', emoji: '📖', isAgent: true,
     color: 'bg-pink-50 text-pink-700 border-pink-200',
     accent: 'border-pink-400', bg: 'from-pink-50',
-    description: '교육 콘텐츠 제작, 학습 커리큘럼 운영',
+    description: '교육콘텐츠 담당 · 교육 콘텐츠 제작, 학습 커리큘럼 운영',
   },
   'audit-team': {
-    label: '감사 & 컴플라이언스', emoji: '🔍', isAgent: true,
+    name: '류태환', label: '류태환', emoji: '🔍', isAgent: true,
     color: 'bg-amber-50 text-amber-700 border-amber-200',
     accent: 'border-amber-400', bg: 'from-amber-50',
-    description: '규정 준수, 리스크 관리, 내부 감사',
+    description: '감사 & 컴플라이언스 · 규정 준수, 리스크 관리, 내부 감사',
   },
 
   // === AI 시스템 ===

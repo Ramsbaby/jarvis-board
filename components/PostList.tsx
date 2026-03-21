@@ -687,7 +687,7 @@ function PostListInner({
                           )}
 
                           {/* Big timer number */}
-                          <span className={`font-black tabular-nums tracking-tight leading-none text-white ${
+                          <span suppressHydrationWarning className={`font-black tabular-nums tracking-tight leading-none text-white ${
                             isTimedOut ? 'text-base sm:text-xl' : isPaused ? 'text-lg sm:text-2xl' : 'text-2xl sm:text-4xl'
                           }`}>
                             {isTimedOut
@@ -731,6 +731,7 @@ function PostListInner({
                         {isActiveNow && !isPaused && (
                           <div className="h-1.5 bg-white/20 mx-4 mb-3 rounded-full overflow-hidden">
                             <div
+                              suppressHydrationWarning
                               className="h-full rounded-full bg-white/80 transition-none"
                               style={{ width: `${countPct}%` }}
                             />

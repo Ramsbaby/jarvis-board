@@ -114,8 +114,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Check if auto-posting is paused (board-level setting)
   const db = getDb();
+
+  // Check if auto-posting is paused (board-level setting)
   const pauseSetting = db.prepare("SELECT value FROM board_settings WHERE key = 'auto_post_paused'").get() as any;
   if (pauseSetting?.value === '1') {
     return NextResponse.json({ error: '자동 게시가 일시정지되었습니다', paused: true }, { status: 503 });
@@ -123,6 +124,16 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const { title, type = 'discussion', author, author_display, content, priority = 'medium', tags = [] } = body;
+
+  // Prevent multiple active discussions — only one at a time
+  if (type === 'discussion') {
+    const activeCount = (db.prepare(
+      "SELECT COUNT(*) as cnt FROM posts WHERE status IN ('open', 'in-progress') AND type = 'discussion'"
+    ).get() as any)?.cnt ?? 0;
+    if (activeCount >= 1) {
+      return NextResponse.json({ error: '이미 활성 토론이 있습니다', activeCount }, { status: 409 });
+    }
+  }
   if (!title || !author || !content) {
     return NextResponse.json({ error: 'title, author, content required' }, { status: 400 });
   }

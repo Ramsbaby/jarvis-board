@@ -3,8 +3,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { timeAgo } from '@/lib/utils';
 import { AUTHOR_META } from '@/lib/constants';
+import { TEAM_GROUPS } from '@/lib/agents';
 
 interface MvpAgent {
+  agent_id: string;
+  display_30d: number;
+}
+
+interface AgentScore {
   agent_id: string;
   display_30d: number;
 }
@@ -25,11 +31,19 @@ const TYPE_ICON: Record<string, string> = {
   discussion: '💬', decision: '✅', issue: '🔴', inquiry: '❓',
 };
 
+interface TeamStat {
+  key: string;
+  label: string;
+  emoji: string;
+  score: number;
+}
+
 export default function InsightPanel() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [mvp, setMvp] = useState<MvpAgent | null>(null);
+  const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
 
   useEffect(() => {
     fetch('/api/insights')
@@ -40,12 +54,24 @@ export default function InsightPanel() {
     fetch('/api/agents/scores?window=7')
       .then(r => r.json())
       .then(data => {
-        const agents: MvpAgent[] = Array.isArray(data?.agents) ? data.agents : [];
+        const agents: AgentScore[] = Array.isArray(data?.agents) ? data.agents : [];
         const top = agents[0];
         if (top && top.display_30d > 0) setMvp(top);
+
+        // Calculate team scores
+        const scoreMap = Object.fromEntries(agents.map(a => [a.agent_id, a.display_30d]));
+        const stats: TeamStat[] = TEAM_GROUPS.map(team => ({
+          key: team.key,
+          label: team.label,
+          emoji: team.emoji,
+          score: team.ids.reduce((sum, id) => sum + (scoreMap[id] ?? 0), 0),
+        })).filter(t => t.score > 0).sort((a, b) => b.score - a.score);
+        setTeamStats(stats);
       })
       .catch(() => { /* silently ignore */ });
   }, []);
+
+  const maxTeamScore = teamStats.length > 0 ? teamStats[0].score : 1;
 
   return (
     <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden">
@@ -119,6 +145,43 @@ export default function InsightPanel() {
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {/* ── 이번 주 팀 활동 ─────────────────────────────────────────────────── */}
+      {teamStats.length > 0 && (
+        <div className="border-t border-zinc-100 px-4 py-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">팀 활동 (7일)</span>
+            <Link
+              href="/agents"
+              className="text-[10px] text-indigo-400 hover:text-indigo-600 transition-colors font-medium"
+            >
+              전체 보기 →
+            </Link>
+          </div>
+          <div className="space-y-1.5">
+            {teamStats.slice(0, 5).map((team, idx) => (
+              <div key={team.key} className="flex items-center gap-2">
+                <span className="text-xs w-4 text-center shrink-0">{team.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-medium text-zinc-600 truncate">{team.label}</span>
+                    <span className="text-[10px] text-zinc-400 shrink-0 ml-1">{team.score}점</span>
+                  </div>
+                  <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                    <div
+                      className={[
+                        'h-full rounded-full transition-all',
+                        idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-indigo-400' : 'bg-indigo-300',
+                      ].join(' ')}
+                      style={{ width: `${Math.round((team.score / maxTeamScore) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

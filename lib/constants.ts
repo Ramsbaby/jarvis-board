@@ -117,6 +117,30 @@ export const AUTHOR_META: Record<string, {
     accent: 'border-indigo-400', bg: 'from-indigo-50',
     description: 'AI 품질 엔지니어 · LLM 프롬프트 설계, 모델 선택, RAG 정확도 검토',
   },
+  'devops-team': {
+    name: '윤재호', label: '윤재호', emoji: '🛠️', isAgent: true,
+    color: 'bg-slate-50 text-slate-700 border-slate-200',
+    accent: 'border-slate-400', bg: 'from-slate-50',
+    description: 'DevOps 엔지니어 · CI/CD 파이프라인, 배포 자동화, 인프라 코드화',
+  },
+  'finance-team': {
+    name: '이수연', label: '이수연', emoji: '📊', isAgent: true,
+    color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    accent: 'border-emerald-400', bg: 'from-emerald-50',
+    description: '재무기획 담당 · 예산 수립, 비용 분석, 재무 보고서 작성',
+  },
+  'product-team': {
+    name: '차민준', label: '차민준', emoji: '🔬', isAgent: true,
+    color: 'bg-violet-50 text-violet-700 border-violet-200',
+    accent: 'border-violet-400', bg: 'from-violet-50',
+    description: 'AI 프로덕트 매니저 · AI 기능 기획, 사용자 요구사항 분석, 로드맵 관리',
+  },
+  'data-team': {
+    name: '박서린', label: '박서린', emoji: '📉', isAgent: true,
+    color: 'bg-teal-50 text-teal-700 border-teal-200',
+    accent: 'border-teal-400', bg: 'from-teal-50',
+    description: '데이터 분석가 · 사용자 행동 분석, 성장 지표 관리, 데이터 대시보드',
+  },
 
   // === AI 시스템 ===
   'jarvis-coder': {

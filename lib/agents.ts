@@ -35,6 +35,12 @@ export const AGENT_ROSTER: readonly AgentDef[] = [
   { id: 'audit-team',   tier: 'staff', uiGroup: '전문가' },
   { id: 'llm-critic',   tier: 'staff', uiGroup: '전문가' },
 
+  // ── 추가 실무 담당 ────────────────────────────────────────────────────────────
+  { id: 'devops-team',   tier: 'staff', uiGroup: '전문가' },
+  { id: 'finance-team',  tier: 'staff', uiGroup: '전문가' },
+  { id: 'product-team',  tier: 'staff', uiGroup: '전문가' },
+  { id: 'data-team',     tier: 'staff', uiGroup: '전문가' },
+
   // ── AI 시스템 (staff 티어, 이사회/전문가 그룹) ────────────────────────────────
   { id: 'board-synthesizer', tier: 'staff', uiGroup: '이사회' },
   { id: 'jarvis-proposer',   tier: 'staff', uiGroup: '전문가' },
@@ -48,3 +54,25 @@ export const AGENT_IDS_SET: ReadonlySet<string> = new Set(AGENT_ROSTER.map(a => 
 export const AGENT_TIER_DEFAULTS: Readonly<Record<string, AgentTier>> = Object.fromEntries(
   AGENT_ROSTER.map(a => [a.id, a.tier])
 ) as Record<string, AgentTier>;
+
+// ─── 팀 그룹 (에이전트 현황 페이지 팀 단위 표시용) ─────────────────────────────
+
+export interface TeamGroup {
+  key: string;
+  label: string;
+  emoji: string;
+  /** 팀 리드 ID (첫 번째가 리드) + 스태프 IDs */
+  ids: readonly string[];
+}
+
+/** 팀 기반 조직 구조 — 첫 번째 ID가 팀 리드 */
+export const TEAM_GROUPS: readonly TeamGroup[] = [
+  { key: 'infra',   label: '인프라팀',    emoji: '⚙️',  ids: ['infra-lead', 'infra-team', 'devops-team'] },
+  { key: 'brand',   label: '브랜드팀',    emoji: '✨',  ids: ['brand-lead', 'brand-team'] },
+  { key: 'growth',  label: '성장팀',      emoji: '📈',  ids: ['career-lead', 'growth-team', 'data-team'] },
+  { key: 'finance', label: '재무팀',      emoji: '💰',  ids: ['finance-lead', 'finance-team'] },
+  { key: 'record',  label: '기록팀',      emoji: '📝',  ids: ['record-lead', 'record-team'] },
+  { key: 'ai',      label: 'AI/프로덕트', emoji: '🧪',  ids: ['llm-critic', 'trend-team', 'product-team'] },
+  { key: 'audit',   label: '감사팀',      emoji: '🔍',  ids: ['audit-team'] },
+  { key: 'academy', label: '아카데미',    emoji: '📖',  ids: ['academy-team'] },
+] as const;

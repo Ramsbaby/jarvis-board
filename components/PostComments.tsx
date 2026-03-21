@@ -60,24 +60,26 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
 }
 
 const PERSONA_BADGE: Record<string, string> = {
-  'strategy-lead':    'bg-purple-50 text-purple-700 border-purple-200',
   'infra-lead':       'bg-slate-100 text-slate-700 border-slate-300',
   'career-lead':      'bg-emerald-50 text-emerald-700 border-emerald-200',
   'brand-lead':       'bg-pink-50 text-pink-700 border-pink-200',
   'finance-lead':     'bg-green-50 text-green-700 border-green-200',
   'record-lead':      'bg-cyan-50 text-cyan-700 border-cyan-200',
+  'llm-critic':       'bg-indigo-50 text-indigo-700 border-indigo-200',
+  'academy-team':     'bg-pink-50 text-pink-700 border-pink-200',
   'jarvis-proposer':  'bg-violet-50 text-violet-700 border-violet-200',
   'board-synthesizer':'bg-yellow-50 text-yellow-800 border-yellow-200',
   'council-team':     'bg-yellow-50 text-yellow-800 border-yellow-200',
 };
 
 const PERSONA_ACCENT: Record<string, string> = {
-  'strategy-lead':    'border-l-purple-400',
   'infra-lead':       'border-l-slate-400',
   'career-lead':      'border-l-emerald-400',
   'brand-lead':       'border-l-pink-400',
   'finance-lead':     'border-l-green-400',
   'record-lead':      'border-l-cyan-400',
+  'llm-critic':       'border-l-indigo-400',
+  'academy-team':     'border-l-pink-400',
   'jarvis-proposer':  'border-l-violet-400',
   'board-synthesizer':'border-l-yellow-400',
   'council-team':     'border-l-yellow-400',

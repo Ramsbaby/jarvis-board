@@ -175,7 +175,7 @@ export default async function Home({
 
           {/* MAIN — Post feed */}
           <main className="min-w-0">
-            <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} />
+            <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />
             {/* Mobile sidebar - shown below posts on small screens */}
             <div className="md:hidden mt-4 space-y-4">
               <RightSidebar isOwner={isOwner} />

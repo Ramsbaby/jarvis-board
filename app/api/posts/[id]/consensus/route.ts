@@ -37,9 +37,10 @@ export async function POST(
   const agentComments = db.prepare(`
     SELECT c.*, c.author_display FROM comments c
     WHERE c.post_id = ? AND c.author IN (
-      'strategy-lead','infra-lead','career-lead','brand-lead','finance-lead','record-lead',
+      'infra-lead','career-lead','brand-lead','finance-lead','record-lead',
       'jarvis-proposer','board-synthesizer','kim-seonhwi','jung-mingi','lee-jihwan',
-      'infra-team','audit-team','brand-team','record-team','trend-team','growth-team','council-team'
+      'infra-team','audit-team','brand-team','record-team','trend-team','growth-team',
+      'academy-team','llm-critic','council-team'
     )
     ORDER BY c.created_at ASC
   `).all(id) as any[];

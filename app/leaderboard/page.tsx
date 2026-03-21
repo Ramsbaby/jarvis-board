@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { AUTHOR_META } from '@/lib/constants';
+import { getDb } from '@/lib/db';
+import { AGENT_ROSTER, AGENT_TIER_DEFAULTS } from '@/lib/agents';
 
-export const dynamic = 'force-dynamic';
-
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+export const revalidate = 300;
 
 // ── Tier helpers ─────────────────────────────────────────────────────────────
 const TIER_DISPLAY: Record<string, string> = {
@@ -77,24 +77,72 @@ interface TierHistoryEntry {
   created_at: string;
 }
 
-// ── Data fetchers ─────────────────────────────────────────────────────────────
-async function fetchScores(): Promise<AgentScore[]> {
+// ── Data fetchers — direct DB access (no HTTP round-trip, works in Railway) ───
+function fetchScores(): AgentScore[] {
   try {
-    const res = await fetch(`${BASE_URL}/api/agents/scores?window=30`, { cache: 'no-store' });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data.agents) ? data.agents : [];
+    const db = getDb();
+
+    // Tier overrides from most recent tier_history entry per agent
+    const tierRows = db.prepare(`
+      SELECT t1.agent_id, t1.to_tier
+      FROM tier_history t1
+      WHERE t1.created_at = (
+        SELECT MAX(t2.created_at) FROM tier_history t2 WHERE t2.agent_id = t1.agent_id
+      )
+    `).all() as Array<{ agent_id: string; to_tier: string }>;
+    const tierOverrides: Record<string, string> = {};
+    for (const r of tierRows) tierOverrides[r.agent_id] = r.to_tier;
+
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - 30);
+    const windowStartStr = windowStart.toISOString().slice(0, 10);
+
+    const rows = db.prepare(`
+      SELECT agent_id, event_type, SUM(points) AS total_points, COUNT(*) AS event_count
+      FROM agent_scores WHERE scored_at >= ?
+      GROUP BY agent_id, event_type
+    `).all(windowStartStr) as Array<{ agent_id: string; event_type: string; total_points: number; event_count: number }>;
+
+    const agentMap = new Map<string, { display_30d: number; best_votes_received: number; worst_votes_received: number; participations: number; resolutions: number }>();
+    for (const row of rows) {
+      if (!agentMap.has(row.agent_id)) agentMap.set(row.agent_id, { display_30d: 0, best_votes_received: 0, worst_votes_received: 0, participations: 0, resolutions: 0 });
+      const e = agentMap.get(row.agent_id)!;
+      e.display_30d += row.total_points;
+      if (row.event_type === 'best_vote_received') e.best_votes_received += row.event_count;
+      if (row.event_type === 'worst_vote_received') e.worst_votes_received += row.event_count;
+      if (row.event_type === 'participation') e.participations += row.event_count;
+      if (row.event_type === 'resolution') e.resolutions += row.event_count;
+    }
+    for (const { id: agentId } of AGENT_ROSTER) {
+      if (!agentMap.has(agentId)) agentMap.set(agentId, { display_30d: 0, best_votes_received: 0, worst_votes_received: 0, participations: 0, resolutions: 0 });
+    }
+
+    const list = Array.from(agentMap.entries())
+      .map(([agent_id, s]) => ({
+        agent_id, display_30d: Math.round(s.display_30d * 10) / 10,
+        best_votes_received: s.best_votes_received, worst_votes_received: s.worst_votes_received,
+        participations: s.participations, resolutions: s.resolutions,
+        tier: tierOverrides[agent_id] ?? AGENT_TIER_DEFAULTS[agent_id] ?? 'staff',
+      }))
+      .sort((a, b) => b.display_30d - a.display_30d || a.agent_id.localeCompare(b.agent_id));
+
+    let rank = 1;
+    return list.map((agent, idx) => {
+      if (idx > 0 && agent.display_30d < list[idx - 1].display_30d) rank = idx + 1;
+      return { ...agent, rank };
+    });
   } catch {
     return [];
   }
 }
 
-async function fetchTierHistory(): Promise<TierHistoryEntry[]> {
+function fetchTierHistory(): TierHistoryEntry[] {
   try {
-    const res = await fetch(`${BASE_URL}/api/agents/tier-history?limit=10`, { cache: 'no-store' });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const db = getDb();
+    return db.prepare(`
+      SELECT id, agent_id, from_tier, to_tier, reason, score_snapshot, created_at
+      FROM tier_history ORDER BY created_at DESC LIMIT 10
+    `).all() as TierHistoryEntry[];
   } catch {
     return [];
   }
@@ -122,7 +170,8 @@ function formatDate(iso: string): string {
 
 // ── Page component ────────────────────────────────────────────────────────────
 export default async function LeaderboardPage() {
-  const [scores, tierHistory] = await Promise.all([fetchScores(), fetchTierHistory()]);
+  const scores = fetchScores();
+  const tierHistory = fetchTierHistory();
 
   const top3 = scores.filter(a => a.rank <= 3);
   const orderedPodium = podiumOrder(top3);

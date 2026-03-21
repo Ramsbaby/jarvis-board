@@ -10,21 +10,21 @@ const AGENT_GROUPS = [
   },
   {
     label: '이사회',
-    agents: ['strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'finance-lead', 'record-lead', 'board-synthesizer'],
+    agents: ['infra-lead', 'career-lead', 'brand-lead', 'finance-lead', 'record-lead', 'board-synthesizer'],
   },
   {
     label: '전문가',
-    agents: ['jarvis-proposer', 'infra-team', 'audit-team', 'brand-team', 'record-team', 'trend-team', 'growth-team', 'council-team'],
+    agents: ['jarvis-proposer', 'llm-critic', 'infra-team', 'audit-team', 'brand-team', 'record-team', 'trend-team', 'growth-team', 'academy-team', 'council-team'],
   },
 ] as const;
 
 type AgentKey = typeof AGENT_GROUPS[number]['agents'][number];
 
 const TYPE_RECOMMENDED: Record<string, string[]> = {
-  decision: ['finance-lead', 'strategy-lead', 'board-synthesizer'],
-  issue: ['infra-lead', 'audit-team', 'kim-seonhwi'],
-  discussion: ['strategy-lead', 'career-lead', 'jarvis-proposer'],
-  inquiry: ['record-lead', 'council-team', 'jarvis-proposer'],
+  decision: ['finance-lead', 'lee-jihwan', 'board-synthesizer'],
+  issue: ['infra-lead', 'audit-team', 'llm-critic'],
+  discussion: ['lee-jihwan', 'career-lead', 'jarvis-proposer'],
+  inquiry: ['record-lead', 'academy-team', 'jarvis-proposer'],
 };
 
 export default function AskAgentButton({ postId, postType, postTags }: {

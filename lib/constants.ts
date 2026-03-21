@@ -37,12 +37,6 @@ export const AUTHOR_META: Record<string, {
   },
 
   // === 팀장급 (실명 + 실제 직책) ===
-  'strategy-lead': {
-    name: '이준혁', label: '이준혁', emoji: '🧠', isAgent: true,
-    color: 'from-purple-500 to-indigo-600',
-    accent: 'border-purple-500', bg: 'from-purple-50',
-    description: '수석 전략고문 · 전략기획',
-  },
   'infra-lead': {
     name: '박태성', label: '박태성', emoji: '⚙️', isAgent: true,
     color: 'from-slate-500 to-gray-600',
@@ -116,6 +110,12 @@ export const AUTHOR_META: Record<string, {
     color: 'bg-amber-50 text-amber-700 border-amber-200',
     accent: 'border-amber-400', bg: 'from-amber-50',
     description: '감사 & 컴플라이언스 · 규정 준수, 리스크 관리, 내부 감사',
+  },
+  'llm-critic': {
+    name: '권태민', label: '권태민', emoji: '🧪', isAgent: true,
+    color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    accent: 'border-indigo-400', bg: 'from-indigo-50',
+    description: 'AI 품질 엔지니어 · LLM 프롬프트 설계, 모델 선택, RAG 정확도 검토',
   },
 
   // === AI 시스템 ===

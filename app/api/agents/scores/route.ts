@@ -1,51 +1,29 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { readFileSync } from 'fs';
-import path from 'path';
+import { AGENT_ROSTER, AGENT_TIER_DEFAULTS } from '@/lib/agents';
+import type Database from 'better-sqlite3';
 
-// ── Static tier map (defaults) ───────────────────────────────────────────────
-const AGENT_TIER_MAP: Record<string, string> = {
-  'kim-seonhwi': 'executives',
-  'jung-mingi': 'executives',
-  'lee-jihwan': 'executives',
-  'strategy-lead': 'team-lead',
-  'infra-lead': 'team-lead',
-  'career-lead': 'team-lead',
-  'brand-lead': 'team-lead',
-  'finance-lead': 'team-lead',
-  'record-lead': 'team-lead',
-  'infra-team': 'staff',
-  'brand-team': 'staff',
-  'record-team': 'staff',
-  'trend-team': 'staff',
-  'growth-team': 'staff',
-  'academy-team': 'staff',
-  'audit-team': 'staff',
-};
-
-// ── Load agent_tiers.json override (graceful: file may not exist) ─────────────
-function loadTierOverrides(): Record<string, string> {
+// ── Load tier overrides from DB (most recent tier_history entry per agent) ────
+// Replaces filesystem read — works in Railway production.
+function loadTierOverrides(db: Database.Database): Record<string, string> {
   try {
-    const filePath = path.join(process.env.HOME ?? '', '.jarvis', 'config', 'agent_tiers.json');
-    const raw = readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    // Support both { agent_id: tier } flat map and { agents: [...] } structures
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      if (Array.isArray(parsed.agents)) {
-        const result: Record<string, string> = {};
-        for (const entry of parsed.agents as Array<{ id: string; tier: string }>) {
-          if (entry.id && entry.tier) result[entry.id] = entry.tier;
-        }
-        return result;
-      }
-      // Flat { agent_id: tier } format
-      return parsed as Record<string, string>;
+    const rows = db.prepare(`
+      SELECT t1.agent_id, t1.to_tier
+      FROM tier_history t1
+      WHERE t1.created_at = (
+        SELECT MAX(t2.created_at) FROM tier_history t2 WHERE t2.agent_id = t1.agent_id
+      )
+    `).all() as Array<{ agent_id: string; to_tier: string }>;
+
+    const result: Record<string, string> = {};
+    for (const row of rows) {
+      result[row.agent_id] = row.to_tier;
     }
+    return result;
   } catch {
-    // File not found or invalid JSON — use defaults
+    return {};
   }
-  return {};
 }
 
 // ── GET /api/agents/scores ────────────────────────────────────────────────────
@@ -56,7 +34,7 @@ export async function GET(req: NextRequest) {
   const filterAgentId = searchParams.get('agent_id') ?? null;
 
   const db = getDb();
-  const tierOverrides = loadTierOverrides();
+  const tierOverrides = loadTierOverrides(db);
 
   // Fetch all score events in the window
   const windowStart = new Date();
@@ -107,8 +85,8 @@ export async function GET(req: NextRequest) {
     if (row.event_type === 'resolution') entry.resolutions += row.event_count;
   }
 
-  // Seed known agents from AGENT_TIER_MAP that have no score events yet
-  for (const agentId of Object.keys(AGENT_TIER_MAP)) {
+  // Seed known agents from AGENT_ROSTER that have no score events yet
+  for (const { id: agentId } of AGENT_ROSTER) {
     if (filterAgentId && agentId !== filterAgentId) continue;
     if (!agentMap.has(agentId)) {
       agentMap.set(agentId, {
@@ -130,7 +108,7 @@ export async function GET(req: NextRequest) {
       worst_votes_received: stats.worst_votes_received,
       participations: stats.participations,
       resolutions: stats.resolutions,
-      tier: tierOverrides[agent_id] ?? AGENT_TIER_MAP[agent_id] ?? 'staff',
+      tier: tierOverrides[agent_id] ?? AGENT_TIER_DEFAULTS[agent_id] ?? 'staff',
     }))
     .sort((a, b) => b.display_30d - a.display_30d || a.agent_id.localeCompare(b.agent_id));
 

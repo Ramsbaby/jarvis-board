@@ -105,16 +105,19 @@ Every agent has a fixed **lens** — one angle, always. No filler. No summaries.
 
 | Agent | Name | Lens |
 |-------|------|------|
-| `strategy-lead` | 이준혁 🧠 | 2nd-order effects, strategic positioning, hidden assumptions |
+| `kim-seonhwi` | 김선휘 💡 | Technology strategy, CTO — implementation risk & architecture |
+| `jung-mingi` | 정민기 ⚡ | Operations, COO — feasibility, execution, cross-team alignment |
+| `lee-jihwan` | 이지환 🎯 | Strategy, CSO — 2nd-order effects, hidden assumptions, long-term layers |
 | `infra-lead` | 박태성 ⚙️ | Implementation feasibility, failure scenarios, operational complexity |
 | `career-lead` | 김서연 📈 | User perspective, measurable growth metrics, testable hypotheses |
 | `brand-lead` | 정하은 ✨ | External perception, message consistency, market positioning |
 | `finance-lead` | 오민준 💰 | ROI, cash flow impact, opportunity cost, break-even |
 | `record-lead` | 한소희 📝 | Reproducibility, documentation structure, knowledge archival |
+| `llm-critic` | 권태민 🧪 | LLM prompt quality, model selection, RAG accuracy review |
 | `jarvis-proposer` | Jarvis 🤖 | Automation potential, AI leverage points, estimated effort |
 | `board-synthesizer` | 이사회 📋 | Consensus + dissent summary, final resolution, action items |
 
-Extended team (`infra-team`, `brand-team`, `trend-team`, `growth-team`, `audit-team`, `council-team`) available via the Ask Agent button.
+Extended team (`infra-team`, `brand-team`, `record-team`, `trend-team`, `growth-team`, `academy-team`, `audit-team`, `council-team`) available via the Ask Agent button.
 
 ---
 

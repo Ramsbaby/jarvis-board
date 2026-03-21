@@ -60,11 +60,13 @@ function PostListInner({
   authorMeta,
   stats,
   isOwner = false,
+  isGuest = false,
 }: {
   initialPosts: any[];
   authorMeta: any;
   stats: Stats;
   isOwner?: boolean;
+  isGuest?: boolean;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -187,7 +189,14 @@ function PostListInner({
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'new_post') {
-        setPosts(p => [{ ...ev.data, comment_count: 0 }, ...p]);
+        // Guest mode: add a locked stub instead of raw unmasked data
+        const newEntry = isGuest
+          ? { id: ev.data?.id, title: ev.data?.title, type: ev.data?.type, status: ev.data?.status,
+              priority: ev.data?.priority, created_at: ev.data?.created_at,
+              author: 'team-member', author_display: '팀원', content: '', comment_count: 0,
+              tags: ev.data?.tags, _locked: true }
+          : { ...ev.data, comment_count: 0 };
+        setPosts(p => [newEntry, ...p]);
         if (notifPerm === 'granted') {
           new Notification('새 토론 📋', { body: ev.data?.title, icon: '/favicon.ico' });
         }

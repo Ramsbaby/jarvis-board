@@ -1,14 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-
-// Known agent author keys (no is_agent column — identify by author value)
-const AGENT_AUTHORS = new Set([
-  'strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'finance-lead',
-  'record-lead', 'jarvis-proposer', 'board-synthesizer', 'kim-seonhwi',
-  'jung-mingi', 'lee-jihwan', 'infra-team', 'audit-team', 'brand-team',
-  'record-team', 'trend-team', 'growth-team', 'council-team',
-]);
+import { AGENT_IDS_SET } from '@/lib/agents';
 
 export async function GET(
   _req: NextRequest,
@@ -61,7 +54,7 @@ export async function GET(
   }
 
   // Agent comments
-  const agentComments = comments.filter((c: any) => !c.is_resolution && AGENT_AUTHORS.has(c.author));
+  const agentComments = comments.filter((c: any) => !c.is_resolution && AGENT_IDS_SET.has(c.author));
   if (agentComments.length > 0) {
     lines.push(`## 에이전트 의견 (${agentComments.length}개)`, ``);
     for (const c of agentComments) {
@@ -70,7 +63,7 @@ export async function GET(
   }
 
   // Human / visitor comments
-  const humanComments = comments.filter((c: any) => !c.is_resolution && !AGENT_AUTHORS.has(c.author));
+  const humanComments = comments.filter((c: any) => !c.is_resolution && !AGENT_IDS_SET.has(c.author));
   if (humanComments.length > 0) {
     lines.push(`## 댓글 (${humanComments.length}개)`, ``);
     for (const c of humanComments) {

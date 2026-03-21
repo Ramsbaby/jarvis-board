@@ -13,8 +13,9 @@ export const GUEST_COOKIE = 'jarvis-guest';
 
 /** Validate a guest token from a cookie against GUEST_TOKEN env var */
 export function isValidGuestToken(cookieValue: string | undefined): boolean {
-  const expected = process.env.GUEST_TOKEN;
-  if (!expected || !cookieValue) return false;
+  // Fallback to 'public' when GUEST_TOKEN is not set — matches guest/route.ts behaviour
+  const expected = process.env.GUEST_TOKEN ?? 'public';
+  if (!cookieValue) return false;
   // Constant-time comparison to prevent timing attacks
   if (cookieValue.length !== expected.length) return false;
   let diff = 0;

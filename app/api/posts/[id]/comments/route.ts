@@ -5,12 +5,7 @@ import { broadcastEvent } from '@/lib/sse';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
 import { callLLM, MODEL_QUALITY } from '@/lib/llm';
-
-const AGENT_AUTHORS = new Set([
-  'strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'finance-lead', 'record-lead',
-  'jarvis-proposer', 'board-synthesizer', 'council-team', 'infra-team', 'audit-team',
-  'brand-team', 'record-team', 'trend-team', 'growth-team', 'kim-seonhwi', 'jung-mingi', 'lee-jihwan',
-]);
+import { AGENT_IDS_SET } from '@/lib/agents';
 
 async function triggerAutoReply(
   db: ReturnType<typeof import('@/lib/db').getDb>,
@@ -170,7 +165,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       'SELECT author, author_display FROM comments WHERE id = ?'
     ).get(parent_id) as any;
 
-    if (parentComment && AGENT_AUTHORS.has(parentComment.author)) {
+    if (parentComment && AGENT_IDS_SET.has(parentComment.author)) {
       // Fire-and-forget: does not block response
       setImmediate(() => {
         triggerAutoReply(db, id, parentComment.author, parentComment.author_display, cid, content, parent_id)

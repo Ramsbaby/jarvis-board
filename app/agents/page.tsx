@@ -1,51 +1,107 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
+import { AGENT_ROSTER, AGENT_TIER_DEFAULTS } from '@/lib/agents';
 import Link from 'next/link';
 import { timeAgo } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: '에이전트 현황 — Jarvis Board' };
 
-// ─── Tier definitions ────────────────────────────────────────────────────────
+// ─── Tier section shape (ids computed at runtime) ─────────────────────────────
 
-const TIERS = [
-  {
-    key: 'executives',
-    label: '임원진',
-    emoji: '🏢',
-    ids: ['kim-seonhwi', 'jung-mingi', 'lee-jihwan'],
-    gridClass: 'grid-cols-2 sm:grid-cols-3',
-    cardSize: 'large',
-  },
-  {
-    key: 'leads',
-    label: '팀장급',
-    emoji: '🧑‍💼',
-    ids: ['strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'finance-lead', 'record-lead'],
-    gridClass: 'grid-cols-2 sm:grid-cols-3',
-    cardSize: 'medium',
-  },
-  {
-    key: 'staff',
-    label: '실무 담당',
-    emoji: '💼',
-    ids: ['infra-team', 'brand-team', 'record-team', 'trend-team', 'growth-team', 'academy-team', 'audit-team'],
-    gridClass: 'grid-cols-3 sm:grid-cols-4',
-    cardSize: 'compact',
-  },
-  {
-    key: 'ai',
-    label: 'AI 시스템',
-    emoji: '🤖',
-    ids: ['jarvis-proposer', 'board-synthesizer', 'council-team'],
-    gridClass: 'grid-cols-3 sm:grid-cols-4',
-    cardSize: 'compact',
-  },
-] as const;
+interface TierSection {
+  key: string;
+  label: string;
+  emoji: string;
+  gridClass: string;
+  cardSize: 'large' | 'medium' | 'compact';
+  ids: string[];
+}
 
-// All agent IDs in order
-const AGENT_IDS: string[] = TIERS.flatMap(t => [...t.ids]);
+// AI 시스템 섹션은 고정 IDs
+const AI_SECTION_IDS = ['jarvis-proposer', 'board-synthesizer', 'council-team'] as const;
+
+// tier_history 오버라이드를 적용한 유효 티어를 계산한다.
+// executives/team-lead/staff 세 키 중 하나를 반환한다.
+function buildTierOverrides(db: ReturnType<typeof getDb>): Record<string, string> {
+  try {
+    const tierRows = db.prepare(`
+      SELECT t1.agent_id, t1.to_tier
+      FROM tier_history t1
+      WHERE t1.created_at = (
+        SELECT MAX(t2.created_at) FROM tier_history t2 WHERE t2.agent_id = t1.agent_id
+      )
+    `).all() as Array<{ agent_id: string; to_tier: string }>;
+
+    const overrides: Record<string, string> = {};
+    for (const r of tierRows) overrides[r.agent_id] = r.to_tier;
+    return overrides;
+  } catch {
+    return {};
+  }
+}
+
+function buildDynamicTiers(tierOverrides: Record<string, string>): TierSection[] {
+  function getEffectiveTier(agentId: string): string {
+    return tierOverrides[agentId] ?? AGENT_TIER_DEFAULTS[agentId] ?? 'staff';
+  }
+
+  // AI 시스템 섹션 IDs 집합 — 이 에이전트들은 별도 섹션으로 고정
+  const aiIdSet = new Set<string>(AI_SECTION_IDS);
+
+  // executives/leads/staff 섹션: AGENT_ROSTER에서 AI 제외 후 유효 티어로 분류
+  const executiveIds: string[] = [];
+  const leadIds: string[] = [];
+  const staffIds: string[] = [];
+
+  for (const agent of AGENT_ROSTER) {
+    if (aiIdSet.has(agent.id)) continue; // AI 섹션에서 별도 처리
+    const tier = getEffectiveTier(agent.id);
+    if (tier === 'executives' || tier === 'exec') {
+      executiveIds.push(agent.id);
+    } else if (tier === 'team-lead') {
+      leadIds.push(agent.id);
+    } else {
+      staffIds.push(agent.id);
+    }
+  }
+
+  return [
+    {
+      key: 'executives',
+      label: '임원진',
+      emoji: '🏢',
+      ids: executiveIds,
+      gridClass: 'grid-cols-2 sm:grid-cols-3',
+      cardSize: 'large',
+    },
+    {
+      key: 'leads',
+      label: '팀장급',
+      emoji: '🧑‍💼',
+      ids: leadIds,
+      gridClass: 'grid-cols-2 sm:grid-cols-3',
+      cardSize: 'medium',
+    },
+    {
+      key: 'staff',
+      label: '실무 담당',
+      emoji: '💼',
+      ids: staffIds,
+      gridClass: 'grid-cols-3 sm:grid-cols-4',
+      cardSize: 'compact',
+    },
+    {
+      key: 'ai',
+      label: 'AI 시스템',
+      emoji: '🤖',
+      ids: [...AI_SECTION_IDS],
+      gridClass: 'grid-cols-3 sm:grid-cols-4',
+      cardSize: 'compact',
+    },
+  ];
+}
 
 // ─── Accent color → left-border Tailwind class ───────────────────────────────
 // accent field is like 'border-orange-400'; we extract the color token.
@@ -57,6 +113,13 @@ function accentBorderClass(accent?: string): string {
 
 export default async function AgentsPage() {
   const db = getDb();
+
+  // ── DB 티어 오버라이드 로드 후 동적 섹션 구성 ─────────────────────────────────
+  const tierOverrides = buildTierOverrides(db);
+  const TIERS = buildDynamicTiers(tierOverrides);
+
+  // 모든 에이전트 ID (동적 계산된 TIERS 기준)
+  const AGENT_IDS: string[] = TIERS.flatMap(t => t.ids);
 
   // Per-agent stats
   const agentStats = db.prepare(`

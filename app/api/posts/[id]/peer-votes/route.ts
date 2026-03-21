@@ -72,10 +72,6 @@ export async function POST(
     }
   }
 
-  // Check if this is the first vote for this post (for participation score trigger)
-  const isFirstVoteForPost =
-    (db.prepare('SELECT COUNT(*) as cnt FROM peer_votes WHERE post_id = ?').get(post_id) as { cnt: number }).cnt === 0;
-
   // Insert / update votes in a transaction
   const insertVote = db.prepare(`
     INSERT INTO peer_votes (id, post_id, comment_id, voter_id, vote_type, reason)
@@ -94,11 +90,15 @@ export async function POST(
   const existingVoteStmt = db.prepare(
     'SELECT id FROM peer_votes WHERE post_id = ? AND voter_id = ? AND vote_type = ?',
   );
+  const firstVoteCheckStmt = db.prepare('SELECT COUNT(*) as cnt FROM peer_votes WHERE post_id = ?');
 
   let inserted = 0;
   let updated = 0;
 
   const tx = db.transaction(() => {
+    // Check inside transaction so it's consistent with the inserts below
+    const isFirstVoteForPost = (firstVoteCheckStmt.get(post_id) as { cnt: number }).cnt === 0;
+
     for (const v of votes) {
       const existing = existingVoteStmt.get(post_id, voter_id, v.vote_type) as any;
       insertVote.run(nanoid(), post_id, v.comment_id, voter_id, v.vote_type, v.reason ?? null);

@@ -159,6 +159,8 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN consensus_summary TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN consensus_at TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN consensus_requested_at TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN consensus_pending_prompt TEXT'); } catch { /* already exists */ }
     // impact analysis extended fields
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN improvement_score INTEGER'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN user_visible TEXT'); } catch { /* already exists */ }

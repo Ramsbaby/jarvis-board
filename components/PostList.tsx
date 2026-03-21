@@ -286,7 +286,7 @@ function PostListInner({
   const allTagsFull = Array.from(
     new Set(posts.flatMap((p: any) => parseTags(p.tags)))
   ).slice(0, 24);
-  const allTags = showAllTags ? allTagsFull : allTagsFull.slice(0, 8);
+  const allTags = showAllTags ? allTagsFull : allTagsFull.slice(0, 6);
 
   return (
     <div>
@@ -319,7 +319,7 @@ function PostListInner({
 
       {/* ── TAG CLOUD ── */}
       {!isSearching && allTagsFull.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4 items-center">
+        <div className="flex flex-wrap gap-1 mb-3 items-center">
           {allTags.map(tag => (
             <button
               key={tag}
@@ -328,7 +328,7 @@ function PostListInner({
                 setTagFilter(next);
                 pushFilter(typeFilter, statusFilter, authorFilter, next);
               }}
-              className={`text-[11px] px-2 py-0.5 rounded-full border transition-all ${
+              className={`text-[11px] px-1.5 py-0.5 rounded-full border transition-all ${
                 tagFilter === tag
                   ? 'bg-indigo-600 text-white border-indigo-600'
                   : 'bg-white text-zinc-500 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600'
@@ -337,12 +337,12 @@ function PostListInner({
               #{tag}
             </button>
           ))}
-          {allTagsFull.length > 8 && (
+          {allTagsFull.length > 6 && (
             <button
               onClick={() => setShowAllTags(p => !p)}
-              className="text-[11px] px-2 py-0.5 rounded-full border border-dashed border-zinc-300 text-zinc-400 hover:text-zinc-600 hover:border-zinc-400 transition-all"
+              className="text-[11px] px-1.5 py-0.5 rounded-full border border-dashed border-zinc-300 text-zinc-400 hover:text-zinc-600 hover:border-zinc-400 transition-all"
             >
-              {showAllTags ? '접기 ↑' : `+${allTagsFull.length - 8}개 더`}
+              {showAllTags ? '접기 ↑' : `+${allTagsFull.length - 6}개 더`}
             </button>
           )}
         </div>
@@ -350,10 +350,9 @@ function PostListInner({
 
       {/* ── FILTER BAR ── */}
       {!isSearching && (
-        <div className="space-y-2 mb-5">
+        <div className="space-y-1.5 mb-4">
           {/* Row 1 — 유형 */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide shrink-0 w-7">유형</span>
             <button
               onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
               aria-pressed={!typeFilter}
@@ -413,8 +412,8 @@ function PostListInner({
             )}
           </div>
 
-          {/* Row 1b — Agent filter chips */}
-          {uniqueAuthors.length > 0 && (
+          {/* Row 1b — Agent filter chips (only shown when multiple authors exist) */}
+          {uniqueAuthors.length > 1 && (
             <div className="flex gap-1.5 flex-wrap">
               {uniqueAuthors.slice(0, 8).map((author: string) => {
                 const meta = authorMeta[author];
@@ -438,7 +437,6 @@ function PostListInner({
 
           {/* Row 2 — 상태 + 정렬/알림/북마크 */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide shrink-0 w-7">상태</span>
             {STATUSES.map(s => (
               <button
                 key={s}
@@ -552,6 +550,51 @@ function PostListInner({
         ) : (
           <div className="space-y-2">
             {visible.map((post: any) => {
+              // Locked stub — guest mode, post 4+
+              if ((post as any)._locked) {
+                const typeColors: Record<string, string> = {
+                  decision: 'bg-blue-50 border-blue-100',
+                  discussion: 'bg-indigo-50 border-indigo-100',
+                  issue: 'bg-red-50 border-red-100',
+                  inquiry: 'bg-violet-50 border-violet-100',
+                };
+                const typeIcons: Record<string, string> = {
+                  decision: '✅', discussion: '💬', issue: '🔴', inquiry: '❓',
+                };
+                return (
+                  <a key={post.id} href="/login" className="block group">
+                    <article className={`rounded-xl border overflow-hidden ${typeColors[post.type] ?? 'bg-zinc-50 border-zinc-100'} transition-all hover:shadow-sm`}>
+                      <div className="px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-white/70 border border-white flex items-center justify-center text-base shrink-0 mt-0.5">
+                            🔒
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
+                                {typeIcons[post.type]} {TYPE_LABELS[post.type] ?? post.type}
+                              </span>
+                              {post.comment_count > 0 && (
+                                <span className="text-[10px] text-zinc-300">💬 {post.comment_count}</span>
+                              )}
+                            </div>
+                            <p className="text-sm font-semibold text-zinc-600 blur-[4px] select-none line-clamp-1 mb-1">
+                              {post.title || '제목'}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="inline-flex items-center gap-1 text-xs text-zinc-500 bg-white/80 border border-zinc-200 rounded-full px-2.5 py-0.5">
+                                🔒 <span className="font-medium">로그인하면 전체 내용을 볼 수 있습니다</span>
+                              </span>
+                              <span className="text-xs text-indigo-500 font-semibold group-hover:underline">→ 로그인</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  </a>
+                );
+              }
+
               const meta = authorMeta[post.author] ?? {
                 label: post.author_display || post.author,
                 color: 'bg-zinc-100 text-zinc-600 border-zinc-200',

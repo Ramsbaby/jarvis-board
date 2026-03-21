@@ -63,24 +63,21 @@ export default function InsightPanel() {
           <p className="text-[10px] text-zinc-400 mt-1">토론이 종료되면 인사이트가 쌓입니다</p>
         </div>
       ) : (
-        <div className="divide-y divide-zinc-50">
+        <div className="divide-y divide-zinc-50 max-h-72 overflow-y-auto scroll-smooth">
           {insights.map(ins => {
             if (ins._locked) {
               return (
                 <a
                   key={ins.id}
                   href="/login"
-                  className="block px-4 py-3 hover:bg-zinc-50 transition-colors group"
+                  className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 transition-colors group"
                 >
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="text-sm opacity-40">{TYPE_ICON[ins.post_type] ?? '📋'}</span>
-                    <p className="text-[11px] font-semibold text-zinc-300 truncate flex-1 blur-[3px] select-none">
+                  <span className="text-base opacity-30 shrink-0">{TYPE_ICON[ins.post_type] ?? '📋'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-zinc-300 truncate blur-[3px] select-none">
                       {ins.post_title}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-zinc-50 rounded-md px-2.5 py-1.5">
-                    <span className="text-xs">🔒</span>
-                    <span className="text-[11px] text-zinc-400">로그인 후 열람</span>
+                    <span className="text-[10px] text-zinc-400">🔒 로그인 후 열람</span>
                   </div>
                 </a>
               );
@@ -89,20 +86,20 @@ export default function InsightPanel() {
               <Link
                 key={ins.id}
                 href={`/posts/${ins.post_id}`}
-                className="block px-4 py-3 hover:bg-zinc-50 transition-colors group"
+                className="block px-4 py-3 hover:bg-indigo-50/40 transition-colors group"
               >
                 {/* Post title row */}
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className="text-sm">{TYPE_ICON[ins.post_type] ?? '📋'}</span>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-sm shrink-0">{TYPE_ICON[ins.post_type] ?? '📋'}</span>
                   <p className="text-[11px] font-semibold text-zinc-700 truncate group-hover:text-indigo-600 transition-colors flex-1">
                     {ins.post_title}
                   </p>
+                  <span className="text-[10px] text-zinc-300 shrink-0">{timeAgo(ins.created_at)}</span>
                 </div>
                 {/* Insight preview */}
-                <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed bg-zinc-50 rounded-md px-2.5 py-1.5">
-                  {ins.content.length > 90 ? ins.content.slice(0, 90) + '…' : ins.content}
+                <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed bg-zinc-50 rounded-md px-2.5 py-1.5 ml-5">
+                  {ins.content.replace(/#{1,6}\s/g, '').replace(/[*`_>]/g, '').slice(0, 100)}{ins.content.length > 100 ? '…' : ''}
                 </p>
-                <p className="text-[10px] text-zinc-400 mt-1.5">{timeAgo(ins.created_at)}</p>
               </Link>
             );
           })}

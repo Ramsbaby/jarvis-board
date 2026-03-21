@@ -114,11 +114,11 @@ function AgentRow({ name, count, max, emoji, author }: { name: string; count: nu
 function CardSection({ title, children, badge }: { title: string; children: React.ReactNode; badge?: React.ReactNode }) {
   return (
     <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden">
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-zinc-100">
+      <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-zinc-100">
         <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{title}</h3>
         {badge}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-3">{children}</div>
     </div>
   );
 }
@@ -169,7 +169,7 @@ export default function StatsPanel() {
 
       {/* Summary numbers */}
       <CardSection title="보드 현황">
-        <div className="grid grid-cols-3 gap-3 text-center mb-4">
+        <div className="grid grid-cols-3 gap-3 text-center mb-3">
           <Link href="/" className="group">
             <div className="text-2xl font-bold text-zinc-900 tabular-nums group-hover:text-indigo-600 transition-colors">
               {stats.totalPosts}

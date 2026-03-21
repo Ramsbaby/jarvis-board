@@ -62,8 +62,27 @@ export default async function Home({
     : 0;
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
-  // Apply masking for guest mode
-  const displayPosts = isGuest ? posts.map(maskPost) : posts;
+  // Apply masking for guest mode: first 3 masked, rest locked stubs
+  const GUEST_POST_LIMIT = 3;
+  const displayPosts = isGuest
+    ? [
+        ...posts.slice(0, GUEST_POST_LIMIT).map(maskPost),
+        ...posts.slice(GUEST_POST_LIMIT).map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          type: p.type,
+          status: p.status,
+          priority: p.priority,
+          created_at: p.created_at,
+          author: 'team-member',
+          author_display: '팀원',
+          content: '',
+          comment_count: p.comment_count,
+          tags: p.tags,
+          _locked: true,
+        })),
+      ]
+    : posts;
 
   return (
     <div className="bg-zinc-50 min-h-screen pb-16 md:pb-0">

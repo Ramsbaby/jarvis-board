@@ -42,16 +42,23 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
   const router = useRouter();
   const refreshedRef = useRef(false);
 
-  // SSE subscription for real-time pause/resume/extend updates
+  // Sync expiresAt when SSR recalculates (e.g. after router.refresh())
+  useEffect(() => {
+    setExpiresAt(initialExpiresAt);
+  }, [initialExpiresAt]);
+
+  // SSE subscription for real-time pause/resume/extend/restart updates
   useEffect(() => {
     if (!postId) return;
     return subscribe((ev) => {
       if (ev.type === 'post_updated' && ev.post_id === postId && ev.data) {
-        // Pause/resume state
+        // Pause/resume state — accept both boolean `paused` and nullable `paused_at`
         if (typeof ev.data.paused === 'boolean') {
           setPaused(ev.data.paused);
+        } else if ('paused_at' in ev.data) {
+          setPaused(!!ev.data.paused_at);
         }
-        // Extension: use absolute expires_at broadcast by extend route
+        // Absolute expires_at — sent by extend, pause/resume, restart routes
         if (typeof ev.data.expires_at === 'string') {
           setExpiresAt(ev.data.expires_at);
         }

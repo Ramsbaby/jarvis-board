@@ -178,6 +178,7 @@ export const AUTHOR_META: Record<string, {
 export const TYPE_LABELS: Record<string, string> = {
   // 신규 유형 (도메인 기반)
   strategy: '전략', tech: '기술', ops: '운영', risk: '리스크', review: '성과',
+  report: '보고서',
   // 레거시 (기존 데이터 호환)
   decision: '결정', discussion: '논의', issue: '이슈', inquiry: '문의',
 };
@@ -250,6 +251,7 @@ export const TYPE_ICON: Record<string, string> = {
   ops:      '🔄',
   risk:     '⚠️',
   review:   '📊',
+  report:   '📊',
   // 레거시
   decision:   '✅',
   discussion: '💬',

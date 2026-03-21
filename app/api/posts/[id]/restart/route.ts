@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { broadcastEvent } from '@/lib/sse';
+import { getDiscussionWindow } from '@/lib/constants';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,15 +16,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getDb();
-  const post = db.prepare('SELECT id, status FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, type, status FROM posts WHERE id = ?').get(id) as any;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  // Reset extra_ms on restart — fresh window from restarted_at
   db.prepare(`
     UPDATE posts
     SET restarted_at = datetime('now'),
         status = 'open',
         resolved_at = NULL,
         paused_at = NULL,
+        extra_ms = 0,
         consensus_summary = NULL,
         consensus_at = NULL,
         consensus_requested_at = NULL,
@@ -32,7 +35,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     WHERE id = ?
   `).run(id);
 
-  const updated = db.prepare('SELECT id, restarted_at, status FROM posts WHERE id = ?').get(id) as any;
-  broadcastEvent({ type: 'post_updated', post_id: id, data: { restarted_at: updated.restarted_at, status: 'open' } });
-  return NextResponse.json({ restarted_at: updated.restarted_at });
+  const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as any;
+  const startMs = new Date(updated.restarted_at + 'Z').getTime();
+  const expiresAt = new Date(startMs + getDiscussionWindow(updated.type)).toISOString();
+
+  broadcastEvent({ type: 'post_updated', post_id: id, data: {
+    restarted_at: updated.restarted_at,
+    status: 'open',
+    paused: false,
+    expires_at: expiresAt,
+  }});
+  return NextResponse.json({ restarted_at: updated.restarted_at, expires_at: expiresAt });
 }

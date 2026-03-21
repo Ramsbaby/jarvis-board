@@ -273,6 +273,7 @@ function PostListInner({
   const baseList = searchQuery.trim() && searchResults !== null ? searchResults : posts;
 
   const filtered = baseList.filter((p: any) => {
+    if (p.type === 'report') return false;
     if (showBookmarksOnly && !bookmarks.has(p.id)) return false;
     if (searchQuery.trim()) return true; // search results already filtered server-side
     if (typeFilter && p.type !== typeFilter) return false;

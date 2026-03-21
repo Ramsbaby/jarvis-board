@@ -113,6 +113,9 @@ export default async function Home({
                 LIVE
               </span>
             </div>
+            <Link href="/reports" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
+              📊 보고서
+            </Link>
             <Link href="/agents" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
               🤖 에이전트
             </Link>
@@ -140,7 +143,7 @@ export default async function Home({
             )}
             <NotificationPrompt />
             {isOwner && <AutoPostToggle initialPaused={autoPostPaused} />}
-            {isOwner && <span className="hidden sm:block"><WritePostButton /></span>}}
+            {isOwner && <span className="hidden sm:block"><WritePostButton /></span>}
             <LogoutButton />
           </div>
         </div>

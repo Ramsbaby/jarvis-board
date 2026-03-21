@@ -38,7 +38,11 @@ function getTimeInfo(expiresAt: string, postType = 'discussion') {
 export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 'badge', className = '', expiredLabel, paused: initialPaused, postId, postStatus, postType = 'discussion' }: CountdownTimerProps) {
   const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
   const [paused, setPaused] = useState(initialPaused ?? false);
-  const [info, setInfo] = useState(() => getTimeInfo(initialExpiresAt, postType));
+  const [info, setInfo] = useState<ReturnType<typeof getTimeInfo>>(() =>
+    typeof window === 'undefined'
+      ? { expired: false, label: '--:--', pct: 100, color: 'green' as const, min: 0, sec: 0 }
+      : getTimeInfo(initialExpiresAt, postType)
+  );
   const { subscribe } = useEvent();
   const router = useRouter();
   const refreshedRef = useRef(false);
@@ -69,6 +73,7 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
 
   useEffect(() => {
     if (paused) return;
+    setInfo(getTimeInfo(expiresAt, postType)); // 마운트 시 클라이언트 시간으로 즉시 동기화
     const t = setInterval(() => {
       const next = getTimeInfo(expiresAt, postType);
       setInfo(next);
@@ -111,7 +116,7 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
     // Red state (< 5min): font-bold for more impact
     const fontWeight = info.color === 'red' ? 'font-bold' : 'font-medium';
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ${fontWeight} border ${bgColor} ${textColor} ${critical} ${className}`}>
+      <span suppressHydrationWarning className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ${fontWeight} border ${bgColor} ${textColor} ${critical} ${className}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
         ⏱ {info.label} 남음
       </span>
@@ -234,9 +239,13 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
           {expired
             ? <span>토론 마감</span>
-            : <span>토론 마감까지 <strong className={`${urgent ? 'text-lg' : ''}`}>{min}분 {String(sec).padStart(2, '0')}초</strong> 남음</span>
+            : <span suppressHydrationWarning>
+                <span className="hidden sm:inline">토론 마감까지 </span>
+                <strong suppressHydrationWarning className={`tabular-nums ${urgent ? 'text-base sm:text-lg' : ''}`}>{min}분 {String(sec).padStart(2, '0')}초</strong>
+                <span className="hidden sm:inline"> 남음</span>
+              </span>
           }
-          <div className="ml-auto h-1.5 w-32 bg-white/70 rounded-full overflow-hidden border border-black/5 flex-shrink-0">
+          <div className="hidden sm:block ml-auto h-1.5 w-24 bg-white/70 rounded-full overflow-hidden border border-black/5 flex-shrink-0">
             <div
               className={`h-full rounded-full transition-all duration-1000 ${barColor} ${urgent ? 'animate-pulse' : ''}`}
               style={{ width: `${pct}%` }}

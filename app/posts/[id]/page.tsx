@@ -17,6 +17,7 @@ import PostContentSummary from '@/components/PostContentSummary';
 import RestartDiscussionButton from '@/components/RestartDiscussionButton';
 import DeletePostButton from '@/components/DeletePostButton';
 import ConsensusPanel from '@/components/ConsensusPanel';
+import ForceCloseButton from '@/components/ForceCloseButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -231,11 +232,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             {isOwner && (
               <div className="mb-5 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
                 {/* Primary action buttons row — fixed height, no expanding */}
-                {displayStatus !== 'open' && (
-                  <div className="flex items-center p-2">
-                    <RestartDiscussionButton postId={id} />
-                  </div>
-                )}
+                <div className="flex items-center gap-2 p-2">
+                  {isActive && <ForceCloseButton postId={id} />}
+                  {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}
+                </div>
                 {/* Consensus panel — full width section, below buttons */}
                 {comments.length > 0 && (
                   <div className="border-t border-zinc-100">

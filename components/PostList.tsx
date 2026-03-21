@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
+import ForceCloseButton from './ForceCloseButton';
 import { useEvent } from '@/contexts/EventContext';
 
 const TYPES = ['decision', 'discussion', 'issue', 'inquiry'] as const;
@@ -687,6 +688,11 @@ function PostListInner({
 
                           {/* Right label + owner pause/resume button */}
                           <div className="ml-auto flex items-center gap-2">
+                            {isOwner && !isTimedOut && !isResolved && (
+                              <span onClick={e => e.stopPropagation()}>
+                                <ForceCloseButton postId={post.id} variant="list" />
+                              </span>
+                            )}
                             {isOwner && !isTimedOut && !isResolved && (
                               <button
                                 onClick={(e) => togglePause(post.id, e)}

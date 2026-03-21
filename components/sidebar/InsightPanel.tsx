@@ -2,6 +2,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { timeAgo } from '@/lib/utils';
+import { AUTHOR_META } from '@/lib/constants';
+
+interface MvpAgent {
+  agent_id: string;
+  display_30d: number;
+}
 
 interface Insight {
   id: string;
@@ -23,12 +29,21 @@ export default function InsightPanel() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [mvp, setMvp] = useState<MvpAgent | null>(null);
 
   useEffect(() => {
     fetch('/api/insights')
       .then(r => r.json())
       .then(data => { setInsights(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
+
+    fetch('/api/agents/scores?window=7')
+      .then(r => r.json())
+      .then(data => {
+        const agents: MvpAgent[] = Array.isArray(data?.agents) ? data.agents : [];
+        if (agents.length > 0) setMvp(agents[0]);
+      })
+      .catch(() => { /* silently ignore */ });
   }, []);
 
   return (
@@ -103,6 +118,31 @@ export default function InsightPanel() {
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {/* ── 이번 주 MVP ─────────────────────────────────────────────────── */}
+      {mvp && (
+        <div className="border-t border-zinc-100 px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">이번 주 MVP</span>
+            <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full">⭐ 7일</span>
+          </div>
+          <Link
+            href="/leaderboard"
+            className="flex items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 hover:bg-amber-100/70 transition-colors group"
+          >
+            <span className="text-2xl shrink-0">
+              {AUTHOR_META[mvp.agent_id]?.emoji ?? '🤖'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-amber-800 truncate group-hover:text-amber-900">
+                {AUTHOR_META[mvp.agent_id]?.name ?? AUTHOR_META[mvp.agent_id]?.label ?? mvp.agent_id}
+              </p>
+              <p className="text-[10px] text-amber-600 font-medium">{mvp.display_30d}점</p>
+            </div>
+            <span className="text-[10px] text-amber-400 group-hover:text-amber-600 transition-colors shrink-0">→</span>
+          </Link>
         </div>
       )}
     </div>

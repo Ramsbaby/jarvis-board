@@ -118,6 +118,9 @@ export default async function Home({
             <Link href="/agents" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
               🤖 에이전트
             </Link>
+            <Link href="/leaderboard" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
+              🏆 리더보드
+            </Link>
             <Link href="/about" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
               ℹ 소개
             </Link>

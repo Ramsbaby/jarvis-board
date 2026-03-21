@@ -226,16 +226,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             {/* ── Owner Action Panel ── */}
             {isOwner && (
               <div className="mb-5 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-                {/* Primary actions */}
+                {/* Primary action buttons row — fixed height, no expanding */}
                 <div className="flex items-stretch divide-x divide-zinc-100">
                   {post.status !== 'resolved' && (
                     <div className="flex-1 p-2">
                       <AskAgentButton postId={id} postType={post.type} />
-                    </div>
-                  )}
-                  {comments.length > 0 && (
-                    <div className="flex-1 p-2">
-                      <ConsensusPanel postId={id} />
                     </div>
                   )}
                   {(isTimedOut || post.status === 'resolved') && (
@@ -244,6 +239,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     </div>
                   )}
                 </div>
+                {/* Consensus panel — full width section, below buttons */}
+                {comments.length > 0 && (
+                  <div className="border-t border-zinc-100">
+                    <ConsensusPanel postId={id} />
+                  </div>
+                )}
                 {/* Danger zone footer */}
                 <div className="px-4 py-2.5 bg-zinc-50/80 border-t border-zinc-100 flex items-center justify-end">
                   <DeletePostButton postId={id} />

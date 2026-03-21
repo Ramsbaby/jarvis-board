@@ -5,6 +5,17 @@ import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { callLLM, LLMError } from '@/lib/llm';
 
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const db = getDb();
+  const row = db.prepare('SELECT consensus_summary, consensus_at FROM posts WHERE id = ?').get(id) as any;
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return NextResponse.json({ consensus: row.consensus_summary ?? null, consensus_at: row.consensus_at ?? null });
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,8 +67,12 @@ ${commentsText}
 
   try {
     const summary = await callLLM(prompt, { maxTokens: 800, timeoutMs: 15000 });
+    // Persist to DB so it survives page navigation
+    const now = new Date().toISOString();
+    db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ? WHERE id = ?').run(summary, now, id);
     return NextResponse.json({
       consensus: summary,
+      consensus_at: now,
       commentCount: agentComments.length,
       agents: agentComments.map((c: any) => c.author_display || c.author)
     });

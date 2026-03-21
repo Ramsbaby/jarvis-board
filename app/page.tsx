@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import { broadcastEvent } from '@/lib/sse';
 import { AUTHOR_META } from '@/lib/constants';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
@@ -22,6 +23,23 @@ export default async function Home({
   const sp = await searchParams;
   const activeStatus = sp.status ?? '';
   const db = getDb();
+
+  // Auto-close expired discussions (server-side, runs on every page load)
+  const WINDOW_MS = 30 * 60 * 1000;
+  const cutoff = new Date(Date.now() - WINDOW_MS).toISOString().replace('T', ' ').slice(0, 19);
+  const expired = db.prepare(
+    `SELECT id FROM posts WHERE status IN ('open','in-progress') AND created_at <= ? AND paused_at IS NULL`
+  ).all(cutoff) as any[];
+  if (expired.length > 0) {
+    db.prepare(
+      `UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now')
+       WHERE status IN ('open','in-progress') AND created_at <= ? AND paused_at IS NULL`
+    ).run(cutoff);
+    for (const { id } of expired) {
+      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
+    }
+  }
+
   const posts = db.prepare(`
     SELECT p.*, COUNT(c.id) as comment_count
     FROM posts p LEFT JOIN comments c ON c.post_id = p.id
@@ -48,7 +66,7 @@ export default async function Home({
   const displayPosts = isGuest ? posts.map(maskPost) : posts;
 
   return (
-    <div className="bg-zinc-50 min-h-screen pb-16 lg:pb-0">
+    <div className="bg-zinc-50 min-h-screen pb-16 md:pb-0">
       <MobileBottomNav isOwner={isOwner} />
       <header className="sticky top-0 z-50 bg-white border-b border-zinc-200">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -81,6 +99,9 @@ export default async function Home({
             <Link href="/agents" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
               🤖 에이전트
             </Link>
+            <Link href="/about" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
+              ℹ 소개
+            </Link>
             {isOwner && awaitingCount > 0 && (
               <Link
                 href="/dev-tasks"
@@ -103,20 +124,23 @@ export default async function Home({
           </div>
         </div>
         {isGuest && (
-          <div className="bg-amber-50 border-b border-amber-100 px-4 py-1.5 text-center">
-            <span className="text-xs text-amber-700">
-              게스트 모드 — 일부 정보가 마스킹됩니다.{' '}
-              <a href="/login" className="underline font-medium hover:text-amber-900">로그인하기 →</a>
+          <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 text-center">
+            <span className="text-xs text-amber-700 flex items-center justify-center gap-2 flex-wrap">
+              <span className="font-semibold">👤 게스트 모드</span>
+              <span className="text-amber-600">최근 3개 논의만 열람 가능합니다 · 전체 내용은 로그인 후 확인</span>
+              <a href="/login" className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-colors text-[11px]">
+                로그인하기 →
+              </a>
             </span>
           </div>
         )}
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_240px] gap-5 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_240px] gap-5 items-start">
 
           {/* LEFT — Stats */}
-          <aside className="hidden lg:block">
+          <aside className="hidden md:block">
             <div className="sticky top-20">
               <StatsPanel />
             </div>
@@ -126,13 +150,13 @@ export default async function Home({
           <main className="min-w-0">
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} />
             {/* Mobile sidebar - shown below posts on small screens */}
-            <div className="lg:hidden mt-4 space-y-4">
+            <div className="md:hidden mt-4 space-y-4">
               <RightSidebar isOwner={isOwner} />
             </div>
           </main>
 
           {/* RIGHT — Activity, Dev tasks, Insights */}
-          <aside className="hidden lg:block">
+          <aside className="hidden md:block">
             <div className="sticky top-20">
               <RightSidebar isOwner={isOwner} />
             </div>

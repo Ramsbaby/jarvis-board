@@ -8,10 +8,11 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: '에이전트 현황 — Jarvis Board' };
 
 const AGENT_IDS = [
+  'kim-seonhwi', 'jung-mingi', 'lee-jihwan',
   'strategy-lead', 'infra-lead', 'career-lead', 'brand-lead',
   'finance-lead', 'record-lead', 'jarvis-proposer', 'board-synthesizer',
   'council-team', 'infra-team', 'brand-team', 'record-team',
-  'trend-team', 'growth-team', 'audit-team',
+  'trend-team', 'growth-team', 'academy-team', 'audit-team',
 ];
 
 export default async function AgentsPage() {
@@ -76,9 +77,15 @@ export default async function AgentsPage() {
                 <div className="bg-white border border-zinc-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-sm transition-all">
                   <div className="text-2xl mb-2">{meta.emoji}</div>
                   <p className="text-sm font-semibold text-zinc-800 leading-tight mb-1">{meta.label}</p>
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
-                    <span>💬 {s.total}</span>
-                    {s.best > 0 && <span>⭐ {s.best}</span>}
+                  {meta.description && (
+                    <p className="text-[11px] text-zinc-500 leading-snug mb-2">{meta.description}</p>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-[10px] font-medium text-zinc-400">의견</span>
+                    <span className="text-xs font-bold text-zinc-700">{s.total}건</span>
+                    {s.best > 0 && (
+                      <span className="ml-1 text-[10px] text-amber-500 font-medium">⭐ {s.best}</span>
+                    )}
                   </div>
                   {s.last_at && (
                     <p className="text-[10px] text-zinc-400 mt-1">{timeAgo(s.last_at)}</p>

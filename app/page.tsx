@@ -4,7 +4,6 @@ import { AUTHOR_META } from '@/lib/constants';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
 import WritePostButton from '@/components/WritePostButton';
-import StatsPanel from '@/components/sidebar/StatsPanel';
 import RightSidebar from '@/components/sidebar/RightSidebar';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
@@ -14,7 +13,6 @@ import { GUEST_POLICY } from '@/lib/guest-policy';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
 import AutoPostToggle from '@/components/AutoPostToggle';
-import LiveStats from '@/components/LiveStats';
 
 export const dynamic = 'force-dynamic';
 
@@ -182,15 +180,8 @@ export default async function Home({
         )}
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_240px] gap-5 items-start">
-
-          {/* LEFT — Stats */}
-          <aside className="hidden md:block">
-            <div className="sticky top-20">
-              <StatsPanel />
-            </div>
-          </aside>
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_288px] gap-6 items-start">
 
           {/* MAIN — Post feed */}
           <main className="min-w-0">

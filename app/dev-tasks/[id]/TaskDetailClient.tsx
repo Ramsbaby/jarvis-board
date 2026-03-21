@@ -34,14 +34,64 @@ interface DevTask {
   changed_files?: string;
   execution_log?: string;
   rejection_note?: string;
+  // New fields
+  expected_impact?: string;
+  actual_impact?: string;
+  impact_areas?: string; // JSON array
+  estimated_minutes?: number;
+  difficulty?: string;
+  post_id?: string;
 }
 
-const PRIORITY_CONFIG: Record<string, { dot: string; badge: string; label: string; ring: string }> = {
-  urgent: { dot: 'bg-red-500',    badge: 'bg-red-50 text-red-700 border-red-200',         label: '긴급', ring: 'ring-red-200' },
-  high:   { dot: 'bg-orange-400', badge: 'bg-orange-50 text-orange-700 border-orange-200', label: '높음', ring: 'ring-orange-200' },
-  medium: { dot: 'bg-blue-400',   badge: 'bg-blue-50 text-blue-700 border-blue-200',       label: '중간', ring: 'ring-blue-100' },
-  low:    { dot: 'bg-zinc-300',   badge: 'bg-zinc-50 text-zinc-500 border-zinc-200',       label: '낮음', ring: 'ring-zinc-100' },
+interface ImpactAnalysis {
+  improvement_score?: number;
+  user_visible?: string;
+  risk_reduced?: string;
+  summary?: string;
+}
+
+// ── Config maps ─────────────────────────────────────────────────────────────
+
+const PRIORITY_CONFIG: Record<string, { dot: string; badge: string; label: string; ring: string; stripe: string }> = {
+  urgent: { dot: 'bg-red-500',    badge: 'bg-red-50 text-red-700 border-red-200',         label: '긴급', ring: 'ring-red-200',    stripe: 'bg-red-400' },
+  high:   { dot: 'bg-orange-400', badge: 'bg-orange-50 text-orange-700 border-orange-200', label: '높음', ring: 'ring-orange-200', stripe: 'bg-orange-400' },
+  medium: { dot: 'bg-blue-400',   badge: 'bg-blue-50 text-blue-700 border-blue-200',       label: '중간', ring: 'ring-blue-100',   stripe: 'bg-blue-400' },
+  low:    { dot: 'bg-zinc-300',   badge: 'bg-zinc-50 text-zinc-500 border-zinc-200',       label: '낮음', ring: 'ring-zinc-100',   stripe: 'bg-zinc-300' },
 };
+
+const DIFFICULTY_LABEL: Record<string, string> = {
+  easy: '쉬움', medium: '보통', hard: '어려움', expert: '전문가',
+};
+
+const IMPACT_AREA_CHIPS: Record<string, string> = {
+  security: '🔒 보안',
+  performance: '⚡ 성능',
+  ux: '✨ UX',
+  infra: '🛠 인프라',
+  data: '📊 데이터',
+  cost: '💰 비용',
+  reliability: '🛡 안정성',
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  decision: '결정', discussion: '논의', issue: '이슈', inquiry: '문의',
+};
+
+const SOURCE_STATUS_LABEL: Record<string, string> = {
+  open: '토론중', 'in-progress': '진행중', resolved: '마감',
+};
+
+// Status pill config
+const STATUS_PILL: Record<string, { label: string; className: string }> = {
+  pending:            { label: '⏸ 대기중',      className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
+  awaiting_approval:  { label: '🔍 검토 대기',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  approved:           { label: '✅ 승인됨',       className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  'in-progress':      { label: '⚙️ 작업 중',     className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  done:               { label: '🎉 완료',          className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  rejected:           { label: '✕ 반려',           className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
+};
+
+// ── Utility functions ────────────────────────────────────────────────────────
 
 function fmt(iso?: string) {
   if (!iso) return '';
@@ -50,14 +100,14 @@ function fmt(iso?: string) {
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '방금';
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}초 전`;
+  const m = Math.floor(s / 60);
   if (m < 60) return `${m}분 전`;
   if (m < 1440) return `${Math.floor(m / 60)}시간 전`;
   return `${Math.floor(m / 1440)}일 전`;
 }
 
-/** Duration between two ISO timestamps as a friendly string */
 function elapsed(from?: string, to?: string): string | null {
   if (!from || !to) return null;
   const ms = new Date(to).getTime() - new Date(from).getTime();
@@ -69,7 +119,12 @@ function elapsed(from?: string, to?: string): string | null {
   return `${Math.floor(min / 60)}시간 ${min % 60}분`;
 }
 
-/** Seconds until next 5-minute cron boundary */
+function formatElapsed(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}분 ${String(s).padStart(2, '0')}초` : `${s}초`;
+}
+
 function secsToNextCron(): number {
   const now = new Date();
   const totalSec = now.getMinutes() * 60 + now.getSeconds();
@@ -77,16 +132,74 @@ function secsToNextCron(): number {
   return period - (totalSec % period);
 }
 
+// Time until next 22:55 KST (dev-runner.sh schedule)
+function secsToDevRunner(): number {
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(22, 55, 0, 0);
+  if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+  return Math.floor((target.getTime() - now.getTime()) / 1000);
+}
+
+function formatDevRunnerEta(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}시간 ${m}분 후`;
+  return `${m}분 후`;
+}
+
+function detectPhase(logs: LogEntry[]): number {
+  if (logs.length === 0) return 0;
+  const last = logs[logs.length - 1].message.toLowerCase();
+  if (/완료|done|success|finish/.test(last)) return 3;
+  if (/테스트|test|검증|verify|build/.test(last)) return 2;
+  if (/수정|writing|edit|create|update/.test(last)) return 1;
+  if (/분석|reading|checking|read|check/.test(last)) return 0;
+  return 0;
+}
+
+// 제목 내 `코드` → styled <code> 태그, 경로는 파일명만 표시
+// 미완성 백틱(60자 잘림)도 처리 — 닫힌 척 하고 끝에 … 표시
+function renderTitle(title: string): React.ReactNode {
+  const isTruncated = /`[^`]*$/.test(title);
+  const normalized = isTruncated ? title + '`' : title;
+  const parts = normalized.split(/(`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('`') && part.endsWith('`')) {
+          const code = part.slice(1, -1);
+          const short = code.split('/').pop() || code;
+          const isLast = isTruncated && i === parts.length - 2;
+          return (
+            <code
+              key={i}
+              title={code}
+              className="mx-0.5 px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 font-mono text-[0.75em] border border-zinc-200 not-italic font-normal"
+            >
+              {short}{isLast ? '…' : ''}
+            </code>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
 function TimelineStep({
   icon, label, sublabel, time, elapsedLabel, done, active, pulse, rejected,
 }: {
-  icon: string; label: string; sublabel?: string; time?: string; elapsedLabel?: string | null;
-  done: boolean; active: boolean; pulse?: boolean; rejected?: boolean;
+  icon: string; label: string; sublabel?: string; time?: string;
+  elapsedLabel?: string | null; done: boolean; active: boolean;
+  pulse?: boolean; rejected?: boolean;
 }) {
   return (
     <div className="flex items-start gap-4">
       <div className="flex flex-col items-center shrink-0 relative z-10">
-        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold transition-all ${
+        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold transition-all duration-300 ${
           rejected ? 'bg-zinc-100 border-zinc-200 text-zinc-300' :
           done     ? 'bg-emerald-500 border-emerald-500 text-white' :
           active   ? 'bg-indigo-500 border-indigo-500 text-white' :
@@ -121,12 +234,32 @@ function TimelineStep({
   );
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  decision: '결정', discussion: '논의', issue: '이슈', inquiry: '문의',
-};
-const STATUS_LABEL: Record<string, string> = {
-  open: '토론중', 'in-progress': '진행중', resolved: '마감',
-};
+function ImpactChips({ areas }: { areas: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {areas.map(area => {
+        const label = IMPACT_AREA_CHIPS[area.toLowerCase()] ?? area;
+        return (
+          <span key={area} className="text-[11px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 font-medium">
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function StarRating({ score }: { score: number }) {
+  return (
+    <span className="inline-flex gap-0.5">
+      {[1,2,3,4,5].map(i => (
+        <span key={i} className={i <= score ? 'text-amber-400' : 'text-zinc-200'}>★</span>
+      ))}
+    </span>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
 
 export default function TaskDetailClient({
   initialTask, isOwner, isGuest, sourcePost,
@@ -143,11 +276,16 @@ export default function TaskDetailClient({
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [cronSecs, setCronSecs] = useState(secsToNextCron);
+  const [devRunnerSecs, setDevRunnerSecs] = useState(secsToDevRunner);
   const [logExpanded, setLogExpanded] = useState(false);
   const [showRetryForm, setShowRetryForm] = useState(false);
   const [retryNote, setRetryNote] = useState('');
+  const [runningElapsed, setRunningElapsed] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(null);
+  const [loadingImpact, setLoadingImpact] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const { subscribe } = useEvent();
+  const { subscribe, connected } = useEvent();
 
   const isLive     = task.status === 'in-progress';
   const isDone     = task.status === 'done';
@@ -160,37 +298,54 @@ export default function TaskDetailClient({
     return subscribe((ev) => {
       if (ev.type === 'dev_task_updated' && ev.data?.task?.id === task.id) {
         setTask(ev.data.task);
+        setLastUpdated(new Date());
       }
     });
   }, [subscribe, task.id]);
 
-  // Fallback polling when in-progress (in case SSE misses)
+  // Fallback polling when in-progress (5s) or approved (10s)
   useEffect(() => {
-    if (!isLive) return;
+    if (!isLive && !isApproved) return;
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/dev-tasks/${task.id}`).catch(() => {
-        console.warn('Task polling failed');
-        return null;
-      });
+      const res = await fetch(`/api/dev-tasks/${task.id}`).catch(() => null);
       if (res?.ok) {
         const updated = await res.json();
-        setTask(updated);
+        if (updated.status !== task.status || updated.execution_log !== task.execution_log) {
+          setTask(updated);
+          setLastUpdated(new Date());
+        }
       }
-    }, 5000);
+    }, isLive ? 5000 : 10000);
     return () => clearInterval(interval);
-  }, [task.id, isLive]);
+  }, [task.id, task.status, task.execution_log, isLive, isApproved]);
 
-  // Cron countdown (5-min boundary)
+  // Cron countdown (5-min boundary) + dev-runner countdown
   useEffect(() => {
-    if (!isApproved) return;
-    const t = setInterval(() => setCronSecs(secsToNextCron()), 1000);
+    if (!isApproved && !isLive) return;
+    const t = setInterval(() => {
+      setCronSecs(secsToNextCron());
+      setDevRunnerSecs(secsToDevRunner());
+    }, 1000);
     return () => clearInterval(t);
-  }, [isApproved]);
+  }, [isApproved, isLive]);
+
+  // Live elapsed timer when running
+  useEffect(() => {
+    if (!isLive || !task.started_at) return;
+    function update() {
+      setRunningElapsed(Math.floor((Date.now() - new Date(task.started_at!).getTime()) / 1000));
+    }
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [isLive, task.started_at]);
 
   // Scroll log to bottom
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [task.execution_log]);
+
+  // ── Action handlers ────────────────────────────────────────────────────────
 
   async function handleApprove() {
     setActionLoading('approved');
@@ -302,33 +457,72 @@ export default function TaskDetailClient({
     } finally { setActionLoading(null); }
   }
 
+  async function handleAnalyzeImpact() {
+    setLoadingImpact(true);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}/analyze-impact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setImpactAnalysis(data);
+      }
+    } catch {
+      // silently fail — analysis is optional
+    } finally {
+      setLoadingImpact(false);
+    }
+  }
+
+  // ── Derived values ─────────────────────────────────────────────────────────
+
   const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium;
   const logs: LogEntry[] = (() => { try { return JSON.parse(task.execution_log || '[]'); } catch { return []; } })();
   const changedFiles: string[] = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
+  const impactAreas: string[] = (() => { try { return JSON.parse(task.impact_areas || '[]'); } catch { return []; } })();
 
-  // Derived timestamps
-  const waitTime    = elapsed(task.created_at, task.approved_at ?? task.rejected_at);
-  const workTime    = elapsed(task.started_at, task.completed_at);
-  const totalTime   = elapsed(task.created_at, task.completed_at ?? task.rejected_at);
+  const waitTime  = elapsed(task.created_at, task.approved_at ?? task.rejected_at);
+  const workTime  = elapsed(task.started_at, task.completed_at);
+  const totalTime = elapsed(task.created_at, task.completed_at ?? task.rejected_at);
   const sourcePostId = task.source?.startsWith('board:') ? task.source.replace('board:', '') : null;
 
-  // Cron countdown display
   const cronMin = Math.floor(cronSecs / 60);
   const cronSecDisplay = cronSecs % 60;
+  const cronProgress = ((5 * 60 - cronSecs) / (5 * 60)) * 100;
 
-  // Status stripe
-  const stripeClass = isDone     ? 'bg-emerald-400' :
+  const statusPill = STATUS_PILL[task.status] ?? STATUS_PILL.pending;
+
+  const stripeClass = isDone     ? 'bg-gradient-to-r from-emerald-400 to-teal-400' :
                       isLive     ? 'bg-gradient-to-r from-indigo-400 to-violet-400' :
                       isRejected ? 'bg-zinc-200' :
                       isAwaiting ? 'bg-gradient-to-r from-amber-400 to-orange-400' :
                       isApproved ? 'bg-gradient-to-r from-teal-400 to-emerald-400' :
                                    'bg-zinc-100';
 
+  // Phase detection for in-progress
+  const currentPhase = detectPhase(logs);
+  const phaseNames = ['코드 분석', '코드 수정', '검증', '마무리'];
+  const phaseIcons = ['📖', '✏️', '🔍', '✅'];
+
+  // Last activity time from logs
+  const lastLogTime = logs.length > 0 ? new Date(logs[logs.length - 1].time) : null;
+  const lastActivitySecs = lastLogTime ? Math.floor((Date.now() - lastLogTime.getTime()) / 1000) : null;
+  const isStale = lastActivitySecs !== null && lastActivitySecs > 120 && isLive;
+
+  // Completion durations
+  const completionDuration = task.started_at && task.completed_at
+    ? Math.round((new Date(task.completed_at).getTime() - new Date(task.started_at).getTime()) / 60000)
+    : null;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="bg-zinc-50 min-h-screen">
 
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
+      {/* ── Sticky header ── */}
+      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-zinc-100 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -339,23 +533,44 @@ export default function TaskDetailClient({
             </svg>
             뒤로
           </button>
-          <div className="ml-auto flex items-center gap-2.5">
-            {isLive && (
-              <span className="flex items-center gap-1.5 text-[11px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+
+          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+            {/* SSE dot */}
+            <span
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
+              title={connected ? 'SSE 실시간 연결됨' : 'SSE 재연결 중...'}
+            />
+
+            {/* Status pill */}
+            <span className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold ${statusPill.className} ${isLive ? 'animate-pulse' : ''}`}>
+              {statusPill.label}
+            </span>
+
+            {isLive && runningElapsed > 0 && (
+              <span className="flex items-center gap-1.5 text-[11px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 tabular-nums">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                실행 중 · SSE 실시간
+                {formatElapsed(runningElapsed)}
               </span>
             )}
+
             {isGuest && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-600 font-medium">
                 열람 전용
               </span>
             )}
+
+            {lastUpdated && (
+              <span className="text-[10px] text-zinc-400 tabular-nums hidden sm:block">
+                {lastUpdated.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} 업데이트
+              </span>
+            )}
+
             <div className="w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
           </div>
         </div>
       </header>
 
+      {/* Guest banner */}
       {isGuest && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 text-center">
           <p className="text-xs text-amber-700">게스트 모드 — 태스크 내용을 열람할 수 있지만 승인·반려 등 관리 기능은 사용할 수 없습니다.</p>
@@ -364,40 +579,63 @@ export default function TaskDetailClient({
 
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
 
-        {/* ── Task header card ── */}
-        <div className={`bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm ${cfg.ring ? `ring-1 ${cfg.ring}` : ''}`}>
+        {/* ── Hero card ── */}
+        <div className={`bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm ${cfg.ring ? `ring-1 ${cfg.ring}` : ''}`}>
+          {/* Priority color stripe */}
           <div className={`h-1.5 w-full ${stripeClass}`} />
-          <div className="p-5">
+
+          <div className="p-5 md:p-6">
+            {/* Title + badges row */}
             <div className="flex items-start gap-3 mb-4">
-              <span className={`mt-1.5 w-3 h-3 rounded-full shrink-0 ${cfg.dot}`} />
+              <span className={`mt-2 w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
               <div className="flex-1 min-w-0">
-                <h1 className="text-lg font-bold text-zinc-900 leading-snug">{task.title}</h1>
+                <h1 className="text-xl font-bold text-zinc-900 leading-snug">{renderTitle(task.title)}</h1>
                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                  <span className={`text-[11px] px-2 py-0.5 rounded-md border font-semibold ${cfg.badge}`}>{cfg.label}</span>
+                  {/* Priority */}
+                  <span className={`text-[11px] px-2 py-0.5 rounded-md border font-semibold ${cfg.badge}`}>
+                    {cfg.label}
+                  </span>
+                  {/* Difficulty */}
+                  {task.difficulty && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-violet-50 border border-violet-200 text-violet-700 font-medium">
+                      난이도: {DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty}
+                    </span>
+                  )}
+                  {/* Assignee */}
                   {task.assignee && (
                     <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-50 border border-zinc-200 text-zinc-500 font-medium">
                       👤 {task.assignee}
                     </span>
                   )}
-                  {isAwaiting  && <span className="text-[11px] px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 font-semibold">⏳ 승인 대기</span>}
-                  {isApproved  && <span className="text-[11px] px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-700 font-semibold">✓ 승인됨</span>}
-                  {isLive      && <span className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold animate-pulse">⚙ 실행 중</span>}
-                  {isDone      && <span className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">✓ 완료</span>}
-                  {isRejected  && <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-500 font-medium">✕ 반려됨</span>}
-                  {task.status === 'pending' && <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-50 border border-zinc-200 text-zinc-400 font-medium">대기중</span>}
                 </div>
               </div>
             </div>
 
-            {task.detail && (
-              <div className={`text-sm text-zinc-700 leading-relaxed rounded-lg p-4 mb-3 whitespace-pre-wrap ${
-                isAwaiting ? 'bg-amber-50/60 border border-amber-100' : 'bg-zinc-50 border border-zinc-100'
-              }`}>
-                {task.detail}
+            {/* Expected impact box */}
+            {task.expected_impact && (
+              <div className="mb-4 px-4 py-3 rounded-xl bg-violet-50 border border-violet-100">
+                <p className="text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-1">💡 기대 효과</p>
+                <p className="text-sm text-violet-800 leading-relaxed">{task.expected_impact}</p>
               </div>
             )}
 
-            {/* Source card */}
+            {/* Detail content */}
+            {task.detail && (
+              <div className={`text-sm text-zinc-700 leading-relaxed rounded-xl p-4 mb-3 ${
+                isAwaiting ? 'bg-amber-50/60 border border-amber-100' : 'bg-zinc-50 border border-zinc-100'
+              }`}>
+                <MarkdownContent content={task.detail} />
+              </div>
+            )}
+
+            {/* Impact area chips */}
+            {impactAreas.length > 0 && (
+              <div className="mb-3">
+                <ImpactChips areas={impactAreas} />
+              </div>
+            )}
+
+            {/* Source post card */}
             {sourcePostId ? (
               <Link
                 href={`/posts/${sourcePostId}`}
@@ -420,14 +658,14 @@ export default function TaskDetailClient({
                           sourcePost.status === 'in-progress' ? 'bg-amber-50 text-amber-600' :
                           'bg-zinc-100 text-zinc-400'
                         }`}>
-                          {STATUS_LABEL[sourcePost.status] ?? sourcePost.status}
+                          {SOURCE_STATUS_LABEL[sourcePost.status] ?? sourcePost.status}
                         </span>
                         <span className="text-[10px] text-zinc-400">{sourcePost.author_display}</span>
                         <span className="text-[10px] text-zinc-400">💬 {sourcePost.comment_count}</span>
                       </div>
                     </>
                   ) : (
-                    <p className="text-xs text-indigo-600 font-mono group-hover:underline truncate">{task.source}</p>
+                    <p className="text-xs text-indigo-600 group-hover:underline">토론 게시물 보기</p>
                   )}
                 </div>
                 <svg className="w-4 h-4 text-indigo-300 shrink-0 mt-1 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -435,12 +673,17 @@ export default function TaskDetailClient({
                 </svg>
               </Link>
             ) : task.source ? (
-              <p className="text-[11px] text-zinc-400 mt-2 px-1">출처: <span className="text-zinc-600">{task.source}</span></p>
+              <p className="text-[11px] text-zinc-400 mt-2 px-1">출처: <span className="text-zinc-600">
+                {task.source.startsWith('cron:') ? '자동 감지 (크론)' :
+                 task.source.startsWith('manual:') ? '수동 등록' :
+                 task.source.startsWith('board:') ? '이사회 토론' :
+                 task.source}
+              </span></p>
             ) : null}
 
             {/* Metadata row */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-400 mt-3 pt-3 border-t border-zinc-100">
-              <span>생성 {fmt(task.created_at)}</span>
+              <span>요청됨 {fmt(task.created_at)}</span>
               {task.approved_at  && <span className="text-teal-600">✓ 승인 {fmt(task.approved_at)}</span>}
               {task.started_at   && <span className="text-indigo-500">⚙ 시작 {fmt(task.started_at)}</span>}
               {task.completed_at && <span className="text-emerald-600">🎉 완료 {fmt(task.completed_at)}</span>}
@@ -450,57 +693,93 @@ export default function TaskDetailClient({
           </div>
         </div>
 
-        {/* ── Approval action card ── */}
+        {/* ── Approval card (awaiting_approval) ── */}
         {isAwaiting && (
           isOwner ? (
-            <div className="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 border-b border-amber-100 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center text-lg shrink-0">⚠️</div>
-                <div>
-                  <h2 className="text-sm font-bold text-amber-800">대표 검토 필요</h2>
-                  <p className="text-[11px] text-amber-600 mt-0.5">승인하면 Jarvis가 즉시 작업을 시작합니다</p>
+            <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 border-b border-amber-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center text-lg shrink-0">🔍</div>
+                  <div className="flex-1">
+                    <h2 className="text-sm font-bold text-amber-800">대표 검토 필요</h2>
+                    <p className="text-[11px] text-amber-600 mt-0.5">승인하면 Jarvis가 즉시 코드 작업을 시작합니다</p>
+                  </div>
+                  <span className="text-[11px] text-amber-500 font-medium shrink-0">{timeAgo(task.created_at)} 요청됨</span>
                 </div>
-                <span className="ml-auto text-[11px] text-amber-500 font-medium">{timeAgo(task.created_at)} 요청됨</span>
               </div>
-              <div className="p-5">
-                <p className="text-sm text-zinc-600 leading-relaxed mb-5">
-                  이 작업을 승인하면 <span className="font-semibold text-zinc-800">Jarvis 자동화 시스템이 실제 코드를 수정</span>합니다.
-                  작업 내용을 꼼꼼히 검토한 후 결정해 주세요.
-                </p>
+
+              <div className="p-5 space-y-4">
+                {/* Decision info grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {task.estimated_minutes !== undefined && (
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">예상 소요</p>
+                      <p className="text-sm font-bold text-zinc-800">약 {task.estimated_minutes}분</p>
+                    </div>
+                  )}
+                  {task.difficulty && (
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">난이도</p>
+                      <p className="text-sm font-bold text-zinc-800">{DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Impact areas */}
+                {impactAreas.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">영향 범위</p>
+                    <ImpactChips areas={impactAreas} />
+                  </div>
+                )}
+
+                {/* Warning notice */}
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
+                  <span className="text-amber-500 shrink-0 mt-0.5">⚠️</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">이 작업은 실제 코드를 수정합니다.</p>
+                    <p className="text-xs text-amber-600 mt-0.5">변경 내용을 꼼꼼히 확인한 뒤 결정해 주세요.</p>
+                  </div>
+                </div>
 
                 {actionError && (
-                  <div className="mb-4 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                  <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
                     ⚠️ {actionError}
                   </div>
                 )}
+
+                {/* Action buttons */}
                 {!showRejectForm ? (
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 pt-1">
                     <button
                       onClick={() => setShowRejectForm(true)}
                       disabled={!!actionLoading}
-                      className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-zinc-50 text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-40 transition-colors"
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-zinc-50 text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-40 transition-all"
                     >
                       ✕ 반려
                     </button>
                     <button
                       onClick={handleApprove}
                       disabled={!!actionLoading}
-                      className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors shadow-sm"
+                      className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-all shadow-sm hover:shadow-md"
                     >
                       {actionLoading === 'approved' ? (
                         <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
-                      ) : '✓ 승인 — 작업 시작'}
+                      ) : '✓ 승인하고 작업 시작'}
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs font-semibold text-zinc-600 mb-1.5 block">반려 사유 <span className="text-zinc-400 font-normal">(선택)</span></label>
+                      <label className="text-xs font-semibold text-zinc-600 mb-1.5 block">
+                        반려 사유 <span className="text-zinc-400 font-normal">(선택)</span>
+                      </label>
                       <textarea
                         value={rejectNote}
                         onChange={e => setRejectNote(e.target.value)}
                         placeholder="어떤 부분이 문제인지 작성하면 Jarvis가 참고합니다..."
-                        className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg p-3 resize-none outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 transition-colors"
+                        className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-xl p-3 resize-none outline-none focus:border-red-300 focus:ring-2 focus:ring-red-100 transition-all"
                         rows={3}
                         autoFocus
                       />
@@ -515,7 +794,7 @@ export default function TaskDetailClient({
                       <button
                         onClick={handleReject}
                         disabled={!!actionLoading}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-all"
                       >
                         {actionLoading === 'rejected' ? (
                           <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
@@ -527,78 +806,254 @@ export default function TaskDetailClient({
               </div>
             </div>
           ) : (
-            <div className="bg-white border border-amber-100 rounded-xl p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-xl shrink-0">🔒</div>
-              <div>
-                <p className="text-sm font-semibold text-zinc-700">승인 대기 중</p>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  {isGuest ? '게스트 모드에서는 승인/반려를 수행할 수 없습니다.' : '대표님의 검토를 기다리고 있습니다.'}
-                </p>
+            <div className="bg-white border border-amber-100 rounded-2xl p-5 space-y-3 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-xl shrink-0">🔒</div>
+                <div>
+                  <p className="text-sm font-semibold text-zinc-700">대표님 검토 대기 중</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {isGuest ? '게스트 모드 — 대표님 로그인 후 승인/반려 가능합니다.' : '대표님의 검토를 기다리고 있습니다.'}
+                  </p>
+                </div>
+              </div>
+              {/* Pipeline preview */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { icon: '🔍', label: '검토 중', sub: '지금', active: true, done: false },
+                  { icon: '📥', label: '큐 등록', sub: '승인 후 5분 내', active: false, done: false },
+                  { icon: '⚙️', label: '코드 실행', sub: `22:55 실행`, active: false, done: false },
+                ].map((step, i) => (
+                  <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
+                    step.active ? 'bg-amber-50 border-amber-200' : 'bg-zinc-50 border-zinc-100'
+                  }`}>
+                    <p className="text-base mb-1">{step.icon}</p>
+                    <p className={`text-[11px] font-semibold ${step.active ? 'text-amber-700' : 'text-zinc-400'}`}>{step.label}</p>
+                    <p className={`text-[10px] mt-0.5 ${step.active ? 'text-amber-600' : 'text-zinc-300'}`}>{step.sub}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )
         )}
 
-        {/* ── Approved — cron countdown ── */}
+        {/* ── Approved — cron countdown card ── */}
         {isApproved && (
-          <div className="bg-white border border-teal-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 px-5 py-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center text-lg shrink-0">✅</div>
-              <div className="flex-1">
-                <p className="text-sm font-bold text-teal-800">승인 완료 — Jarvis 큐 대기 중</p>
-                <p className="text-xs text-teal-600 mt-0.5">다음 크론 실행 시 자동으로 작업을 시작합니다</p>
+          <div className="bg-white border border-teal-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center text-lg shrink-0">✅</div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-teal-800">승인 완료 — 큐 등록 대기 중</p>
+                  <p className="text-xs text-teal-600 mt-0.5">5분 내 큐에 등록되고, 오늘 22:55에 실행됩니다</p>
+                </div>
+                {/* Poller countdown */}
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-zinc-400 font-medium">큐 등록까지</p>
+                  <p className="text-2xl font-black tabular-nums text-teal-700 leading-none">
+                    {cronMin}:{String(cronSecDisplay).padStart(2, '0')}
+                  </p>
+                </div>
               </div>
-              {/* Cron countdown */}
-              <div className="text-right shrink-0">
-                <p className="text-[10px] text-zinc-400 font-medium">다음 Jarvis 폴링</p>
-                <p className="text-lg font-black tabular-nums text-teal-700 leading-none">
-                  {cronMin}:{String(cronSecDisplay).padStart(2, '0')}
-                </p>
+
+              {/* Progress bar */}
+              <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 rounded-full transition-none"
+                  style={{ width: `${cronProgress}%` }}
+                />
               </div>
-            </div>
-            {/* Cron progress bar */}
-            <div className="h-1 bg-zinc-100">
-              <div
-                className="h-full bg-teal-400 transition-none"
-                style={{ width: `${((5 * 60 - cronSecs) / (5 * 60)) * 100}%` }}
-              />
+
+              {/* Pipeline steps */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { icon: '✅', label: '승인 완료', sub: '방금', done: true, active: false },
+                  { icon: '📥', label: '큐 등록', sub: `약 ${cronMin}분 내`, done: false, active: true },
+                  { icon: '⚙️', label: '코드 실행', sub: `22:55 (${formatDevRunnerEta(devRunnerSecs)})`, done: false, active: false },
+                ].map((step, i) => (
+                  <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
+                    step.done   ? 'bg-teal-50 border-teal-200' :
+                    step.active ? 'bg-amber-50 border-amber-200 animate-pulse' :
+                                  'bg-zinc-50 border-zinc-100'
+                  }`}>
+                    <p className="text-base mb-1">{step.icon}</p>
+                    <p className={`text-[11px] font-semibold ${step.done ? 'text-teal-700' : step.active ? 'text-amber-700' : 'text-zinc-400'}`}>{step.label}</p>
+                    <p className={`text-[10px] mt-0.5 ${step.done ? 'text-teal-500' : step.active ? 'text-amber-600' : 'text-zinc-300'}`}>{step.sub}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
+        {/* ── In-progress card ── */}
+        {isLive && (
+          <div className="bg-white border border-indigo-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-indigo-50 to-violet-50 px-5 py-4 border-b border-indigo-100">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-lg shrink-0 ${logs.length > 0 ? 'animate-pulse' : ''}`}>
+                  {logs.length > 0 ? '⚙️' : '📥'}
+                </div>
+                <div className="flex-1">
+                  {logs.length > 0 ? (
+                    <>
+                      <p className="text-sm font-bold text-indigo-800">Jarvis 작업 중</p>
+                      <p className="text-xs text-indigo-600 mt-0.5 tabular-nums">
+                        {runningElapsed > 0 ? `${formatElapsed(runningElapsed)} 경과` : '방금 시작됨'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-bold text-indigo-800">개발 큐 등록됨 — 실행 대기 중</p>
+                      <p className="text-xs text-indigo-600 mt-0.5">오늘 22:55에 Jarvis가 코드를 작업합니다</p>
+                    </>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  {logs.length > 0 && task.estimated_minutes ? (
+                    <>
+                      <p className="text-[10px] text-zinc-400">예상 완료</p>
+                      <p className="text-xs font-semibold text-indigo-700">약 {task.estimated_minutes}분 후</p>
+                    </>
+                  ) : logs.length === 0 ? (
+                    <>
+                      <p className="text-[10px] text-zinc-400 font-medium">실행까지</p>
+                      <p className="text-base font-black tabular-nums text-indigo-700 leading-none">{formatDevRunnerEta(devRunnerSecs)}</p>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Queued (no logs yet) — show simple waiting state */}
+            {logs.length === 0 && (
+              <div className="p-5 space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { icon: '✅', label: '승인', done: true, active: false },
+                    { icon: '📥', label: '큐 등록', done: true, active: false },
+                    { icon: '⚙️', label: '22:55 실행', done: false, active: true },
+                  ].map((step, i) => (
+                    <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
+                      step.done   ? 'bg-teal-50 border-teal-200' :
+                      step.active ? 'bg-indigo-50 border-indigo-200' :
+                                    'bg-zinc-50 border-zinc-100'
+                    }`}>
+                      <p className="text-base mb-1">{step.icon}</p>
+                      <p className={`text-[11px] font-semibold ${step.done ? 'text-teal-700' : step.active ? 'text-indigo-700' : 'text-zinc-400'}`}>{step.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-4 py-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+                  <p className="text-xs text-indigo-700">
+                    <span className="font-semibold">로그가 보이지 않나요?</span>{' '}
+                    실행 로그는 22:55에 Jarvis가 실제 코드 작업을 시작할 때 채워집니다. 그 전까지는 큐에서 대기 중입니다.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {logs.length > 0 && (
+            <div className="p-5 space-y-4">
+              {/* 4-phase stepper */}
+              <div>
+                <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-3">지금 Jarvis가 하는 일</p>
+                <div className="flex items-center gap-1">
+                  {phaseNames.map((name, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                      <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm transition-all duration-300 ${
+                        i < currentPhase  ? 'bg-emerald-500 border-emerald-500 text-white' :
+                        i === currentPhase ? 'bg-indigo-500 border-indigo-500 text-white animate-pulse' :
+                                             'bg-white border-zinc-200 text-zinc-300'
+                      }`}>
+                        {i < currentPhase ? '✓' : phaseIcons[i]}
+                      </div>
+                      <p className={`text-[10px] text-center leading-tight ${
+                        i < currentPhase  ? 'text-emerald-600 font-semibold' :
+                        i === currentPhase ? 'text-indigo-700 font-bold' :
+                                             'text-zinc-300'
+                      }`}>{name}</p>
+                      {/* Connector line */}
+                      {i < phaseNames.length - 1 && (
+                        <div className="absolute" /> // spacer handled by flex gap
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Connecting lines between steps */}
+                <div className="flex items-center mt-1 px-4">
+                  {phaseNames.map((_, i) => i < phaseNames.length - 1 && (
+                    <div key={i} className={`flex-1 h-0.5 mx-1 rounded-full transition-all duration-300 ${
+                      i < currentPhase ? 'bg-emerald-400' : 'bg-zinc-100'
+                    }`} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Why it takes time */}
+              <div className="px-4 py-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+                <p className="text-xs font-semibold text-indigo-700 mb-1">왜 시간이 걸리나요?</p>
+                <ul className="text-xs text-indigo-600 space-y-1 list-disc list-inside">
+                  <li>코드를 이해하고 안전하게 수정하는 데 시간이 필요합니다</li>
+                  <li>수정 후 자동 테스트·검증을 실행합니다</li>
+                  {task.estimated_minutes
+                    ? <li>예상 완료: 약 {task.estimated_minutes}분 후</li>
+                    : <li>잠시 후 완료될 예정입니다</li>}
+                </ul>
+              </div>
+
+              {/* Last activity + stale warning */}
+              {lastActivitySecs !== null && (
+                <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs ${
+                  isStale
+                    ? 'bg-amber-50 border border-amber-200 text-amber-700'
+                    : 'bg-zinc-50 border border-zinc-100 text-zinc-500'
+                }`}>
+                  <span>{isStale ? '⚠️' : '🕐'}</span>
+                  <span>
+                    {isStale
+                      ? `2분 이상 응답 없음 — 잠시 대기해주세요`
+                      : `마지막 활동: ${lastActivitySecs < 60 ? `${lastActivitySecs}초 전` : `${Math.floor(lastActivitySecs / 60)}분 전`}`}
+                  </span>
+                </div>
+              )}
+            </div>
+            )}
+          </div>
+        )}
+
         {/* ── Timeline ── */}
-        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm">
           <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-5">진행 타임라인</h2>
           <div className="relative pl-4">
             <div className="absolute left-[32px] top-5 bottom-5 w-0.5 bg-zinc-100" />
 
             <TimelineStep
-              icon="📋" label="태스크 생성됨" sublabel="Jarvis 시스템에 등록"
+              icon="📋" label="작업 요청됨" sublabel="Jarvis 시스템에 등록"
               time={task.created_at} done={true} active={false}
             />
             <TimelineStep
-              icon="⏳" label="승인 대기" sublabel="대표 검토 필요"
+              icon="⏳" label="대표 검토 중" sublabel="승인 여부 확인 필요"
               time={isAwaiting ? task.created_at : undefined}
               done={!isAwaiting && !isRejected && task.status !== 'pending'}
               active={isAwaiting} pulse={isAwaiting} rejected={isRejected}
             />
             <TimelineStep
               icon="✓"
-              label={isRejected ? '반려됨' : '대표 승인 완료'}
-              sublabel={isRejected ? '작업 취소됨' : '작업 실행 승인'}
+              label={isRejected ? '반려됨' : '작업 승인됨'}
+              sublabel={isRejected ? '작업 취소됨' : '코드 작업 실행 승인'}
               time={task.approved_at ?? task.rejected_at}
               elapsedLabel={waitTime ? `대기 ${waitTime}` : null}
               done={!isRejected && !!task.approved_at}
               active={isApproved} rejected={isRejected}
             />
             <TimelineStep
-              icon="⚙" label="Jarvis 실행 시작" sublabel="자동화 코드 작업"
+              icon="⚙" label="Jarvis 코드 작업 시작" sublabel="자동화 코드 작업 실행 중"
               time={task.started_at}
               done={isDone} active={isLive} pulse={isLive} rejected={isRejected}
             />
             <TimelineStep
               icon="🎉"
-              label={isDone ? '작업 완료' : isRejected ? '–' : '완료 대기'}
+              label={isDone ? '모든 작업 완료' : isRejected ? '–' : '완료 대기 중'}
               sublabel={isDone ? '결과물 저장됨' : isRejected ? '' : '실행 완료 후 자동 기록'}
               time={task.completed_at}
               elapsedLabel={workTime ? `작업 ${workTime}` : null}
@@ -609,33 +1064,52 @@ export default function TaskDetailClient({
 
         {/* ── Execution log ── */}
         {(logs.length > 0 || isLive) && (
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-sm">
+            {/* Log header */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-700/80">
-              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">실행 로그</span>
-              {isLive && (
-                <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  LIVE
-                </span>
-              )}
-              <span className="ml-auto text-[10px] text-zinc-600 tabular-nums">{logs.length}개 항목</span>
-              {logs.length > 5 && (
-                <button
-                  onClick={() => setLogExpanded(v => !v)}
-                  className="ml-2 text-[10px] text-zinc-500 hover:text-zinc-300 underline"
-                >
-                  {logExpanded ? '접기' : `전체 보기 (${logs.length}개)`}
-                </button>
-              )}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">실행 로그</span>
+                {isLive && (
+                  <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    LIVE
+                  </span>
+                )}
+                {/* Current phase indicator */}
+                {isLive && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 font-medium">
+                    {phaseIcons[currentPhase]} {phaseNames[currentPhase]}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {/* Last activity */}
+                {lastActivitySecs !== null && (
+                  <span className={`text-[10px] tabular-nums ${isStale ? 'text-amber-400' : 'text-zinc-500'}`}>
+                    {lastActivitySecs < 60 ? `${lastActivitySecs}s 전 활동` : `${Math.floor(lastActivitySecs / 60)}m 전 활동`}
+                  </span>
+                )}
+                <span className="text-[10px] text-zinc-600 tabular-nums">{logs.length}개</span>
+                {logs.length > 5 && (
+                  <button
+                    onClick={() => setLogExpanded(v => !v)}
+                    className="text-[10px] text-zinc-500 hover:text-zinc-300 underline transition-colors"
+                  >
+                    {logExpanded ? '접기' : `전체 보기 (${logs.length})`}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Log entries */}
             <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto space-y-1.5">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
               ) : (
                 (logExpanded ? logs : logs.slice(-5)).map((entry, i) => {
                   const msg = entry.message;
-                  const isErr  = /error|fail|failed/i.test(msg);
-                  const isWarn = /warn|warning/i.test(msg);
+                  const isErr     = /error|fail|failed/i.test(msg);
+                  const isWarn    = /warn|warning/i.test(msg);
                   const isDoneLog = /done|complete|success|완료/i.test(msg);
                   const color = isErr ? 'text-red-400' : isWarn ? 'text-amber-400' : isDoneLog ? 'text-emerald-400' : 'text-zinc-200';
                   return (
@@ -651,7 +1125,7 @@ export default function TaskDetailClient({
               {isLive && (
                 <div className="flex gap-3 mt-1">
                   <span className="text-zinc-700">···</span>
-                  <span className="text-indigo-400 animate-pulse">실행 중</span>
+                  <span className="text-indigo-400 animate-pulse">작업 실행 중</span>
                 </div>
               )}
               <div ref={logEndRef} />
@@ -659,115 +1133,236 @@ export default function TaskDetailClient({
           </div>
         )}
 
-        {/* ── Completion summary ── */}
+        {/* ── Completion card ── */}
         {isDone && (
-          <div className="bg-white border border-emerald-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 border-b border-emerald-100 flex items-center gap-3">
-              <span className="text-xl">✅</span>
-              <div>
-                <h2 className="text-sm font-bold text-emerald-800">작업 완료 요약</h2>
-                {task.completed_at && (
-                  <p className="text-[11px] text-emerald-600 mt-0.5">{fmt(task.completed_at)} 완료 {workTime ? `· ${workTime} 소요` : ''}</p>
-                )}
+          <div className="bg-white border border-emerald-200 rounded-2xl overflow-hidden shadow-sm">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 border-b border-emerald-100">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🎉</span>
+                <div className="flex-1">
+                  <h2 className="text-base font-bold text-emerald-800">작업 완료!</h2>
+                  {task.completed_at && (
+                    <p className="text-[11px] text-emerald-600 mt-0.5 tabular-nums">
+                      완료 시각: {fmt(task.completed_at)}
+                      {completionDuration !== null ? ` · 총 ${completionDuration}분 소요` : workTime ? ` · ${workTime} 소요` : ''}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
+
             <div className="p-5 space-y-5">
-              {task.result_summary ? (
+              {/* One-line summary box */}
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">이 작업으로 무엇이 바뀌었나요?</p>
+                <p className="text-sm text-emerald-800 leading-relaxed">
+                  {task.actual_impact
+                    ? task.actual_impact
+                    : task.result_summary
+                      ? task.result_summary.slice(0, 80) + (task.result_summary.length > 80 ? '…' : '')
+                      : '결과 요약이 없습니다.'}
+                </p>
+              </div>
+
+              {/* Impact area chips */}
+              {impactAreas.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">작업 내용</h3>
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4">
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">영향 범위</p>
+                  <ImpactChips areas={impactAreas} />
+                </div>
+              )}
+
+              {/* Expected impact */}
+              {task.expected_impact && (
+                <div>
+                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">기대 효과</h3>
+                  <div className="bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
+                    <p className="text-sm text-violet-800 leading-relaxed">{task.expected_impact}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Result summary */}
+              {task.result_summary && (
+                <div>
+                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">실제 변화</h3>
+                  <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4">
                     <MarkdownContent content={task.result_summary} />
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-zinc-400 italic">작업 요약이 제출되지 않았습니다.</p>
               )}
 
+              {/* Changed files */}
               {changedFiles.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">변경된 파일 ({changedFiles.length}개)</h3>
+                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+                    변경된 파일 {changedFiles.length}개
+                  </h3>
                   <ul className="space-y-1.5">
-                    {changedFiles.map((f, i) => (
-                      <li key={i} className="flex items-center gap-2.5 text-xs">
-                        <span className="text-indigo-400 shrink-0 font-bold">+</span>
-                        <code className="font-mono text-zinc-700 bg-zinc-50 px-2 py-0.5 rounded border border-zinc-100 truncate">{f}</code>
-                      </li>
-                    ))}
+                    {changedFiles.map((f, i) => {
+                      const isNew = /new|create/i.test(f);
+                      return (
+                        <li key={i} className="flex items-center gap-2.5 text-xs">
+                          <span className="shrink-0 text-sm">{isNew ? '🆕' : '📝'}</span>
+                          <code className="font-mono text-zinc-700 bg-zinc-50 px-2 py-0.5 rounded-lg border border-zinc-100 truncate">
+                            {f}
+                          </code>
+                          <span className={`text-[10px] shrink-0 font-medium ${isNew ? 'text-emerald-600' : 'text-zinc-400'}`}>
+                            {isNew ? '새 파일' : '수정됨'}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
+
+              {/* AI impact analysis */}
+              <div className="pt-1 border-t border-zinc-100">
+                {!impactAnalysis ? (
+                  <button
+                    onClick={handleAnalyzeImpact}
+                    disabled={loadingImpact}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-sm font-semibold text-zinc-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 disabled:opacity-50 transition-all"
+                  >
+                    {loadingImpact ? (
+                      <><span className="w-3.5 h-3.5 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> 분석 중...</>
+                    ) : (
+                      <>✨ AI 임팩트 분석{task.actual_impact ? ' (다시 분석)' : ''}</>
+                    )}
+                  </button>
+                ) : (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">AI 임팩트 분석 결과</p>
+                      <button
+                        onClick={handleAnalyzeImpact}
+                        disabled={loadingImpact}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-600 underline transition-colors"
+                      >
+                        다시 분석
+                      </button>
+                    </div>
+                    {impactAnalysis.improvement_score !== undefined && (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-zinc-500">개선도</p>
+                        <StarRating score={impactAnalysis.improvement_score} />
+                        <p className="text-xs font-semibold text-zinc-700">{impactAnalysis.improvement_score}/5</p>
+                      </div>
+                    )}
+                    {impactAnalysis.user_visible && (
+                      <div>
+                        <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">사용자 체감 변화</p>
+                        <p className="text-sm text-zinc-700 leading-relaxed">{impactAnalysis.user_visible}</p>
+                      </div>
+                    )}
+                    {impactAnalysis.risk_reduced && (
+                      <div>
+                        <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">리스크 감소</p>
+                        <p className="text-sm text-zinc-700 leading-relaxed">{impactAnalysis.risk_reduced}</p>
+                      </div>
+                    )}
+                    {impactAnalysis.summary && (
+                      <div>
+                        <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">종합 평가</p>
+                        <p className="text-sm text-zinc-700 leading-relaxed">{impactAnalysis.summary}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── Rejected ── */}
+        {/* ── Rejected card ── */}
         {isRejected && (
-          <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-5 py-4 bg-zinc-50 border-b border-zinc-100 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg shrink-0">✕</div>
-              <div>
-                <p className="text-sm font-bold text-zinc-700">반려된 태스크</p>
-                {task.rejected_at && <p className="text-[11px] text-zinc-400 mt-0.5">{fmt(task.rejected_at)} 반려됨 {waitTime ? `· 대기 ${waitTime}` : ''}</p>}
+          <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 bg-zinc-50 border-b border-zinc-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg shrink-0">✕</div>
+                <div>
+                  <p className="text-sm font-bold text-zinc-700">이 작업은 반려되었습니다</p>
+                  {task.rejected_at && (
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      {fmt(task.rejected_at)} 반려됨{waitTime ? ` · 대기 ${waitTime}` : ''}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="px-5 py-4 space-y-3">
+
+            <div className="px-5 py-4 space-y-4">
               {task.rejection_note ? (
-                <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-3">
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
                   <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">반려 사유</p>
                   <p className="text-sm text-zinc-600 leading-relaxed">{task.rejection_note}</p>
                 </div>
               ) : (
                 <p className="text-sm text-zinc-400">반려 사유가 기재되지 않았습니다.</p>
               )}
-              <p className="text-xs text-zinc-400">이 태스크는 반려되어 Jarvis 작업 큐에서 제외되었습니다.</p>
+
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 text-sm shrink-0 mt-0.5">💭</span>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  이 작업은 Jarvis 작업 큐에서 제외되었습니다. 내용을 수정해 다시 요청하면 더 잘 반영될 수 있습니다.
+                </p>
+              </div>
+
               {actionError && (
-                <div className="px-3 py-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
                   ⚠️ {actionError}
                 </div>
               )}
+
               {isOwner && !showRetryForm && (
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => router.back()}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
                   >
                     ← 뒤로 가기
                   </button>
                   <button
                     onClick={handleRetry}
                     disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 disabled:opacity-40 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 disabled:opacity-40 transition-all"
                   >
                     {actionLoading === 'retry' ? (
                       <><span className="w-3 h-3 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" /> 처리 중...</>
-                    ) : '↺ 재시도'}
+                    ) : '↺ 그대로 재시도'}
                   </button>
                   <button
                     onClick={() => setShowRetryForm(true)}
                     disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-50 text-violet-600 border border-violet-100 hover:bg-violet-100 disabled:opacity-40 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-violet-50 text-violet-600 border border-violet-100 hover:bg-violet-100 disabled:opacity-40 transition-all"
                   >
                     ✏ 수정 후 재요청
                   </button>
                 </div>
               )}
+
               {!isOwner && (
                 <button
                   onClick={() => router.back()}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
                 >
                   ← 뒤로 가기
                 </button>
               )}
+
               {isOwner && showRetryForm && (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-semibold text-zinc-600 mb-1.5 block">추가 지시사항 <span className="text-zinc-400 font-normal">(선택)</span></label>
+                    <label className="text-xs font-semibold text-zinc-600 mb-1.5 block">
+                      추가 지시사항 <span className="text-zinc-400 font-normal">(선택)</span>
+                    </label>
                     <textarea
                       value={retryNote}
                       onChange={e => setRetryNote(e.target.value)}
                       placeholder="어떤 부분을 수정해서 다시 시도할지 작성해주세요..."
-                      className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg p-3 resize-none outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100 transition-colors"
+                      className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-xl p-3 resize-none outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
                       rows={3}
                       autoFocus
                     />
@@ -782,7 +1377,7 @@ export default function TaskDetailClient({
                     <button
                       onClick={handleRetryWithNote}
                       disabled={!!actionLoading}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-all"
                     >
                       {actionLoading === 'retry-note' ? (
                         <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>

@@ -2,8 +2,13 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 export async function GET(req: NextRequest) {
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = agentKey === process.env.AGENT_API_KEY;
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner && !isAgent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const url = new URL(req.url);
   const statusFilter = url.searchParams.get('status');
   const db = getDb();

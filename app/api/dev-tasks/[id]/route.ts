@@ -3,11 +3,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = agentKey === process.env.AGENT_API_KEY;
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner && !isAgent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await params;
   const db = getDb();
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
@@ -33,7 +39,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note } = body;
+  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty } = body;
 
   // Agents can set operational statuses; owner can approve/reject
   const agentAllowed = ['pending', 'in-progress', 'done'];
@@ -56,43 +62,102 @@ export async function PATCH(
     return NextResponse.json({ ok: true });
   }
 
+  // Owner can update expected_impact/difficulty/estimated_minutes metadata
+  if ((expected_impact !== undefined || difficulty !== undefined || estimated_minutes !== undefined) && !status) {
+    const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+    if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    db.prepare(`UPDATE dev_tasks SET
+      expected_impact = COALESCE(?, expected_impact),
+      difficulty = COALESCE(?, difficulty),
+      estimated_minutes = COALESCE(?, estimated_minutes)
+      WHERE id = ?`
+    ).run(expected_impact || null, difficulty || null, estimated_minutes || null, id);
+    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+    broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
+    return NextResponse.json({ ok: true });
+  }
+
   if (!status) return NextResponse.json({ error: 'status required' }, { status: 400 });
   if (!allowed.includes(status)) {
     return NextResponse.json({ error: 'invalid status for this auth level' }, { status: 400 });
   }
 
-  if (status === 'approved') {
-    db.prepare('UPDATE dev_tasks SET status = ?, approved_at = ? WHERE id = ?').run(status, now, id);
-  } else if (status === 'rejected') {
-    db.prepare('UPDATE dev_tasks SET status = ?, rejected_at = ?, rejection_note = COALESCE(?, rejection_note) WHERE id = ?')
-      .run(status, now, rejection_note || null, id);
-  } else if (status === 'in-progress') {
-    db.prepare('UPDATE dev_tasks SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?').run(status, now, id);
-  } else if (status === 'done') {
-    const task = db.prepare('SELECT execution_log FROM dev_tasks WHERE id = ?').get(id) as any;
-    const logs: any[] = JSON.parse(task?.execution_log || '[]');
-    if (log_entry) logs.push({ time: now, message: log_entry });
+  const validTransitions: Record<string, string[]> = {
+    pending:           ['awaiting_approval', 'pending'],
+    awaiting_approval: ['approved', 'rejected', 'pending'],
+    approved:          ['in-progress', 'rejected', 'pending'],
+    'in-progress':     ['done', 'pending'],
+    done:              ['pending'],
+    rejected:          ['pending'],
+  };
 
-    db.prepare(`UPDATE dev_tasks SET
-      status = ?, completed_at = ?,
-      result_summary = COALESCE(?, result_summary),
-      changed_files = COALESCE(?, changed_files),
-      execution_log = ?
-      WHERE id = ?`).run(
-        status, now,
-        result_summary || null,
-        changed_files ? JSON.stringify(changed_files) : null,
-        JSON.stringify(logs),
-        id,
-    );
-  } else if (status === 'pending') {
-    db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = NULL, execution_log = NULL WHERE id = ?`).run(id);
-  } else {
-    db.prepare('UPDATE dev_tasks SET status = ? WHERE id = ?').run(status, id);
+  // State machine: enforce valid transitions — wrapped in transaction to prevent races
+  type TransitionResult =
+    | { ok: true; task: any }
+    | { ok: false; code: 404 | 409; error: string };
+
+  const updateStatus = db.transaction((
+    taskId: string,
+    newStatus: string,
+    _now: string,
+  ): TransitionResult => {
+    const current = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(taskId) as any;
+    if (!current) return { ok: false, code: 404, error: 'Not found' };
+
+    const allowedFrom = validTransitions[current.status] ?? [];
+    if (!allowedFrom.includes(newStatus)) {
+      return {
+        ok: false,
+        code: 409,
+        error: `Cannot transition from '${current.status}' to '${newStatus}'`,
+      };
+    }
+
+    if (newStatus === 'approved') {
+      db.prepare('UPDATE dev_tasks SET status = ?, approved_at = ? WHERE id = ?').run(newStatus, _now, taskId);
+    } else if (newStatus === 'rejected') {
+      db.prepare('UPDATE dev_tasks SET status = ?, rejected_at = ?, rejection_note = COALESCE(?, rejection_note) WHERE id = ?')
+        .run(newStatus, _now, rejection_note || null, taskId);
+    } else if (newStatus === 'in-progress') {
+      db.prepare('UPDATE dev_tasks SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?').run(newStatus, _now, taskId);
+    } else if (newStatus === 'done') {
+      const t = db.prepare('SELECT execution_log FROM dev_tasks WHERE id = ?').get(taskId) as any;
+      const logs: any[] = JSON.parse(t?.execution_log || '[]');
+      if (log_entry) logs.push({ time: _now, message: log_entry });
+
+      db.prepare(`UPDATE dev_tasks SET
+        status = ?, completed_at = ?,
+        result_summary = COALESCE(?, result_summary),
+        changed_files = COALESCE(?, changed_files),
+        execution_log = ?,
+        actual_impact = COALESCE(?, actual_impact),
+        impact_areas = COALESCE(?, impact_areas)
+        WHERE id = ?`).run(
+          newStatus, _now,
+          result_summary || null,
+          changed_files ? JSON.stringify(changed_files) : null,
+          JSON.stringify(logs),
+          actual_impact || null,
+          impact_areas ? JSON.stringify(impact_areas) : null,
+          taskId,
+      );
+    } else if (newStatus === 'pending') {
+      db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]' WHERE id = ?`).run(taskId);
+    } else {
+      db.prepare('UPDATE dev_tasks SET status = ? WHERE id = ?').run(newStatus, taskId);
+    }
+
+    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(taskId) as any;
+    return { ok: true, task: updated };
+  });
+
+  const result = updateStatus(id, status, now);
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.code });
   }
 
-  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
-  broadcastEvent({ type: 'dev_task_updated', data: { id, status, task } });
+  broadcastEvent({ type: 'dev_task_updated', data: { id, status, task: result.task } });
 
-  return NextResponse.json({ ok: true, status });
+  return NextResponse.json(result.task);
 }

@@ -4,6 +4,70 @@ import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
+import { callLLM, MODEL_QUALITY } from '@/lib/llm';
+
+const AGENT_AUTHORS = new Set([
+  'strategy-lead', 'infra-lead', 'career-lead', 'brand-lead', 'finance-lead', 'record-lead',
+  'jarvis-proposer', 'board-synthesizer', 'council-team', 'infra-team', 'audit-team',
+  'brand-team', 'record-team', 'trend-team', 'growth-team', 'kim-seonhwi', 'jung-mingi', 'lee-jihwan',
+]);
+
+async function triggerAutoReply(
+  db: ReturnType<typeof import('@/lib/db').getDb>,
+  postId: string,
+  agentAuthor: string,
+  agentDisplay: string,
+  ownerCommentId: string,
+  ownerContent: string,
+  parentCommentId: string,
+) {
+  try {
+    const postData = db.prepare('SELECT title, content FROM posts WHERE id = ?').get(postId) as any;
+    const thread = db.prepare(
+      'SELECT author, author_display, content FROM comments WHERE (id = ? OR parent_id = ?) AND id != ? ORDER BY created_at ASC LIMIT 10'
+    ).all(parentCommentId, parentCommentId, ownerCommentId) as any[];
+
+    const threadContext = thread
+      .map(c => `[${c.author_display}]: ${c.content.slice(0, 250)}`)
+      .join('\n');
+
+    broadcastEvent({ type: 'agent_typing', post_id: postId, data: { agent: agentAuthor, label: agentDisplay } });
+
+    const prompt = `당신은 자비스 컴퍼니의 ${agentDisplay}입니다.
+토론에서 당신이 댓글을 달았고, 대표님이 답변했습니다. 대표님의 의견에 직접 반응하세요.
+
+## 토론 주제
+${postData?.title || ''}
+
+## 이전 대화
+${threadContext}
+
+## 대표님의 답변 (지금 이것에 반응)
+[대표]: ${ownerContent}
+
+[답변 규칙]
+- 당신의 전문 렌즈로 대표님 의견에 구체적으로 반응 (단순 동의·칭찬 금지)
+- 존댓말(합쇼체) 필수: "~합니다", "~입니다" 형식. 반말 절대 금지.
+- 새 분석·근거·반론·제안 중 하나 이상 포함, 3~5문장
+- 서명(— 이름) 금지. 이미 완료된 논의면 [SKIP] 출력.
+
+한국어로만 답변.`;
+
+    const reply = await callLLM(prompt, { model: MODEL_QUALITY, maxTokens: 450, timeoutMs: 25000 });
+    if (!reply || reply.trim() === '[SKIP]') return;
+
+    const rid = nanoid();
+    db.prepare(
+      `INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, parent_id)
+       VALUES (?, ?, ?, ?, ?, 0, 0, ?)`
+    ).run(rid, postId, agentAuthor, agentDisplay, reply.trim(), ownerCommentId);
+
+    const replyComment = db.prepare('SELECT * FROM comments WHERE id = ?').get(rid);
+    broadcastEvent({ type: 'new_comment', post_id: postId, data: replyComment });
+  } catch (e) {
+    console.error('[auto-reply] 에이전트 자동 대댓글 실패:', e);
+  }
+}
 
 async function generateSummary(content: string): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -99,5 +163,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);
   broadcastEvent({ type: 'new_comment', post_id: id, data: comment });
+
+  // Auto-reply: if owner replied to an agent's comment, trigger that agent to respond
+  if (parent_id && !post.paused_at && process.env.GROQ_API_KEY) {
+    const parentComment = db.prepare(
+      'SELECT author, author_display FROM comments WHERE id = ?'
+    ).get(parent_id) as any;
+
+    if (parentComment && AGENT_AUTHORS.has(parentComment.author)) {
+      // Fire-and-forget: does not block response
+      setImmediate(() => {
+        triggerAutoReply(db, id, parentComment.author, parentComment.author_display, cid, content, parent_id)
+          .catch(e => console.error('[auto-reply]', e));
+      });
+    }
+  }
+
   return NextResponse.json(comment, { status: 201 });
 }

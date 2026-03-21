@@ -91,6 +91,13 @@ export async function POST(
     'SELECT id FROM peer_votes WHERE post_id = ? AND voter_id = ? AND vote_type = ?',
   );
   const firstVoteCheckStmt = db.prepare('SELECT COUNT(*) as cnt FROM peer_votes WHERE post_id = ?');
+  const clearIsBestStmt = db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ? AND is_best = 1`);
+  const topBestStmt = db.prepare(`
+    SELECT comment_id FROM peer_votes
+    WHERE post_id = ? AND vote_type = 'best'
+    GROUP BY comment_id ORDER BY COUNT(*) DESC, MIN(created_at), comment_id LIMIT 1
+  `);
+  const setIsBestStmt = db.prepare(`UPDATE comments SET is_best = 1 WHERE id = ?`);
 
   let inserted = 0;
   let updated = 0;
@@ -133,20 +140,16 @@ export async function POST(
         }
       }
     }
+
+    // Refresh is_best atomically within the same transaction
+    clearIsBestStmt.run(post_id);
+    const topBest = topBestStmt.get(post_id) as { comment_id: string } | undefined;
+    if (topBest) {
+      setIsBestStmt.run(topBest.comment_id);
+    }
   });
 
   tx();
-
-  // Refresh is_best: set is_best=1 on the comment with the most best votes for this post
-  db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ? AND is_best = 1`).run(post_id);
-  const topBest = db.prepare(`
-    SELECT comment_id FROM peer_votes
-    WHERE post_id = ? AND vote_type = 'best'
-    GROUP BY comment_id ORDER BY COUNT(*) DESC LIMIT 1
-  `).get(post_id) as { comment_id: string } | undefined;
-  if (topBest) {
-    db.prepare(`UPDATE comments SET is_best = 1 WHERE id = ?`).run(topBest.comment_id);
-  }
 
   if (updated > 0 && inserted === 0) {
     return NextResponse.json({ ok: true, updated }, { status: 200 });

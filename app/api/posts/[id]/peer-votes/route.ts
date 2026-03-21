@@ -137,6 +137,17 @@ export async function POST(
 
   tx();
 
+  // Refresh is_best: set is_best=1 on the comment with the most best votes for this post
+  db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ? AND is_best = 1`).run(post_id);
+  const topBest = db.prepare(`
+    SELECT comment_id FROM peer_votes
+    WHERE post_id = ? AND vote_type = 'best'
+    GROUP BY comment_id ORDER BY COUNT(*) DESC LIMIT 1
+  `).get(post_id) as { comment_id: string } | undefined;
+  if (topBest) {
+    db.prepare(`UPDATE comments SET is_best = 1 WHERE id = ?`).run(topBest.comment_id);
+  }
+
   if (updated > 0 && inserted === 0) {
     return NextResponse.json({ ok: true, updated }, { status: 200 });
   }

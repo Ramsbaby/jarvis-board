@@ -107,12 +107,13 @@ const SOURCE_STATUS_LABEL: Record<string, string> = {
 
 // Status pill config
 const STATUS_PILL: Record<string, { label: string; className: string }> = {
-  pending:            { label: '⏸ 대기중',      className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
-  awaiting_approval:  { label: '🔍 검토 대기',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  approved:           { label: '⏳ 실행 대기',     className: 'bg-teal-50 text-teal-700 border-teal-200' },
-  'in-progress':      { label: '⚙️ 작업 중',     className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  done:               { label: '🎉 완료',          className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  rejected:           { label: '✕ 반려',           className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
+  pending:            { label: '미제출',            className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
+  awaiting_approval:  { label: '🔍 검토 요청됨',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  approved:           { label: '✅ 승인됨',          className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  'in-progress':      { label: '⚙️ Jarvis 작업 중', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  done:               { label: '🎉 완료',            className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  rejected:           { label: '✕ 반려',             className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
+  failed:             { label: '⚠ 실패',             className: 'bg-red-50 text-red-600 border-red-200' },
 };
 
 // ── Utility functions ────────────────────────────────────────────────────────
@@ -386,6 +387,7 @@ export default function TaskDetailClient({
   const isAwaiting = task.status === 'awaiting_approval';
   const isApproved = task.status === 'approved';
   const isPending  = task.status === 'pending';
+  const isFailed   = task.status === 'failed';
 
   // SSE real-time updates
   useEffect(() => {
@@ -691,6 +693,7 @@ export default function TaskDetailClient({
   const stripeClass = isDone     ? 'bg-gradient-to-r from-emerald-400 to-teal-400' :
                       isLive     ? 'bg-gradient-to-r from-indigo-400 to-violet-400' :
                       isRejected ? 'bg-zinc-200' :
+                      isFailed   ? 'bg-gradient-to-r from-red-300 to-rose-300' :
                       isAwaiting ? 'bg-gradient-to-r from-amber-400 to-orange-400' :
                       isApproved ? 'bg-gradient-to-r from-teal-400 to-emerald-400' :
                                    'bg-zinc-100';
@@ -1136,9 +1139,9 @@ export default function TaskDetailClient({
               {/* Pipeline preview */}
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { icon: '🔍', label: '검토 중', sub: '지금', active: true, done: false },
-                  { icon: '📥', label: '큐 등록', sub: '승인 후 5분 내', active: false, done: false },
-                  { icon: '⚙️', label: '코드 실행', sub: '승인 후 즉시', active: false, done: false },
+                  { icon: '🔍', label: '대표 검토 중', sub: '지금', active: true, done: false },
+                  { icon: '✅', label: '승인', sub: '승인 후 진행', active: false, done: false },
+                  { icon: '⚙️', label: 'Jarvis 코드 작업', sub: '승인 후 자동 실행', active: false, done: false },
                 ].map((step, i) => (
                   <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                     step.active ? 'bg-amber-50 border-amber-200' : 'bg-zinc-50 border-zinc-100'
@@ -1184,8 +1187,8 @@ export default function TaskDetailClient({
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { icon: '✅', label: '승인 완료', sub: '방금', done: true, active: false },
-                  { icon: '📥', label: '큐 등록', sub: `약 ${cronMin}분 내`, done: false, active: true },
-                  { icon: '⚙️', label: '코드 실행', sub: '큐 등록 후 즉시', done: false, active: false },
+                  { icon: '📥', label: '큐 등록 중', sub: `약 ${cronMin}분 내`, done: false, active: true },
+                  { icon: '⚙️', label: 'Jarvis 코드 작업', sub: '큐 등록 후 자동 실행', done: false, active: false },
                 ].map((step, i) => (
                   <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                     step.done   ? 'bg-teal-50 border-teal-200' :
@@ -1243,7 +1246,7 @@ export default function TaskDetailClient({
                   {[
                     { icon: '✅', label: '승인', done: true, active: false },
                     { icon: '📥', label: '큐 등록', done: true, active: false },
-                    { icon: '⚙️', label: '즉시 실행', done: false, active: true },
+                    { icon: '⚙️', label: 'Jarvis 코드 작업', done: false, active: true },
                   ].map((step, i) => (
                     <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                       step.done   ? 'bg-teal-50 border-teal-200' :
@@ -1333,67 +1336,131 @@ export default function TaskDetailClient({
           </div>
         )}
 
+        {/* ── Failed card ── */}
+        {isFailed && (
+          <div className="bg-white border border-red-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-red-50 to-rose-50 px-5 py-4 border-b border-red-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 border border-red-200 flex items-center justify-center text-lg shrink-0">⚠️</div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-red-800">Jarvis 작업 실패</p>
+                  <p className="text-xs text-red-600 mt-0.5">코드 작업이 완료되지 못했습니다. 재시도하거나 내용을 수정해 다시 검토 요청하세요.</p>
+                </div>
+                {task.started_at && <span className="text-[11px] text-red-400 font-medium shrink-0">{timeAgo(task.started_at)} 시작됨</span>}
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {logs.length > 0 && (
+                <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-100">
+                  <p className="text-[10px] text-red-500 font-semibold uppercase tracking-wider mb-1">마지막 로그</p>
+                  <p className="text-xs text-red-700 leading-relaxed font-mono">
+                    {logs[logs.length - 1].message.slice(0, 150)}{logs[logs.length - 1].message.length > 150 ? '…' : ''}
+                  </p>
+                </div>
+              )}
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 text-sm shrink-0 mt-0.5">💭</span>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  일시적인 오류일 수 있습니다. 재시도하면 대기 상태로 초기화되어 다시 검토 요청할 수 있습니다.
+                </p>
+              </div>
+              {actionError && (
+                <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                  ⚠️ {actionError}
+                </div>
+              )}
+              {isOwner && (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleRetry}
+                    disabled={!!actionLoading}
+                    className="inline-flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-xl bg-zinc-800 text-white hover:bg-zinc-900 disabled:opacity-40 transition-colors font-semibold"
+                  >
+                    {actionLoading === 'retry' ? (
+                      <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
+                    ) : '🔄 재시도 (미제출로 초기화)'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Timeline ── */}
         <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm">
           <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-5">진행 타임라인</h2>
+          {isPending && (
+            <p className="text-xs text-zinc-400 mb-4 px-1">검토 요청 전 단계입니다. 아래 버튼으로 검토를 요청하면 타임라인이 시작됩니다.</p>
+          )}
           <div className="relative pl-4">
             <div className="absolute left-[32px] top-5 bottom-5 w-0.5 bg-zinc-100" />
 
+            {/* Step 1: 검토 요청 */}
             <TimelineStep
               icon="📋"
-              label="작업 접수"
-              sublabel={task.source?.startsWith('board:')
-                ? '이사회 토론에서 도출된 개발 요청이 큐에 등록됨'
-                : task.source?.startsWith('manual:') ? '수동으로 등록된 개발 요청'
-                : 'Jarvis 시스템에 개발 요청 등록됨'}
-              time={task.created_at} done={true} active={false}
-            />
-            <TimelineStep
-              icon="⏳"
-              label={isAwaiting ? '대표 검토 중 (현재 단계)' : isPending ? '대표 검토 대기 중' : '대표 검토'}
-              sublabel={isRejected
-                ? '검토 결과: 반려 (재검토 가능)'
+              label={isAwaiting ? '검토 요청됨 — 대표 검토 대기 중' : '검토 요청'}
+              sublabel={isPending
+                ? '아직 검토를 요청하지 않았습니다'
                 : isAwaiting
                 ? '승인하면 Jarvis가 즉시 코드 작업을 시작합니다'
-                : isPending
-                ? '검토 요청 후 대표 승인이 필요합니다'
-                : '검토 완료'}
-              time={isAwaiting ? task.created_at : undefined}
-              done={!isAwaiting && !isRejected && task.status !== 'pending'}
-              active={isAwaiting} pulse={isAwaiting} rejected={isRejected}
+                : isRejected
+                ? '검토 요청 후 반려됨'
+                : '검토 요청 완료'}
+              time={!isPending ? task.created_at : undefined}
+              done={!isPending && !isAwaiting}
+              active={isAwaiting} pulse={isAwaiting}
             />
+
+            {/* Step 2: 대표 승인 */}
             <TimelineStep
               icon="✓"
-              label={isRejected ? '반려 — 작업 중단' : '승인 완료'}
+              label={isRejected ? '반려 — 작업 중단' : isApproved ? '승인됨 — 실행 대기 중' : '대표 승인'}
               sublabel={isRejected
                 ? (task.rejection_note ? `사유: ${task.rejection_note.slice(0, 60)}` : '반려 사유 없음')
-                : isApproved ? '5분 내 자동으로 개발 큐에 등록됩니다'
-                : '코드 작업 실행이 예약됨'}
+                : isApproved
+                ? '5분 내 자동으로 개발 큐에 등록됩니다'
+                : isDone || isLive || isFailed
+                ? '승인 완료'
+                : '승인 후 Jarvis 코드 작업이 시작됩니다'}
               time={task.approved_at ?? task.rejected_at}
-              elapsedLabel={waitTime ? `검토 소요 ${waitTime}` : null}
-              done={!isRejected && !!task.approved_at}
+              elapsedLabel={waitTime && (isDone || isLive || isFailed) ? `검토 소요 ${waitTime}` : null}
+              done={!isRejected && !!task.approved_at && !isApproved}
               active={isApproved} rejected={isRejected}
             />
+
+            {/* Step 3: Jarvis 작업 */}
             <TimelineStep
               icon="⚙"
-              label={isLive ? 'Jarvis 작업 중 (현재 단계)' : 'Jarvis 코드 작업'}
+              label={isLive
+                ? 'Jarvis 작업 중 (현재 단계)'
+                : isFailed
+                ? 'Jarvis 작업 실패'
+                : 'Jarvis 코드 작업'}
               sublabel={isLive
                 ? `코드 분석 → 수정 → 검증 진행 중${runningElapsed > 0 ? ` (${formatElapsed(runningElapsed)} 경과)` : ''}`
-                : isDone ? `${task.assignee ?? ''}팀 코드 자동 수정 완료`
+                : isDone
+                ? `${changedFiles.length > 0 ? `파일 ${changedFiles.length}개 수정됨` : '코드 수정 완료'}`
+                : isFailed
+                ? '작업 중 오류 발생 — 재시도 가능'
                 : '승인 후 Jarvis가 자동으로 코드를 수정합니다'}
               time={task.started_at}
-              done={isDone} active={isLive} pulse={isLive} rejected={isRejected}
+              done={isDone} active={isLive} pulse={isLive} rejected={isFailed || isRejected}
             />
+
+            {/* Step 4: 완료 */}
             <TimelineStep
               icon="🎉"
-              label={isDone ? '작업 완료' : isRejected ? '완료되지 않음' : '완료 대기'}
+              label={isDone ? '완료' : isRejected ? '완료되지 않음' : isFailed ? '미완료' : '완료'}
               sublabel={isDone
                 ? `수정된 파일 ${changedFiles.length > 0 ? `${changedFiles.length}개` : '확인 필요'} — 결과 기록 저장됨`
-                : isRejected ? '반려로 인해 작업이 진행되지 않았습니다'
+                : isRejected
+                ? '반려로 인해 작업이 진행되지 않았습니다'
+                : isFailed
+                ? '작업 실패로 미완료 — 재시도하면 다시 시작됩니다'
                 : '코드 작업 완료 시 자동으로 기록됩니다'}
               time={task.completed_at}
               elapsedLabel={workTime ? `작업 소요 ${workTime}` : null}
-              done={isDone} active={false} rejected={isRejected}
+              done={isDone} active={false} rejected={isRejected || isFailed}
             />
           </div>
         </div>

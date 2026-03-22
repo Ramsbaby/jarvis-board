@@ -113,21 +113,21 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
     stripe: 'bg-gradient-to-r from-amber-400 to-orange-400',
     innerBg: 'bg-amber-50/60',
     badgeCls: 'bg-amber-50 border-amber-200 text-amber-700',
-    badgeLabel: '🔍 검토 대기',
+    badgeLabel: '🔍 검토 요청됨',
   },
   approved: {
     outerBorder: 'border-teal-200 shadow-sm shadow-teal-50',
     stripe: 'bg-gradient-to-r from-teal-400 to-emerald-400',
     innerBg: 'bg-teal-50/40',
     badgeCls: 'bg-teal-50 border-teal-200 text-teal-700',
-    badgeLabel: '⏳ 실행 대기',
+    badgeLabel: '✅ 승인됨',
   },
   'in-progress': {
     outerBorder: 'border-indigo-200 shadow-sm',
     stripe: 'bg-gradient-to-r from-indigo-400 to-violet-400',
     innerBg: 'bg-indigo-50/40',
     badgeCls: 'bg-indigo-50 border-indigo-200 text-indigo-700',
-    badgeLabel: '⚙ 작업 중',
+    badgeLabel: '⚙ Jarvis 작업 중',
   },
   done: {
     outerBorder: 'border-zinc-200',
@@ -152,7 +152,7 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
   },
   failed: {
     outerBorder: 'border-red-200',
-    stripe: 'bg-red-400',
+    stripe: 'bg-gradient-to-r from-red-300 to-rose-300',
     innerBg: 'bg-red-50/30',
     badgeCls: 'bg-red-50 border-red-200 text-red-600',
     badgeLabel: '⚠ 실패',
@@ -171,9 +171,9 @@ const TAB_BADGE_CLS: Record<string, string> = {
 
 const STATUS_TABS = [
   { key: 'all',               label: '전체' },
-  { key: 'awaiting_approval', label: '검토 대기' },
-  { key: 'approved',          label: '실행 대기' },
-  { key: 'in-progress',       label: '작업 중' },
+  { key: 'awaiting_approval', label: '검토 요청됨' },
+  { key: 'approved',          label: '승인됨' },
+  { key: 'in-progress',       label: 'Jarvis 작업 중' },
   { key: 'pending',           label: '미제출' },
   { key: 'done',              label: '완료' },
   { key: 'rejected',          label: '반려' },
@@ -318,13 +318,13 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   const filtered = grouped[tab] ?? tasks;
 
   const STATS = [
-    { label: '검토 대기', key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
-    { label: '실행 대기',  key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: true  },
-    { label: '작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: true },
-    { label: '완료',      key: 'done',               color: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-400', pulse: false },
-    { label: '반려',      key: 'rejected',           color: 'bg-zinc-50 border-zinc-200 text-zinc-500',    dot: 'bg-zinc-300',    pulse: false },
-    { label: '미제출',    key: 'pending',            color: 'bg-zinc-50 border-zinc-200 text-zinc-400',    dot: 'bg-zinc-200',    pulse: false },
-    { label: '실패',      key: 'failed',             color: 'bg-red-50 border-red-200 text-red-600',       dot: 'bg-red-400',     pulse: false },
+    { label: '검토 요청됨',      key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
+    { label: '승인됨',           key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: true  },
+    { label: 'Jarvis 작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: true },
+    { label: '완료',             key: 'done',               color: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-400', pulse: false },
+    { label: '반려',             key: 'rejected',           color: 'bg-zinc-50 border-zinc-200 text-zinc-500',    dot: 'bg-zinc-300',    pulse: false },
+    { label: '미제출',           key: 'pending',            color: 'bg-zinc-50 border-zinc-200 text-zinc-400',    dot: 'bg-zinc-200',    pulse: false },
+    { label: '실패',             key: 'failed',             color: 'bg-red-50 border-red-200 text-red-600',       dot: 'bg-red-400',     pulse: false },
   ];
 
   return (
@@ -537,7 +537,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     >
                       {isLoading ? (
                         <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
-                      ) : '✓ 승인 & 즉시 실행'}
+                      ) : '✓ 승인하고 작업 시작'}
                     </button>
                   </div>
                 )}

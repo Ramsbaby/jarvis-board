@@ -193,6 +193,30 @@ export interface TierHistory {
   created_at: string;
 }
 
+// ── Persona Generations (세대 기록) ──────────────────────────────────────────
+
+export interface PersonaGeneration {
+  id: string;
+  generation_number: number;
+  name: string;
+  notes: string | null;
+  avg_score: number | null;
+  created_at: string;
+}
+
+export interface PersonaGenerationMember {
+  id: string;
+  generation_id: string;
+  agent_id: string;
+  system_prompt_snapshot: string;
+  status: 'active' | 'fired' | 'hired';
+  hired_at: string;
+  fired_at: string | null;
+  score_at_hire: number | null;
+  score_at_fire: number | null;
+  fire_reason: string | null;
+}
+
 // ── Activity feed items (constructed, not a DB table) ────────────────────────
 
 export interface ActivityItem {

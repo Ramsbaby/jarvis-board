@@ -237,6 +237,38 @@ export function getDb(): Database.Database {
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
     `);
+
+    // persona_generations: 세대 기록 (페르소나 채용/해고 이력 추적)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS persona_generations (
+        id TEXT PRIMARY KEY,
+        generation_number INTEGER NOT NULL UNIQUE,
+        name TEXT NOT NULL DEFAULT '',
+        notes TEXT,
+        avg_score REAL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_persona_gen_num ON persona_generations(generation_number);
+    `);
+
+    // persona_generation_members: 세대별 멤버 (채용/해고 상태 + 시스템 프롬프트 스냅샷)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS persona_generation_members (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES persona_generations(id) ON DELETE CASCADE,
+        agent_id TEXT NOT NULL,
+        system_prompt_snapshot TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        hired_at TEXT NOT NULL DEFAULT (datetime('now')),
+        fired_at TEXT,
+        score_at_hire REAL,
+        score_at_fire REAL,
+        fire_reason TEXT,
+        UNIQUE(generation_id, agent_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_gen_members_gen ON persona_generation_members(generation_id);
+      CREATE INDEX IF NOT EXISTS idx_gen_members_agent ON persona_generation_members(agent_id);
+    `);
   }
   return _db;
 }

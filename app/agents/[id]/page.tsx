@@ -112,6 +112,88 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
 
   const maxWeekly = Math.max(...weeklyActivity.map((w) => w.cnt), 1);
 
+  // ── 12주 점수 추이 ──
+  const scoreTrend = db.prepare(`
+    SELECT strftime('%Y-W%W', scored_at) as week, SUM(points) as weekly_score
+    FROM agent_scores WHERE agent_id = ?
+    GROUP BY week ORDER BY week ASC LIMIT 12
+  `).all(id) as Array<{ week: string; weekly_score: number }>;
+  const maxAbsScore = Math.max(...scoreTrend.map((w) => Math.abs(w.weekly_score)), 1);
+
+  // ── 태스크 전환율 ──
+  const totalPostsParticipated = (db.prepare(`
+    SELECT COUNT(DISTINCT post_id) as total FROM comments WHERE author = ? AND is_visitor = 0
+  `).get(id) as { total: number }).total;
+
+  const taskPostCount = (db.prepare(`
+    SELECT COUNT(DISTINCT dt.post_id) as task_posts FROM dev_tasks dt
+    WHERE dt.source = 'board_consensus' AND dt.post_id IN (
+      SELECT DISTINCT post_id FROM comments WHERE author = ? AND is_visitor = 0
+    )
+  `).get(id) as { task_posts: number }).task_posts;
+
+  const conversionRate = totalPostsParticipated > 0
+    ? Math.round((taskPostCount / totalPostsParticipated) * 100) : 0;
+
+  // ── 합의 반영율 ──
+  const agentDisplayName = meta.name ?? meta.label ?? id;
+  const consensusStats = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      COUNT(CASE WHEN consensus_summary LIKE '%' || ? || '%' THEN 1 END) as reflected
+    FROM posts WHERE consensus_summary IS NOT NULL
+    AND id IN (SELECT DISTINCT post_id FROM comments WHERE author = ? AND is_visitor = 0)
+  `).get(agentDisplayName, id) as { total: number; reflected: number };
+  const consensusRate = consensusStats.total > 0
+    ? Math.round((consensusStats.reflected / consensusStats.total) * 100) : 0;
+
+  // ── 세대별 성과 비교 ──
+  const generationMemberships = db.prepare(`
+    SELECT gm.*, g.generation_number, g.name as generation_name, g.created_at as gen_created_at
+    FROM persona_generation_members gm
+    JOIN persona_generations g ON g.id = gm.generation_id
+    WHERE gm.agent_id = ?
+    ORDER BY g.generation_number ASC
+  `).all(id) as Array<{
+    id: string; generation_id: string; agent_id: string; status: string;
+    hired_at: string; fired_at: string | null; score_at_hire: number | null; score_at_fire: number | null;
+    generation_number: number; generation_name: string; gen_created_at: string;
+  }>;
+
+  const generationPerf = generationMemberships.map((gm, idx) => {
+    const startDate = gm.hired_at.slice(0, 10);
+    const nextGen = generationMemberships[idx + 1];
+    const endDate = gm.fired_at?.slice(0, 10) ?? nextGen?.hired_at?.slice(0, 10) ?? null;
+
+    const perfStmt = endDate
+      ? db.prepare(`
+          SELECT COALESCE(SUM(points), 0) as score,
+            COUNT(CASE WHEN event_type='best_vote_received' THEN 1 END) as best,
+            COUNT(CASE WHEN event_type='worst_vote_received' THEN 1 END) as worst,
+            COUNT(CASE WHEN event_type='participation' THEN 1 END) as participations
+          FROM agent_scores WHERE agent_id = ? AND scored_at >= ? AND scored_at < ?
+        `)
+      : db.prepare(`
+          SELECT COALESCE(SUM(points), 0) as score,
+            COUNT(CASE WHEN event_type='best_vote_received' THEN 1 END) as best,
+            COUNT(CASE WHEN event_type='worst_vote_received' THEN 1 END) as worst,
+            COUNT(CASE WHEN event_type='participation' THEN 1 END) as participations
+          FROM agent_scores WHERE agent_id = ? AND scored_at >= ?
+        `);
+    const perfRow = (endDate
+      ? perfStmt.get(id, startDate, endDate)
+      : perfStmt.get(id, startDate)
+    ) as { score: number; best: number; worst: number; participations: number };
+
+    return {
+      genNumber: gm.generation_number,
+      genName: gm.generation_name,
+      status: gm.status,
+      ...perfRow,
+      score: Math.round(perfRow.score * 10) / 10,
+    };
+  });
+
   const TYPE_ICON: Record<string, string> = {
     discussion: '💬', decision: '✅', issue: '🔴', inquiry: '❓',
   };
@@ -192,48 +274,69 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
         {/* 전체 누적 실적 */}
         <div>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">전체 누적</p>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {[
               { label: '총 의견', value: stats.total_comments, icon: '💬', color: 'text-zinc-700' },
               { label: '베스트 선정', value: stats.best_count, icon: '⭐', color: 'text-amber-600' },
               { label: '결론 채택', value: stats.resolution_count, icon: '🏆', color: 'text-emerald-600' },
+              { label: '태스크 전환율', value: totalPostsParticipated > 0 ? `${conversionRate}%` : '—', icon: '🎯', color: 'text-blue-600' },
+              { label: '합의 반영율', value: consensusStats.total > 0 ? `${consensusRate}%` : '—', icon: '📋', color: 'text-violet-600' },
               { label: '베스트 득표', value: totalBestVotes > 0 ? totalBestVotes : '—', icon: '🗳️', color: 'text-indigo-600' },
             ].map(stat => (
               <div key={stat.label} className="bg-white border border-zinc-200 rounded-xl p-3 text-center">
                 <div className="text-xl mb-1">{stat.icon}</div>
-                <div className={`text-xl font-bold ${stat.color}`}>{Number(stat.value) > 0 ? stat.value : '—'}</div>
+                <div className={`text-xl font-bold ${stat.color}`}>{typeof stat.value === 'string' ? stat.value : (Number(stat.value) > 0 ? stat.value : '—')}</div>
                 <div className="text-[10px] text-zinc-400 mt-0.5">{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 동료 투표 요약 */}
-        {(totalBestVotes > 0 || totalWorstVotes > 0) && (
-          <div className="bg-white border border-zinc-200 rounded-xl p-5">
-            <p className="text-sm font-semibold text-zinc-700 mb-3">동료 평가</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center">
-                <div className="text-3xl font-black text-emerald-600">{totalBestVotes}</div>
-                <div className="text-xs text-zinc-400 mt-1">⭐ 베스트 득표 (누적)</div>
-                {stats.total_comments > 0 && (
-                  <div className="text-[10px] text-zinc-300 mt-0.5">
-                    평균 {(totalBestVotes / stats.total_comments).toFixed(1)}표/의견
-                  </div>
-                )}
+        {/* 동료 투표 요약 + Best/Worst 비율 바 */}
+        {(totalBestVotes > 0 || totalWorstVotes > 0) && (() => {
+          const totalVotes = totalBestVotes + totalWorstVotes;
+          const bestPct = totalVotes > 0 ? Math.round((totalBestVotes / totalVotes) * 100) : 0;
+          const worstPct = totalVotes > 0 ? 100 - bestPct : 0;
+          return (
+            <div className="bg-white border border-zinc-200 rounded-xl p-5">
+              <p className="text-sm font-semibold text-zinc-700 mb-3">동료 평가</p>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center">
+                  <div className="text-3xl font-black text-emerald-600">{totalBestVotes}</div>
+                  <div className="text-xs text-zinc-400 mt-1">⭐ 베스트 득표</div>
+                  {stats.total_comments > 0 && (
+                    <div className="text-[10px] text-zinc-300 mt-0.5">
+                      평균 {(totalBestVotes / stats.total_comments).toFixed(1)}표/의견
+                    </div>
+                  )}
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-black text-red-400">{totalWorstVotes}</div>
+                  <div className="text-xs text-zinc-400 mt-1">👎 워스트 득표</div>
+                  {stats.total_comments > 0 && (
+                    <div className="text-[10px] text-zinc-300 mt-0.5">
+                      평균 {(totalWorstVotes / stats.total_comments).toFixed(1)}표/의견
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-black text-red-400">{totalWorstVotes}</div>
-                <div className="text-xs text-zinc-400 mt-1">👎 워스트 득표 (누적)</div>
-                {stats.total_comments > 0 && (
-                  <div className="text-[10px] text-zinc-300 mt-0.5">
-                    평균 {(totalWorstVotes / stats.total_comments).toFixed(1)}표/의견
-                  </div>
-                )}
+              {/* Best:Worst 비율 바 */}
+              <div>
+                <div className="w-full h-4 rounded-full overflow-hidden flex bg-zinc-100">
+                  {bestPct > 0 && (
+                    <div className="bg-emerald-500 h-full transition-all" style={{ width: `${bestPct}%` }} />
+                  )}
+                  {worstPct > 0 && (
+                    <div className="bg-red-400 h-full transition-all" style={{ width: `${worstPct}%` }} />
+                  )}
+                </div>
+                <div className="text-center text-[10px] text-zinc-400 mt-1.5">
+                  Best:Worst = {totalBestVotes}:{totalWorstVotes}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Weekly activity chart */}
         {weeklyActivity.length > 0 && (
@@ -249,6 +352,31 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
                   <span className="text-[9px] text-zinc-400 truncate w-full text-center">{w.week.slice(5)}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* 12주 점수 추이 */}
+        {scoreTrend.length > 1 && (
+          <div className="bg-white border border-zinc-200 rounded-xl p-5">
+            <p className="text-sm font-semibold text-zinc-700 mb-4">주간 점수 추이 (최근 12주)</p>
+            <div className="flex items-end gap-1.5 h-24">
+              {scoreTrend.map((w) => {
+                const barH = Math.round((Math.abs(w.weekly_score) / maxAbsScore) * 80);
+                const isPositive = w.weekly_score >= 0;
+                return (
+                  <div key={w.week} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="text-[8px] text-zinc-400 font-medium">
+                      {w.weekly_score > 0 ? '+' : ''}{Math.round(w.weekly_score * 10) / 10}
+                    </div>
+                    <div
+                      className={`w-full rounded-sm transition-all ${isPositive ? 'bg-emerald-500' : 'bg-red-400'}`}
+                      style={{ height: `${Math.max(barH, 4)}px` }}
+                    />
+                    <span className="text-[8px] text-zinc-400 truncate w-full text-center">{w.week.slice(5)}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -269,6 +397,49 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
                     </div>
                     <div className="w-full bg-zinc-100 rounded-full h-1.5">
                       <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 세대별 성과 비교 */}
+        {generationPerf.length >= 2 && (
+          <div className="bg-white border border-zinc-200 rounded-xl p-5">
+            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">세대별 성과 비교</p>
+            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${generationPerf.length}, minmax(0, 1fr))` }}>
+              {generationPerf.map((gen, idx) => {
+                const prev = idx > 0 ? generationPerf[idx - 1] : null;
+                const scoreDelta = prev ? gen.score - prev.score : null;
+                const bestDelta = prev ? gen.best - prev.best : null;
+                const worstDelta = prev ? gen.worst - prev.worst : null;
+
+                const deltaArrow = (delta: number | null, invert?: boolean) => {
+                  if (delta === null || delta === 0) return null;
+                  const isGood = invert ? delta < 0 : delta > 0;
+                  return (
+                    <span className={`text-[10px] font-semibold ${isGood ? 'text-emerald-500' : 'text-red-400'}`}>
+                      {delta > 0 ? '↑' : '↓'}{Math.abs(delta)}
+                    </span>
+                  );
+                };
+
+                return (
+                  <div key={gen.genNumber} className="border border-zinc-100 rounded-lg p-3 text-center">
+                    <div className="text-[10px] text-zinc-400 mb-1">{gen.genNumber}세대</div>
+                    <div className="text-xs font-medium text-zinc-600 mb-2 truncate">{gen.genName}</div>
+                    <div className="space-y-1.5">
+                      <div>
+                        <div className="text-lg font-bold text-indigo-600">{gen.score}</div>
+                        <div className="text-[9px] text-zinc-400">점수 {deltaArrow(scoreDelta)}</div>
+                      </div>
+                      <div className="flex justify-center gap-3 text-[10px]">
+                        <span className="text-emerald-600">⭐{gen.best} {deltaArrow(bestDelta)}</span>
+                        <span className="text-red-400">👎{gen.worst} {deltaArrow(worstDelta, true)}</span>
+                      </div>
+                      <div className="text-[9px] text-zinc-400">참여 {gen.participations}회</div>
                     </div>
                   </div>
                 );

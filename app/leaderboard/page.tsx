@@ -139,6 +139,36 @@ function fetchScores(): { agents: AgentScore[]; teams: TeamScore[] } {
   }
 }
 
+interface GenerationRow {
+  id: string;
+  generation_number: number;
+  name: string;
+  notes: string | null;
+  avg_score: number | null;
+  created_at: string;
+  member_count: number;
+  fired_count: number;
+  hired_count: number;
+}
+
+function fetchGenerations(): GenerationRow[] {
+  try {
+    const db = getDb();
+    return db.prepare(`
+      SELECT g.*,
+        COUNT(m.id) as member_count,
+        COUNT(CASE WHEN m.status = 'fired' THEN 1 END) as fired_count,
+        COUNT(CASE WHEN m.status = 'hired' THEN 1 END) as hired_count
+      FROM persona_generations g
+      LEFT JOIN persona_generation_members m ON m.generation_id = g.id
+      GROUP BY g.id
+      ORDER BY g.generation_number ASC
+    `).all() as GenerationRow[];
+  } catch {
+    return [];
+  }
+}
+
 function fetchTierHistory(): TierHistoryEntry[] {
   try {
     const db = getDb();
@@ -196,6 +226,7 @@ const PODIUM_CONFIG: Record<number, {
 export default async function LeaderboardPage() {
   const { agents: scores, teams } = fetchScores();
   const tierHistory = fetchTierHistory();
+  const generations = fetchGenerations();
 
   const top3 = scores.filter(a => a.rank <= 3 && a.display_30d > 0);
   const orderedPodium = podiumOrder(top3);
@@ -511,6 +542,87 @@ export default async function LeaderboardPage() {
                 </div>
               </section>
             )}
+
+            {/* ── 세대별 성과 추이 ──────────────────────────────────────── */}
+            {generations.length > 0 && (() => {
+              const maxAvg = Math.max(...generations.map(g => g.avg_score ?? 0), 1);
+              return (
+                <section className="bg-white border border-zinc-200 rounded-lg p-4">
+                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+                    세대별 성과 추이
+                  </h3>
+
+                  {/* Bar Chart */}
+                  <div className="flex items-end gap-3 h-32 mb-4 px-2">
+                    {generations.map((gen, idx) => {
+                      const score = gen.avg_score ?? 0;
+                      const pct = maxAvg > 0 ? Math.max((score / maxAvg) * 100, 4) : 4;
+                      const opacity = Math.max(0.3, 1 - (generations.length - 1 - idx) * 0.15);
+                      return (
+                        <div key={gen.id} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                          <span className="text-[10px] font-bold text-zinc-600">
+                            {score > 0 ? score.toFixed(1) : '—'}
+                          </span>
+                          <div
+                            className="w-full rounded-t bg-indigo-500 min-h-[4px] transition-all"
+                            style={{ height: `${pct}%`, opacity }}
+                          />
+                          <span className="text-[10px] text-zinc-400 font-medium">
+                            {gen.generation_number}기
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Generation Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {generations.map((gen, idx) => {
+                      const activeCount = gen.member_count - gen.fired_count;
+                      const isLatest = idx === generations.length - 1;
+                      return (
+                        <div
+                          key={gen.id}
+                          className={`border rounded-lg p-3 ${isLatest ? 'border-indigo-300 bg-indigo-50/30' : 'border-zinc-200'}`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-zinc-800">
+                              {gen.generation_number}기
+                            </span>
+                            {isLatest && (
+                              <span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
+                                현재
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-zinc-600 font-medium mb-1.5 line-clamp-1">
+                            {gen.name || `${gen.generation_number}기`}
+                          </p>
+                          <div className="space-y-0.5 text-[10px] text-zinc-500">
+                            <div>
+                              {activeCount}명 활동
+                              {gen.fired_count > 0 && (
+                                <span className="text-red-500 ml-1">({gen.fired_count}해고)</span>
+                              )}
+                              {gen.hired_count > 0 && (
+                                <span className="text-emerald-600 ml-1">({gen.hired_count}채용)</span>
+                              )}
+                            </div>
+                            <div>
+                              평균{' '}
+                              <span className="font-semibold text-zinc-700">
+                                {gen.avg_score != null ? gen.avg_score.toFixed(1) : '—'}
+                              </span>
+                            </div>
+                            <div className="text-zinc-400">{formatDate(gen.created_at)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })()}
           </>
         )}
 

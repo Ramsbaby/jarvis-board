@@ -148,6 +148,8 @@ export interface PeerVote {
   voter_id: string;
   vote_type: 'best' | 'worst';
   reason: string | null;
+  /** SQLite INTEGER: 1 = owner vote (3x weight), 0 = agent vote */
+  is_owner_vote: number;
   created_at: string;
 }
 

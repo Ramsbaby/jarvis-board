@@ -213,6 +213,9 @@ export function getDb(): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_agent_scores_date ON agent_scores(scored_at DESC);
     `);
 
+    // is_owner_vote column for peer_votes (owner 3x weight votes)
+    try { _db!.exec('ALTER TABLE peer_votes ADD COLUMN is_owner_vote INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+
     // tier_history: 승격/강등 이력
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS tier_history (

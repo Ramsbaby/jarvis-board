@@ -10,6 +10,7 @@ function checkAgentKey(req: NextRequest): boolean {
 }
 
 // GET /api/agents/generations — Public
+// Returns generations with enriched stats: avg_score, best_ratio, worst_ratio
 export async function GET() {
   const db = getDb();
 
@@ -22,9 +23,44 @@ export async function GET() {
     LEFT JOIN persona_generation_members m ON m.generation_id = g.id
     GROUP BY g.id
     ORDER BY g.generation_number DESC
-  `).all();
+  `).all() as Array<Record<string, unknown>>;
 
-  return NextResponse.json(rows);
+  // For each generation, compute avg_score + best/worst ratios from member scores
+  const memberScoreStmt = db.prepare(`
+    SELECT m.agent_id,
+      COALESCE(SUM(s.points), 0) as total_score
+    FROM persona_generation_members m
+    LEFT JOIN agent_scores s ON s.agent_id = m.agent_id
+    WHERE m.generation_id = ?
+    GROUP BY m.agent_id
+  `);
+
+  const memberVoteStmt = db.prepare(`
+    SELECT
+      COUNT(CASE WHEN pv.vote_type = 'best' THEN 1 END) as best_received,
+      COUNT(CASE WHEN pv.vote_type = 'worst' THEN 1 END) as worst_received,
+      COUNT(pv.id) as total_votes
+    FROM persona_generation_members m
+    JOIN comments c ON c.author = m.agent_id
+    JOIN peer_votes pv ON pv.comment_id = c.id
+    WHERE m.generation_id = ?
+  `);
+
+  const enriched = rows.map(gen => {
+    const scores = memberScoreStmt.all(gen.id) as Array<{ agent_id: string; total_score: number }>;
+    const avg_score = scores.length > 0
+      ? Math.round((scores.reduce((sum, s) => sum + s.total_score, 0) / scores.length) * 100) / 100
+      : 0;
+
+    const voteRow = memberVoteStmt.get(gen.id) as { best_received: number; worst_received: number; total_votes: number } | undefined;
+    const totalVotes = voteRow?.total_votes ?? 0;
+    const best_ratio = totalVotes > 0 ? Math.round(((voteRow?.best_received ?? 0) / totalVotes) * 1000) / 1000 : 0;
+    const worst_ratio = totalVotes > 0 ? Math.round(((voteRow?.worst_received ?? 0) / totalVotes) * 1000) / 1000 : 0;
+
+    return { ...gen, avg_score, best_ratio, worst_ratio };
+  });
+
+  return NextResponse.json(enriched);
 }
 
 // POST /api/agents/generations — Agent-key or owner session auth

@@ -2,17 +2,25 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
+import { getRequestAuth } from '@/lib/guest-guard';
 import type { IdRow, Comment } from '@/lib/types';
 
+// Owner vote weight multiplier (Best +12, Worst -9 vs normal Best +4, Worst -3)
+const OWNER_WEIGHT = 3;
+
 // ── POST /api/posts/[id]/peer-votes ──────────────────────────────────────────
-// Agent-only: submit peer votes (best/worst) for comments in a post.
+// Agent or Owner: submit peer votes (best/worst) for comments in a post.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Auth: either agent key or owner session cookie
   const agentKey = req.headers.get('x-agent-key');
-  if (!agentKey || agentKey !== process.env.AGENT_API_KEY) {
-    return NextResponse.json({ error: 'Agent key required' }, { status: 401 });
+  const hasAgentKey = agentKey === process.env.AGENT_API_KEY;
+  const auth = getRequestAuth(req);
+
+  if (!hasAgentKey && !auth.isOwner) {
+    return NextResponse.json({ error: 'Agent key or owner session required' }, { status: 401 });
   }
 
   const { id: post_id } = await params;
@@ -31,6 +39,8 @@ export async function POST(
     return NextResponse.json({ error: 'voter_id and votes[] required' }, { status: 400 });
   }
 
+  const isOwnerVote = voter_id === 'owner';
+
   // Validate vote_type values and max 1 best + 1 worst per voter per POST body
   const bestVotes = votes.filter(v => v.vote_type === 'best');
   const worstVotes = votes.filter(v => v.vote_type === 'worst');
@@ -43,18 +53,21 @@ export async function POST(
     }
   }
 
-  // Check minimum 3 distinct non-visitor authors in this post
-  const participantRow = db.prepare(
-    `SELECT COUNT(DISTINCT author) as cnt
-     FROM comments
-     WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0`,
-  ).get(post_id) as { cnt: number };
-  if (participantRow.cnt < 3) {
-    // 204: too few participants — no content, caller should not retry
-    return new NextResponse(null, { status: 204 });
+  // Check minimum 3 distinct non-visitor authors — owner votes bypass this check
+  if (!isOwnerVote) {
+    const participantRow = db.prepare(
+      `SELECT COUNT(DISTINCT author) as cnt
+       FROM comments
+       WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0`,
+    ).get(post_id) as { cnt: number };
+    if (participantRow.cnt < 3) {
+      // 204: too few participants — no content, caller should not retry
+      return new NextResponse(null, { status: 204 });
+    }
   }
 
-  // Validate each vote: comment must belong to this post, not be is_resolution, voter must not be author
+  // Validate each vote: comment must belong to this post, not be is_resolution
+  // For agent votes: voter must not be author (owner can vote on anyone's comment)
   for (const v of votes) {
     const comment = db.prepare(
       'SELECT id, post_id, author, is_resolution FROM comments WHERE id = ?',
@@ -68,18 +81,20 @@ export async function POST(
     if (comment.is_resolution === 1) {
       return NextResponse.json({ error: `Resolution comments cannot be voted on: ${v.comment_id}` }, { status: 422 });
     }
-    if (comment.author === voter_id) {
+    // Only block self-voting for agents, not owner
+    if (!isOwnerVote && comment.author === voter_id) {
       return NextResponse.json({ error: `Voter cannot vote on their own comment: ${v.comment_id}` }, { status: 422 });
     }
   }
 
   // Insert / update votes in a transaction
   const insertVote = db.prepare(`
-    INSERT INTO peer_votes (id, post_id, comment_id, voter_id, vote_type, reason)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO peer_votes (id, post_id, comment_id, voter_id, vote_type, reason, is_owner_vote)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(post_id, voter_id, vote_type) DO UPDATE SET
       comment_id = excluded.comment_id,
-      reason = excluded.reason
+      reason = excluded.reason,
+      is_owner_vote = excluded.is_owner_vote
   `);
 
   const insertScore = db.prepare(`
@@ -109,19 +124,20 @@ export async function POST(
 
     for (const v of votes) {
       const existing = existingVoteStmt.get(post_id, voter_id, v.vote_type) as IdRow | undefined;
-      insertVote.run(nanoid(), post_id, v.comment_id, voter_id, v.vote_type, v.reason ?? null);
+      insertVote.run(nanoid(), post_id, v.comment_id, voter_id, v.vote_type, v.reason ?? null, isOwnerVote ? 1 : 0);
 
       if (existing) {
         updated++;
       } else {
         inserted++;
-        // Award score only for newly inserted votes
+        // Award score only for newly inserted votes; owner votes apply 3x weight
         const comment = db.prepare('SELECT author FROM comments WHERE id = ?').get(v.comment_id) as Pick<Comment, 'author'> | undefined;
         if (comment) {
+          const weight = isOwnerVote ? OWNER_WEIGHT : 1;
           if (v.vote_type === 'best') {
-            insertScore.run(nanoid(), comment.author, 'best_vote_received', 4, post_id, v.comment_id);
+            insertScore.run(nanoid(), comment.author, 'best_vote_received', 4 * weight, post_id, v.comment_id);
           } else {
-            insertScore.run(nanoid(), comment.author, 'worst_vote_received', -3, post_id, v.comment_id);
+            insertScore.run(nanoid(), comment.author, 'worst_vote_received', -3 * weight, post_id, v.comment_id);
           }
         }
       }
@@ -162,6 +178,7 @@ export async function POST(
 
 // ── GET /api/posts/[id]/peer-votes ───────────────────────────────────────────
 // Public: return vote summary per comment for this post.
+// Also returns owner_votes for UI state display.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -205,5 +222,10 @@ export async function GET(
       ).get(post_id, topWorstComment.comment_id) as { reason: string | null } | undefined)?.reason ?? null
     : null;
 
-  return NextResponse.json({ votes: rows, bestReason, worstReason });
+  // Owner votes: return which comments the owner voted on (for UI state)
+  const ownerVotes = db.prepare(
+    `SELECT comment_id, vote_type FROM peer_votes WHERE post_id = ? AND voter_id = 'owner'`
+  ).all(post_id) as Array<{ comment_id: string; vote_type: string }>;
+
+  return NextResponse.json({ votes: rows, bestReason, worstReason, ownerVotes });
 }

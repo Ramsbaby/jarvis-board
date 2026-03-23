@@ -253,6 +253,10 @@ export default function PostComments({
   const [reactions, setReactions] = useState<ReactionMap>({});
   const [myId, setMyId] = useState('anon');
 
+  // Owner peer votes state: { best: commentId | null, worst: commentId | null }
+  const [ownerVotes, setOwnerVotes] = useState<{ best: string | null; worst: string | null }>({ best: null, worst: null });
+  const [ownerVoteLoading, setOwnerVoteLoading] = useState(false);
+
   // #21 Typing indicators
   const [typingAgents, setTypingAgents] = useState<Array<{ agent: string; label: string }>>([]);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -281,6 +285,20 @@ export default function PostComments({
       .then(data => setReactions(data))
       .catch(() => {});
   }, [postId]);
+
+  // Fetch owner peer votes for this post
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch(`/api/posts/${postId}/peer-votes`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.ownerVotes) return;
+        const best = data.ownerVotes.find((v: { vote_type: string }) => v.vote_type === 'best')?.comment_id ?? null;
+        const worst = data.ownerVotes.find((v: { vote_type: string }) => v.vote_type === 'worst')?.comment_id ?? null;
+        setOwnerVotes({ best, worst });
+      })
+      .catch(() => {});
+  }, [postId, isOwner]);
 
   // Task #14: compute if discussion time has expired
   const timerBase = restartedAt ?? postCreatedAt;
@@ -376,6 +394,38 @@ export default function PostComments({
       if (!res.ok) throw new Error('reaction failed');
     } catch {
       setReactions(prev); // rollback
+    }
+  }
+
+  // Owner peer vote handler (best or worst for a single comment)
+  async function handleOwnerVote(commentId: string, voteType: 'best' | 'worst') {
+    if (ownerVoteLoading) return;
+    // Toggle: if already voted on this comment with same type, re-submit to change target
+    // For simplicity: clicking the same button on the same comment is a no-op
+    const currentTarget = voteType === 'best' ? ownerVotes.best : ownerVotes.worst;
+    if (currentTarget === commentId) return; // already voted this way
+
+    setOwnerVoteLoading(true);
+    const prev = { ...ownerVotes };
+    // Optimistic update
+    setOwnerVotes(v => ({ ...v, [voteType]: commentId }));
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/peer-votes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voter_id: 'owner',
+          votes: [{ comment_id: commentId, vote_type: voteType }],
+        }),
+      });
+      if (!res.ok) {
+        setOwnerVotes(prev); // rollback
+      }
+    } catch {
+      setOwnerVotes(prev); // rollback
+    } finally {
+      setOwnerVoteLoading(false);
     }
   }
 
@@ -644,6 +694,36 @@ export default function PostComments({
           {/* AI 요약 — 댓글 하단 표시 (길면 3줄, 짧으면 1줄) */}
           {!isVisitor && !isOwnerComment && (
             <CommentSummary commentId={c.id} initialSummary={c.ai_summary} content={c.content} />
+          )}
+
+          {/* Owner peer vote buttons — AI comments only (not visitor, not owner, not resolution) */}
+          {isOwner && isAgentComment && !isResolution && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={() => handleOwnerVote(c.id, 'best')}
+                disabled={ownerVoteLoading}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs transition-all ${
+                  ownerVotes.best === c.id
+                    ? 'bg-amber-100 border-amber-400 text-amber-700 font-semibold'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-amber-300 hover:bg-amber-50'
+                } disabled:opacity-50`}
+                title="오너 베스트 투표 (3배 가중치)"
+              >
+                ⭐ {ownerVotes.best === c.id ? '베스트' : '베스트 투표'}
+              </button>
+              <button
+                onClick={() => handleOwnerVote(c.id, 'worst')}
+                disabled={ownerVoteLoading}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs transition-all ${
+                  ownerVotes.worst === c.id
+                    ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-red-300 hover:bg-red-50'
+                } disabled:opacity-50`}
+                title="오너 워스트 투표 (3배 가중치)"
+              >
+                👎 {ownerVotes.worst === c.id ? '워스트' : '워스트 투표'}
+              </button>
+            </div>
           )}
 
           {/* #4 Reactions */}

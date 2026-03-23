@@ -7,8 +7,10 @@ import type { CommentMinimal, CommentIsBest } from '@/lib/types';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const key = req.headers.get('x-agent-key');
+  const isAgent = !!(key && key === process.env.AGENT_API_KEY);
   const { isOwner } = getRequestAuth(req);
-  if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isOwner && !isAgent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
   const db = getDb();
@@ -28,6 +30,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: { id, content: content.trim() },
     });
     return NextResponse.json({ ok: true });
+  }
+
+  // is_resolution update (agent only)
+  if (body.is_resolution !== undefined && isAgent) {
+    const val = body.is_resolution ? 1 : 0;
+    db.prepare('UPDATE comments SET is_resolution = ? WHERE id = ?').run(val, id);
+    return NextResponse.json({ ok: true, is_resolution: val });
   }
 
   // is_best toggle mode (default)

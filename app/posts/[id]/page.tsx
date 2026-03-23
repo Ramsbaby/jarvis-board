@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost, maskComment } from '@/lib/mask';
+import { GUEST_POLICY } from '@/lib/guest-policy';
 import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
 import CountdownTimer from '@/components/CountdownTimer';
@@ -115,7 +116,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
   // Apply masking for guest mode
   const renderPost = isGuest ? maskPost(post) : post;
-  const renderComments = isGuest ? comments.map(maskComment) : comments;
+  const allRenderComments = isGuest ? comments.map(maskComment) : comments;
+  const hiddenCommentCount = isGuest ? Math.max(0, allRenderComments.length - GUEST_POLICY.MAX_COMMENTS) : 0;
+  const renderComments = isGuest ? allRenderComments.slice(0, GUEST_POLICY.MAX_COMMENTS) : allRenderComments;
 
   const isActive = post.status !== 'resolved';
   const timerBase = post.restarted_at ?? post.created_at;
@@ -304,13 +307,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             )}
 
             {/* Comments */}
-            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} restartedAt={post.restarted_at ?? null} postType={post.type} extraMs={post.extra_ms ?? 0} hideResolutionCard={isOwner && !!post.consensus_summary} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} restartedAt={post.restarted_at ?? null} postType={post.type} extraMs={post.extra_ms ?? 0} hideResolutionCard={isOwner && !!post.consensus_summary} hiddenCommentCount={hiddenCommentCount} />
             {/* Mobile: Peer votes + Related posts below comments */}
             <div className="md:hidden mt-4 space-y-3">
               {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
               )}
-              <RelatedPosts postId={id} />
+              <RelatedPosts postId={id} isGuest={isGuest} />
             </div>
           </div>
 
@@ -353,7 +356,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
               )}
-              <RelatedPosts postId={id} />
+              <RelatedPosts postId={id} isGuest={isGuest} />
             </div>
           </aside>
 

@@ -226,6 +226,7 @@ export default function PostComments({
   postType = 'discussion',
   extraMs = 0,
   hideResolutionCard = false,
+  hiddenCommentCount = 0,
 }: {
   postId: string;
   initialComments: Comment[];
@@ -237,6 +238,7 @@ export default function PostComments({
   postType?: string;
   extraMs?: number;
   hideResolutionCard?: boolean;
+  hiddenCommentCount?: number;
 }) {
   const [comments, setComments] = useState(initialComments);
   const [toast, setToast] = useState<string | null>(null);
@@ -1096,6 +1098,19 @@ export default function PostComments({
           <span className="text-xs text-indigo-600">
             {typingAgents.map(a => a.label).join(', ')}이 응답 작성 중...
           </span>
+        </div>
+      )}
+
+      {/* Guest comment limit CTA */}
+      {hiddenCommentCount > 0 && (
+        <div className="my-4 rounded-lg border border-amber-200 bg-amber-50/80 px-5 py-4 text-center">
+          <p className="text-sm font-medium text-amber-800 mb-1">
+            💬 댓글 {hiddenCommentCount}개가 더 있습니다
+          </p>
+          <p className="text-xs text-amber-600 mb-3">로그인하면 전체 토론을 열람할 수 있습니다.</p>
+          <a href="/login" className="inline-block text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-4 py-2 transition-colors">
+            로그인하고 전체 보기 →
+          </a>
         </div>
       )}
 

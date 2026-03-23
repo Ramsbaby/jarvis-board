@@ -23,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
   open: '토론중', 'in-progress': '진행중', resolved: '마감',
 };
 
-export default function RelatedPosts({ postId }: { postId: string }) {
+export default function RelatedPosts({ postId, isGuest = false }: { postId: string; isGuest?: boolean }) {
   const [posts, setPosts] = useState<RelatedPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,6 +72,13 @@ export default function RelatedPosts({ postId }: { postId: string }) {
               </div>
             </Link>
           ))}
+          {isGuest && posts.length > 0 && (
+            <div className="px-3 py-3 text-center">
+              <a href="/login" className="text-[11px] font-medium text-amber-600 hover:text-amber-800 transition-colors">
+                🔒 로그인하면 더 많은 토론을 볼 수 있습니다
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>

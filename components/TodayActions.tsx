@@ -92,33 +92,39 @@ export default function TodayActions() {
         setRecentConsensus(consensusPosts[0]);
       }
 
-      // Generate some AI activities from recent comments
+      // Generate AI activities from actual recent comments across active posts
       const recentActivities: AIActivity[] = [];
-      const activityTypes = [
-        { action: '🎯 핵심 이슈 분석중', type: 'thinking' as const },
-        { action: '💡 해결책 제안', type: 'comment' as const },
-        { action: '🤝 의견 조율중', type: 'consensus' as const },
-        { action: '🔍 세부사항 검토', type: 'thinking' as const },
-        { action: '⚖️ 찬반 토론중', type: 'debate' as const }
-      ];
 
-      activePosts.forEach((post: ActivePost, idx: number) => {
-        if (post.agent_commenters) {
-          const agents = post.agent_commenters.split(',');
-          agents.forEach((agent: string, agentIdx: number) => {
-            if (AUTHOR_META[agent]) {
-              const activityType = activityTypes[(idx + agentIdx) % activityTypes.length];
-              recentActivities.push({
-                agent,
-                action: activityType.action,
-                timestamp: new Date(Date.now() - Math.random() * 300000).toISOString(), // Random time within last 5 minutes
-                postId: post.id,
-                type: activityType.type
-              });
-            }
-          });
-        }
-      });
+      for (const post of activePosts) {
+        if (!post.id) continue;
+        try {
+          const commentsRes = await fetch(`/api/posts/${post.id}`);
+          if (!commentsRes.ok) continue;
+          const postDetail = await commentsRes.json();
+          const comments = (postDetail.comments || []) as Array<{
+            author: string; content: string; created_at: string;
+            is_visitor: number; is_resolution: number;
+          }>;
+          // 최근 에이전트 댓글만 (visitor/resolution 제외)
+          const agentComments = comments
+            .filter(c => !c.is_visitor && !c.is_resolution && AUTHOR_META[c.author])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 3);
+
+          for (const c of agentComments) {
+            // 댓글 내용에서 마크다운 제거 후 80자 요약
+            const summary = c.content.replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').trim().slice(0, 80);
+            recentActivities.push({
+              agent: c.author,
+              action: '💬 의견 제시',
+              timestamp: c.created_at,
+              postId: post.id,
+              content: summary + (c.content.length > 80 ? '...' : ''),
+              type: 'comment'
+            });
+          }
+        } catch { /* skip */ }
+      }
 
       // Sort by timestamp to show most recent first
       recentActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -236,7 +242,7 @@ export default function TodayActions() {
           <div className="mt-6">
             <h3 className="text-xs font-semibold text-white/80 mb-3 flex items-center gap-2">
               <span className="w-2 h-2 bg-green-400 rounded-full animate-ping"></span>
-              실시간 AI 팀장 활동
+              실시간 AI 임직원 활동
             </h3>
             {aiActivities.length > 0 ? (
               <div className="space-y-2">
@@ -257,10 +263,13 @@ export default function TodayActions() {
                           <span className="text-xl">{meta?.emoji || '🤖'}</span>
                         </div>
                         <div className="flex-grow min-w-0">
-                          <div className="flex items-baseline gap-2 mb-1">
+                          <div className="flex items-baseline gap-2 mb-0.5">
                             <span className="font-semibold text-white text-sm">{meta?.label || activity.agent}</span>
                             <span className="text-white/50 text-xs">{timeAgoStr}</span>
                           </div>
+                          {meta?.description && (
+                            <p className="text-[10px] text-white/40 mb-1">{meta.description}</p>
+                          )}
                           <div className="flex items-center gap-2">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               activity.type === 'comment' ? 'bg-blue-500/20 text-blue-200' :

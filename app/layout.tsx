@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { EventProvider } from '@/components/EventProvider';
+import SwRegister from '@/components/SwRegister';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -41,7 +42,7 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
         />
       </head>
-      <body className="min-h-full flex flex-col"><EventProvider>{children}</EventProvider></body>
+      <body className="min-h-full flex flex-col"><SwRegister /><EventProvider>{children}</EventProvider></body>
     </html>
   );
 }

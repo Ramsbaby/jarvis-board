@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db';
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import Link from 'next/link';
@@ -247,6 +247,9 @@ export default async function JarvisDashboardPage() {
   }
   const topDiscordErrors = Object.entries(discordErrByType).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
+  // 로컬 환경 여부 (Railway 배포 환경에서는 ~/.jarvis 파일 없음)
+  const isLocalEnv = existsSync(join(JARVIS_HOME, 'state', 'health.json'));
+
   // 경보 여부
   const hasAlerts = circuitBreakers.length > 0 || ragStatus.stuck;
   const ragLastTs = ragStatus.lastLine.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/)?.[1]?.replace('T', ' ');
@@ -281,6 +284,18 @@ export default async function JarvisDashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-5 pb-24 space-y-5 md:pb-5">
+
+        {/* ── Railway 환경 안내 배너 ── */}
+        {!isLocalEnv && (
+          <div className="flex items-center gap-3 bg-zinc-100 border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-600">
+            <span className="text-lg">🌐</span>
+            <div>
+              <span className="font-semibold">Railway 배포 환경</span>
+              {' '}— Jarvis 로컬 데이터(크론 로그, 봇 상태, RAG 등)에 접근할 수 없습니다.
+              보드 DB 데이터만 표시됩니다.
+            </div>
+          </div>
+        )}
 
         {/* ── 1. 경보 배너 (문제 있을 때만) ── */}
         {hasAlerts && (
@@ -345,11 +360,19 @@ export default async function JarvisDashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl border border-zinc-200 p-4">
               <div className="text-xs text-zinc-500 mb-1">Discord Bot</div>
-              <div className={`text-xl font-bold ${health?.discord_bot === 'healthy' ? 'text-emerald-600' : 'text-red-600'}`}>
-                {health?.discord_bot === 'healthy' ? '✅ 정상' : '❌ 오프라인'}
+              <div className={`text-xl font-bold ${
+                !isLocalEnv ? 'text-zinc-400'
+                : health?.discord_bot === 'healthy' ? 'text-emerald-600'
+                : 'text-red-600'
+              }`}>
+                {!isLocalEnv ? '— 로컬 전용'
+                  : health?.discord_bot === 'healthy' ? '✅ 정상'
+                  : '❌ 오프라인'}
               </div>
               <div className="text-xs text-zinc-400 mt-1">
-                메모리 {health?.memory_mb ?? '?'}MB · 크래시 {health?.crash_count ?? 0}회
+                {isLocalEnv
+                  ? `메모리 ${health?.memory_mb ?? '?'}MB · 크래시 ${health?.crash_count ?? 0}회`
+                  : 'health.json 없음'}
               </div>
             </div>
 
@@ -376,11 +399,19 @@ export default async function JarvisDashboardPage() {
 
             <div className="bg-white rounded-xl border border-zinc-200 p-4">
               <div className="text-xs text-zinc-500 mb-1">RAG 인덱싱</div>
-              <div className={`text-xl font-bold ${ragStatus.stuck ? 'text-red-600' : 'text-emerald-600'}`}>
-                {ragStatus.stuck ? '🔴 STUCK' : '✅ 정상'}
+              <div className={`text-xl font-bold ${
+                !isLocalEnv ? 'text-zinc-400'
+                : ragStatus.stuck ? 'text-red-600'
+                : 'text-emerald-600'
+              }`}>
+                {!isLocalEnv ? '— 로컬 전용'
+                  : ragStatus.stuck ? '🔴 STUCK'
+                  : '✅ 정상'}
               </div>
               <div className="text-xs text-zinc-400 mt-1">
-                {ragStatus.stuck ? `PID ${ragStatus.pidCycling}개 사이클링` : '정상 동작 중'}
+                {!isLocalEnv ? 'rag-index.log 없음'
+                  : ragStatus.stuck ? `PID ${ragStatus.pidCycling}개 사이클링`
+                  : '정상 동작 중'}
               </div>
             </div>
           </div>

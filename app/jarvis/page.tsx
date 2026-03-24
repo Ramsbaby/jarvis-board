@@ -22,34 +22,31 @@ function safeText(path: string): string {
   try { return readFileSync(path, 'utf-8'); }
   catch { return ''; }
 }
+function safeLines(path: string): string[] {
+  return safeText(path).split('\n').filter(Boolean);
+}
+function safeJsonLines<T>(path: string): T[] {
+  return safeLines(path).flatMap(l => { try { return [JSON.parse(l) as T]; } catch { return []; } });
+}
 
 // ── 크론 로그 파싱 ────────────────────────────────────────────────────────
 interface CronDaily { date: string; ok: number; fail: number }
-interface CronError  { task: string; count: number; lastAt: string }
 
-function parseCronLog(): { daily: CronDaily[]; topErrors: CronError[] } {
+function parseCronLog() {
   const text = safeText(join(JARVIS_HOME, 'logs', 'cron.log'));
   const dailyMap: Record<string, { ok: number; fail: number }> = {};
   const errMap: Record<string, { count: number; lastAt: string }> = {};
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
 
   for (const line of text.split('\n')) {
     const dm = line.match(/^\[(\d{4}-\d{2}-\d{2})\s/);
-    if (!dm) continue;
+    if (!dm || new Date(dm[1]) < cutoff) continue;
     const date = dm[1];
-    if (new Date(date) < cutoff) continue;
-
     if (!dailyMap[date]) dailyMap[date] = { ok: 0, fail: 0 };
-
-    // 두 번째 [] = 태스크명
     const task = line.match(/\]\s*\[([^\]]+)\]/)?.[1] ?? 'unknown';
-    const isOk = / SUCCESS | OK /.test(line);
-    const isFail = /FAILED|ERROR/.test(line);
 
-    if (isOk)   dailyMap[date].ok++;
-    if (isFail) {
+    if (/ SUCCESS | OK /.test(line)) dailyMap[date].ok++;
+    if (/FAILED|ERROR/.test(line)) {
       dailyMap[date].fail++;
       const ts = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/)?.[1] ?? date;
       if (!errMap[task]) errMap[task] = { count: 0, lastAt: ts };
@@ -60,12 +57,10 @@ function parseCronLog(): { daily: CronDaily[]; topErrors: CronError[] } {
 
   const daily: CronDaily[] = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(); d.setDate(d.getDate() - i);
     const date = d.toISOString().slice(0, 10);
     daily.push({ date, ok: dailyMap[date]?.ok ?? 0, fail: dailyMap[date]?.fail ?? 0 });
   }
-
   const topErrors = Object.entries(errMap)
     .map(([task, v]) => ({ task, ...v }))
     .sort((a, b) => b.count - a.count)
@@ -74,61 +69,92 @@ function parseCronLog(): { daily: CronDaily[]; topErrors: CronError[] } {
   return { daily, topErrors };
 }
 
-// ── Discord 채널별 최근 대화 파싱 ─────────────────────────────────────────
-interface ConvEntry { time: string; user: string; snippet: string }
+// ── RAG stuck 감지 ────────────────────────────────────────────────────────
+function detectRagStuck(): { stuck: boolean; pidCycling: number; lastLine: string } {
+  const lines = safeLines(join(JARVIS_HOME, 'logs', 'rag-index.log')).slice(-20);
+  const stuckLines = lines.filter(l => l.includes('Already running'));
+  const pids = [...new Set(stuckLines.map(l => l.match(/PID (\d+)/)?.[1]).filter(Boolean))];
+  return { stuck: stuckLines.length >= 3, pidCycling: pids.length, lastLine: lines.at(-1) ?? '' };
+}
 
-function parseDiscordHistory(): Record<string, ConvEntry[]> {
-  const dir = join(JARVIS_HOME, 'context', 'discord-history');
-  const result: Record<string, ConvEntry[]> = {};
+// ── 서킷브레이커 ──────────────────────────────────────────────────────────
+interface CircuitEntry { task_id: string; consecutive_fails: number; last_fail_ts: number }
+
+function readCircuitBreakers(): CircuitEntry[] {
+  const dir = join(JARVIS_HOME, 'state', 'circuit-breaker');
   try {
-    const files = readdirSync(dir)
-      .filter(f => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
-      .sort()
-      .slice(-4);
+    return readdirSync(dir)
+      .filter(f => f.endsWith('.json'))
+      .flatMap(f => { const d = safeJson<CircuitEntry>(join(dir, f)); return d ? [d] : []; })
+      .sort((a, b) => b.last_fail_ts - a.last_fail_ts);
+  } catch { return []; }
+}
 
-    for (const file of files) {
-      const text = safeText(join(dir, file));
-      for (const rawSection of text.split(/(?=^## \[)/m)) {
-        const hdr = rawSection.match(/^## \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) KST\] #(\S+)/);
-        if (!hdr) continue;
-        const [, time, channel] = hdr;
-        // 첫 번째 굵은 텍스트 발화자 + 내용
-        const msgM = rawSection.match(/\*\*([^*]+)\*\*:\s*([^\n]+)/);
-        if (!msgM) continue;
-        const snippet = msgM[2].replace(/\[.*?\]/g, '').trim().slice(0, 120);
-        if (!snippet) continue;
-        if (!result[channel]) result[channel] = [];
-        result[channel].push({ time, user: msgM[1], snippet });
-      }
-    }
-    for (const ch of Object.keys(result)) {
-      result[ch] = result[ch].slice(-6).reverse();
-    }
-  } catch { /* 무시 */ }
-  return result;
+// ── 오늘의 팀 의사결정 ────────────────────────────────────────────────────
+interface Decision {
+  ts: string; decision: string; team: string;
+  okr?: string | null; status?: string; rationale?: string;
+  action?: string; result?: string;
+}
+
+function readTodayDecisions(): Decision[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const path = join(JARVIS_HOME, 'state', 'decisions', `${today}.jsonl`);
+  return safeJsonLines<Decision>(path).slice(-20);
+}
+
+// ── 리스크 연쇄 (connections.jsonl) ──────────────────────────────────────
+interface Connection { from: string; to: string; relationship: string; strength: number }
+interface ConnectionEntry { date: string; session: string; connections: Connection[] }
+
+function readLatestConnections(): ConnectionEntry | null {
+  const lines = safeLines(join(JARVIS_HOME, 'state', 'connections.jsonl'));
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { return JSON.parse(lines[i]) as ConnectionEntry; } catch { continue; }
+  }
+  return null;
+}
+
+// ── 자율 작업 큐 (dev-queue.json) ────────────────────────────────────────
+interface DevQueueItem {
+  id: string; name: string; priority: number; status: string;
+  source?: string; assignee?: string; createdAt: string;
+  retries?: number; maxRetries?: number;
+}
+
+function readDevQueue(): DevQueueItem[] {
+  const raw = safeJson<Record<string, DevQueueItem> | DevQueueItem[]>(
+    join(JARVIS_HOME, 'state', 'dev-queue.json')
+  );
+  if (!raw) return [];
+  const items = Array.isArray(raw) ? raw : Object.values(raw);
+  return items
+    .filter(i => i.status === 'pending')
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    .slice(0, 8);
+}
+
+// ── 팀 스코어카드 ─────────────────────────────────────────────────────────
+interface TeamInfo {
+  lead: string; merit: number; penalty: number; status: string;
+  history?: { ts: string; decision: string; outcome: string }[];
+}
+interface TeamScorecard { teams: Record<string, TeamInfo>; lastDecay?: string; thresholds?: Record<string, number> }
+
+function readTeamScorecard(): TeamScorecard | null {
+  return safeJson<TeamScorecard>(join(JARVIS_HOME, 'state', 'team-scorecard.json'));
 }
 
 // ── SVG 미니 막대 차트 ─────────────────────────────────────────────────────
-function MiniBarChart({
-  data,
-  colorA = '#6366f1',
-  colorB = '#f87171',
-  labelKey = 'date',
-  valueKeyA = 'ok',
-  valueKeyB = 'fail',
-}: {
+function MiniBarChart({ data, colorA = '#6366f1', colorB = '#f87171', labelKey = 'date', valueKeyA = 'ok', valueKeyB = 'fail' }: {
   data: Record<string, number | string>[];
-  colorA?: string;
-  colorB?: string;
-  labelKey?: string;
-  valueKeyA?: string;
-  valueKeyB?: string;
+  colorA?: string; colorB?: string;
+  labelKey?: string; valueKeyA?: string; valueKeyB?: string;
 }) {
   const maxVal = Math.max(...data.map(d => (d[valueKeyA] as number) + (d[valueKeyB] as number)), 1);
   const W = 560, H = 80, ML = 4, MR = 4, MT = 4, MB = 20;
   const CW = W - ML - MR, CH = H - MT - MB;
-  const bw = Math.floor(CW / data.length) - 2;
-  const gap = CW / data.length;
+  const gap = CW / data.length, bw = Math.max(4, gap * 0.7);
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
@@ -136,163 +162,99 @@ function MiniBarChart({
         const cx = ML + i * gap + gap / 2;
         const aH = Math.max(2, ((d[valueKeyA] as number) / maxVal) * CH);
         const bH = Math.max(0, ((d[valueKeyB] as number) / maxVal) * CH);
-        const stackH = aH + bH;
-        const label = String(d[labelKey]).slice(5); // MM-DD
         return (
           <g key={i}>
-            {/* ok bar */}
-            <rect x={cx - bw / 2} y={MT + CH - stackH} width={bw} height={aH} fill={colorA} rx="2" opacity="0.85" />
-            {/* fail bar */}
-            {bH > 0 && <rect x={cx - bw / 2} y={MT + CH - bH} width={bw} height={bH} fill={colorB} rx="2" opacity="0.85" />}
-            {/* label */}
-            <text x={cx} y={H - 2} textAnchor="middle" fontSize="9" fill="#94a3b8">{label}</text>
+            <rect x={cx - bw / 2} y={MT + CH - aH - bH} width={bw} height={aH} fill={colorA} rx="2" opacity="0.85" />
+            {bH > 0 && <rect x={cx - bw / 2} y={MT + CH - bH} width={bw} height={bH} fill={colorB} rx="2" opacity="0.9" />}
+            <text x={cx} y={H - 2} textAnchor="middle" fontSize="9" fill="#94a3b8">{String(d[labelKey]).slice(5)}</text>
           </g>
         );
       })}
-      {/* baseline */}
       <line x1={ML} y1={MT + CH} x2={W - MR} y2={MT + CH} stroke="#e4e4e7" strokeWidth="1" />
     </svg>
   );
 }
 
-// ── 상태 배지 색상 ─────────────────────────────────────────────────────────
-const TASK_STATUS_STYLE: Record<string, string> = {
-  pending:      'bg-zinc-100 text-zinc-600',
-  approved:     'bg-indigo-100 text-indigo-700',
-  'in-progress':'bg-amber-100 text-amber-700',
-  completed:    'bg-emerald-100 text-emerald-700',
-  rejected:     'bg-red-100 text-red-600',
+// ── 팀 뱃지 색상 ──────────────────────────────────────────────────────────
+const TEAM_LABEL: Record<string, string> = {
+  infra: '인프라', council: '이사회', record: '기록', career: '커리어',
+  brand: '브랜드', academy: '아카데미', strategy: '전략',
 };
-const TASK_STATUS_LABEL: Record<string, string> = {
-  pending: '대기', approved: '승인됨', 'in-progress': '진행', completed: '완료', rejected: '반려',
-};
-const PRIORITY_STYLE: Record<string, string> = {
-  high:   'text-red-600 bg-red-50',
-  medium: 'text-amber-600 bg-amber-50',
-  low:    'text-zinc-500 bg-zinc-50',
+const TEAM_COLOR: Record<string, string> = {
+  infra: 'bg-blue-100 text-blue-700', council: 'bg-purple-100 text-purple-700',
+  record: 'bg-zinc-100 text-zinc-600', career: 'bg-amber-100 text-amber-700',
+  brand: 'bg-pink-100 text-pink-700', academy: 'bg-emerald-100 text-emerald-700',
+  strategy: 'bg-indigo-100 text-indigo-700',
 };
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────
 export default async function JarvisDashboardPage() {
-  // ── 인증 ──
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE)?.value;
   const ownerPw = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPw && session && session === makeToken(ownerPw));
   if (!isOwner) redirect('/login');
 
-  // ── 시스템 데이터 수집 ──
+  // ── 데이터 수집 ──
   const health = safeJson<{
     last_check: string; discord_bot: string;
     memory_mb: number; crash_count: number; stale_claude_killed: number;
   }>(join(JARVIS_HOME, 'state', 'health.json'));
 
   const errorTracker = safeJson<{
-    errors: { channelId: string; userId: string; errorMessage: string; timestamp: number }[];
+    errors: { channelId: string; errorMessage: string; timestamp: number }[];
   }>(join(JARVIS_HOME, 'state', 'error-tracker.json'));
 
   const { daily: cronDaily, topErrors: cronErrors } = parseCronLog();
-  const discordHistory = parseDiscordHistory();
+  const ragStatus = detectRagStuck();
+  const circuitBreakers = readCircuitBreakers();
+  const todayDecisions = readTodayDecisions();
+  const latestConnections = readLatestConnections();
+  const devQueue = readDevQueue();
+  const scorecard = readTeamScorecard();
 
-  // ── 디스크 (간단히 /proc 없으면 skip) ──
-  let diskPct = 0;
+  // 디스크 사용률
+  let diskPct = 0, diskFree = '?';
   try {
     const { execSync } = await import('child_process');
     const df = execSync('df -h / | tail -1', { timeout: 2000 }).toString().trim().split(/\s+/);
     diskPct = parseInt(df[4] ?? '0', 10);
+    diskFree = df[3] ?? '?';
   } catch { /* 무시 */ }
 
-  // ── 크론 집계 ──
-  const cronTotal7 = cronDaily.reduce((s, d) => s + d.ok + d.fail, 0);
-  const cronOk7    = cronDaily.reduce((s, d) => s + d.ok, 0);
-  const cronFail7  = cronDaily.reduce((s, d) => s + d.fail, 0);
-  const cronSuccessRate = cronTotal7 > 0 ? Math.round((cronOk7 / cronTotal7) * 100) : 0;
+  // 크론 집계
+  const cronOk7   = cronDaily.reduce((s, d) => s + d.ok, 0);
+  const cronFail7 = cronDaily.reduce((s, d) => s + d.fail, 0);
+  const cronTotal = cronOk7 + cronFail7;
+  const cronRate  = cronTotal > 0 ? Math.round((cronOk7 / cronTotal) * 100) : 0;
 
-  // ── 보드 DB ──
+  // 보드 DB (최소한의 데이터만)
   const db = getDb();
-
-  const postRows = db.prepare(`
-    SELECT channel, status, type, date(created_at) as day
-    FROM posts ORDER BY created_at DESC
-  `).all() as { channel: string; status: string; type: string; day: string }[];
-
-  const commentRows = db.prepare(`
-    SELECT author, author_display, date(created_at) as day
-    FROM comments WHERE is_visitor = 0 AND author NOT IN ('system','synthesizer')
-  `).all() as { author: string; author_display: string; day: string }[];
-
-  const devTasks = db.prepare(`
-    SELECT id, title, priority, status, assignee, created_at, approved_at, started_at, completed_at
-    FROM dev_tasks ORDER BY created_at DESC LIMIT 40
-  `).all() as {
-    id: string; title: string; priority: string; status: string;
-    assignee: string; created_at: string; approved_at: string | null;
-    started_at: string | null; completed_at: string | null;
-  }[];
-
-  // 최근 포스트 채널별 (상위 5개씩)
   const recentPosts = db.prepare(`
     SELECT id, title, channel, status, author_display, created_at,
       (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count
-    FROM posts p ORDER BY created_at DESC LIMIT 30
+    FROM posts p ORDER BY created_at DESC LIMIT 10
   `).all() as {
     id: string; title: string; channel: string; status: string;
     author_display: string; created_at: string; comment_count: number;
   }[];
-
-  // 보드 집계
-  const totalPosts    = postRows.length;
-  const totalComments = commentRows.length;
-  const resolvedCount = postRows.filter(p => p.status === 'resolved' || p.status === 'concluded').length;
-  const resolutionRate = totalPosts > 0 ? Math.round((resolvedCount / totalPosts) * 100) : 0;
-
-  // 7일 트렌드
-  const boardTrend: { date: string; posts: number; comments: number }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const date = d.toISOString().slice(0, 10);
-    boardTrend.push({
-      date,
-      posts:    postRows.filter(p => p.day === date).length,
-      comments: commentRows.filter(c => c.day === date).length,
-    });
-  }
-
-  // 에이전트 활동
-  const agentMap: Record<string, { name: string; count: number }> = {};
-  for (const c of commentRows) {
-    if (!agentMap[c.author]) agentMap[c.author] = { name: c.author_display, count: 0 };
-    agentMap[c.author].count++;
-  }
-  const agentActivity = Object.entries(agentMap)
-    .map(([id, v]) => ({ id, ...v }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-  const maxAgentCount = Math.max(...agentActivity.map(a => a.count), 1);
-
-  // 채널별 post 수
-  const channelMap: Record<string, number> = {};
-  for (const p of postRows) channelMap[p.channel] = (channelMap[p.channel] || 0) + 1;
-
-  // dev_tasks 칸반
-  const KANBAN_COLS = ['pending', 'approved', 'in-progress', 'completed'] as const;
-  const kanban = Object.fromEntries(KANBAN_COLS.map(s => [s, devTasks.filter(t => t.status === s)]));
+  const totalPosts = (db.prepare('SELECT COUNT(*) as n FROM posts').get() as { n: number })?.n ?? 0;
 
   // Discord 에러 집계
-  const discordErrors = errorTracker?.errors ?? [];
-  const errorByType: Record<string, number> = {};
-  const recentDiscordErrors = discordErrors.slice(-50).reverse();
-  for (const e of discordErrors) {
-    errorByType[e.errorMessage] = (errorByType[e.errorMessage] || 0) + 1;
+  const discordErrByType: Record<string, number> = {};
+  for (const e of (errorTracker?.errors ?? [])) {
+    discordErrByType[e.errorMessage] = (discordErrByType[e.errorMessage] || 0) + 1;
   }
-  const topDiscordErrors = Object.entries(errorByType)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
+  const topDiscordErrors = Object.entries(discordErrByType).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
+  // 경보 여부
+  const hasAlerts = circuitBreakers.length > 0 || ragStatus.stuck;
+  const ragLastTs = ragStatus.lastLine.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/)?.[1]?.replace('T', ' ');
   const now = new Date().toLocaleString('ko-KR');
-  const diskCol = diskPct > 90 ? 'text-red-600' : diskPct > 75 ? 'text-amber-600' : 'text-emerald-600';
-  const botOk = health?.discord_bot === 'healthy';
+
+  // UNMATCHED 의사결정 (수동 처리 필요)
+  const unmatchedDecisions = todayDecisions.filter(d => d.action === 'UNMATCHED' || d.result === 'NEEDS_MANUAL_REVIEW');
+  const confirmedDecisions = todayDecisions.filter(d => d.status === 'confirmed' || (!d.action && !d.result));
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -302,322 +264,387 @@ export default async function JarvisDashboardPage() {
           <div className="flex items-center gap-3">
             <Link href="/" className="text-zinc-400 hover:text-zinc-600 text-sm">← 보드</Link>
             <span className="text-zinc-200">|</span>
-            <h1 className="font-bold text-zinc-800 text-base">🤖 Jarvis 시스템 대시보드</h1>
+            <h1 className="font-bold text-zinc-800 text-base flex items-center gap-2">
+              🛸 Jarvis 시스템 대시보드
+              {hasAlerts && (
+                <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                  ⚠ 알림 {circuitBreakers.length + (ragStatus.stuck ? 1 : 0)}
+                </span>
+              )}
+            </h1>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-zinc-400">갱신: {now}</span>
+            <span className="text-xs text-zinc-400 hidden sm:block">갱신: {now}</span>
             <RefreshButton interval={30} />
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 pb-24 space-y-6 md:pb-6">
+      <main className="max-w-7xl mx-auto px-4 py-5 pb-24 space-y-5 md:pb-5">
 
-        {/* ── 1. 시스템 상태 카드 4개 ── */}
+        {/* ── 1. 경보 배너 (문제 있을 때만) ── */}
+        {hasAlerts && (
+          <section className="space-y-2">
+            {ragStatus.stuck && (
+              <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <span className="text-red-500 text-lg mt-0.5">🔴</span>
+                <div>
+                  <div className="text-sm font-semibold text-red-700">RAG 인덱싱 STUCK</div>
+                  <div className="text-xs text-red-600 mt-0.5">
+                    {ragStatus.pidCycling}개 PID 사이클링 중 · 마지막: {ragLastTs ?? '?'} ·
+                    {' '}정상화하려면 <code className="bg-red-100 px-1 rounded">pkill -f rag-index</code> 후 재시작
+                  </div>
+                </div>
+              </div>
+            )}
+            {circuitBreakers.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-500">⚡</span>
+                  <span className="text-sm font-semibold text-amber-800">
+                    서킷브레이커 OPEN — {circuitBreakers.length}개 태스크 연속 실패
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {circuitBreakers.map(cb => (
+                    <div key={cb.task_id} className="bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-xs">
+                      <span className="font-mono font-medium text-amber-800">{cb.task_id}</span>
+                      <span className="text-amber-500 ml-2">
+                        {cb.consecutive_fails}회 실패 · {new Date(cb.last_fail_ts * 1000).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {unmatchedDecisions.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-orange-500">🔁</span>
+                  <span className="text-sm font-semibold text-orange-800">
+                    수동 처리 필요 — {unmatchedDecisions.length}건 의사결정 UNMATCHED
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {unmatchedDecisions.map((d, i) => (
+                    <div key={i} className="text-xs text-orange-700 bg-white border border-orange-100 rounded px-3 py-1.5">
+                      <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium mr-2 ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                        {TEAM_LABEL[d.team] ?? d.team}
+                      </span>
+                      {d.decision}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── 2. 시스템 상태 카드 4개 ── */}
         <section>
-          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">시스템 상태</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {/* Discord Bot */}
             <div className="bg-white rounded-xl border border-zinc-200 p-4">
               <div className="text-xs text-zinc-500 mb-1">Discord Bot</div>
-              <div className={`text-2xl font-bold ${botOk ? 'text-emerald-600' : 'text-red-600'}`}>
-                {botOk ? '✅ 정상' : '❌ 오프라인'}
+              <div className={`text-xl font-bold ${health?.discord_bot === 'healthy' ? 'text-emerald-600' : 'text-red-600'}`}>
+                {health?.discord_bot === 'healthy' ? '✅ 정상' : '❌ 오프라인'}
               </div>
               <div className="text-xs text-zinc-400 mt-1">
-                메모리 {health?.memory_mb ?? '?'} MB · 크래시 {health?.crash_count ?? '?'}회
+                메모리 {health?.memory_mb ?? '?'}MB · 크래시 {health?.crash_count ?? 0}회
               </div>
             </div>
 
-            {/* 디스크 */}
             <div className="bg-white rounded-xl border border-zinc-200 p-4">
-              <div className="text-xs text-zinc-500 mb-1">디스크 사용률</div>
-              <div className={`text-2xl font-bold ${diskCol}`}>{diskPct}%</div>
-              <div className="mt-2 h-2 bg-zinc-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${diskPct}%`,
-                    backgroundColor: diskPct > 90 ? '#dc2626' : diskPct > 75 ? '#d97706' : '#16a34a',
-                  }}
-                />
+              <div className="text-xs text-zinc-500 mb-1">디스크 / 잔여</div>
+              <div className={`text-xl font-bold ${diskPct > 90 ? 'text-red-600' : diskPct > 75 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {diskPct}%
               </div>
+              <div className="mt-1.5 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${diskPct}%`, backgroundColor: diskPct > 90 ? '#dc2626' : diskPct > 75 ? '#d97706' : '#16a34a' }} />
+              </div>
+              <div className="text-xs text-zinc-400 mt-1">여유 {diskFree}</div>
             </div>
 
-            {/* 크론 성공률 */}
             <div className="bg-white rounded-xl border border-zinc-200 p-4">
               <div className="text-xs text-zinc-500 mb-1">크론 성공률 (7일)</div>
-              <div className={`text-2xl font-bold ${cronSuccessRate >= 90 ? 'text-emerald-600' : cronSuccessRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
-                {cronSuccessRate}%
+              <div className={`text-xl font-bold ${cronRate >= 90 ? 'text-emerald-600' : cronRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
+                {cronRate}%
               </div>
               <div className="text-xs text-zinc-400 mt-1">
-                성공 {cronOk7.toLocaleString()} · 실패 {cronFail7.toLocaleString()}
+                ✅ {cronOk7.toLocaleString()} · ❌ {cronFail7.toLocaleString()}
               </div>
             </div>
 
-            {/* 보드 현황 */}
             <div className="bg-white rounded-xl border border-zinc-200 p-4">
-              <div className="text-xs text-zinc-500 mb-1">보드 현황</div>
-              <div className="text-2xl font-bold text-indigo-600">{totalPosts}개</div>
+              <div className="text-xs text-zinc-500 mb-1">RAG 인덱싱</div>
+              <div className={`text-xl font-bold ${ragStatus.stuck ? 'text-red-600' : 'text-emerald-600'}`}>
+                {ragStatus.stuck ? '🔴 STUCK' : '✅ 정상'}
+              </div>
               <div className="text-xs text-zinc-400 mt-1">
-                댓글 {totalComments}개 · 해결률 {resolutionRate}%
+                {ragStatus.stuck ? `PID ${ragStatus.pidCycling}개 사이클링` : '정상 동작 중'}
               </div>
             </div>
           </div>
         </section>
 
-        {/* ── 2. 크론 + 보드 추세 (2열) ── */}
+        {/* ── 3. 오늘의 팀 의사결정 + 리스크 연쇄 ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+          {/* 오늘의 의사결정 (60%) */}
+          <div className="lg:col-span-3 bg-white rounded-xl border border-zinc-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-zinc-800">📋 오늘의 팀 의사결정</h2>
+              <span className="text-xs text-zinc-400">{new Date().toLocaleDateString('ko-KR')}</span>
+            </div>
+            {confirmedDecisions.length > 0 ? (
+              <div className="space-y-2.5">
+                {confirmedDecisions.map((d, i) => (
+                  <div key={i} className="flex gap-3 py-2 border-b border-zinc-50 last:border-0">
+                    <div className="shrink-0 mt-0.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                        {TEAM_LABEL[d.team] ?? d.team}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-zinc-700 leading-snug">{d.decision}</p>
+                      {d.rationale && (
+                        <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">{d.rationale}</p>
+                      )}
+                    </div>
+                    {d.okr && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-mono font-medium self-start mt-0.5">
+                        {d.okr}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-400">오늘 의사결정 기록 없음</div>
+            )}
+          </div>
+
+          {/* 리스크 연쇄 (40%) */}
+          <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-zinc-800">🔗 리스크 연쇄</h2>
+              {latestConnections && (
+                <span className="text-xs text-zinc-400">{latestConnections.date} {latestConnections.session}</span>
+              )}
+            </div>
+            {latestConnections?.connections.length ? (
+              <div className="space-y-3">
+                {latestConnections.connections.slice(0, 5).map((c, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium text-zinc-700 truncate max-w-[35%]">{c.from.replace(/_/g, ' ')}</span>
+                      <span className="text-zinc-400 shrink-0">→</span>
+                      <span className="font-medium text-zinc-700 truncate max-w-[35%]">{c.to.replace(/_/g, ' ')}</span>
+                      <span className={`shrink-0 font-bold text-[10px] ml-auto ${c.strength >= 0.8 ? 'text-red-500' : c.strength >= 0.6 ? 'text-amber-500' : 'text-zinc-400'}`}>
+                        {Math.round(c.strength * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-1 bg-zinc-100 rounded overflow-hidden">
+                      <div
+                        className="h-full rounded"
+                        style={{
+                          width: `${c.strength * 100}%`,
+                          backgroundColor: c.strength >= 0.8 ? '#ef4444' : c.strength >= 0.6 ? '#f59e0b' : '#6366f1',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-400">연결 데이터 없음</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── 4. 크론 현황 + 자율 작업 큐 ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* 크론 현황 */}
           <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-zinc-800">📋 크론 현황 (7일)</h2>
+              <h2 className="font-semibold text-zinc-800">⚙️ 크론 현황 (7일)</h2>
               <div className="flex gap-3 text-xs">
-                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-indigo-500 opacity-85" />성공</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400 opacity-85" />실패</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-indigo-400" />성공</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />실패</span>
               </div>
             </div>
             <MiniBarChart
               data={cronDaily as unknown as Record<string, number | string>[]}
-              colorA="#6366f1"
-              colorB="#f87171"
-              labelKey="date"
-              valueKeyA="ok"
-              valueKeyB="fail"
+              colorA="#818cf8" colorB="#f87171"
+              labelKey="date" valueKeyA="ok" valueKeyB="fail"
             />
-
-            {/* 에러 태스크 TOP */}
             {cronErrors.length > 0 ? (
-              <div>
-                <div className="text-xs font-semibold text-zinc-500 mb-2">에러 TOP {cronErrors.length}</div>
-                <div className="space-y-1 max-h-56 overflow-y-auto">
-                  {cronErrors.map(e => (
-                    <div key={e.task} className="flex items-center justify-between text-xs py-1 border-b border-zinc-50">
-                      <span className="font-mono text-zinc-700 truncate max-w-[55%]">{e.task}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-red-600">{e.count}회</span>
-                        <span className="text-zinc-400">{e.lastAt.slice(5, 16)}</span>
-                      </div>
+              <div className="space-y-1 max-h-52 overflow-y-auto">
+                {cronErrors.map(e => (
+                  <div key={e.task} className="flex items-center justify-between text-xs py-1 border-b border-zinc-50">
+                    <span className="font-mono text-zinc-600 truncate max-w-[55%]">{e.task}</span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-bold text-red-500">{e.count}회</span>
+                      <span className="text-zinc-400">{e.lastAt.slice(5, 16)}</span>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div className="text-sm text-emerald-600 font-medium">✅ 최근 7일 에러 없음</div>
+              <div className="text-sm text-emerald-600">✅ 최근 7일 에러 없음</div>
             )}
           </div>
 
-          {/* 보드 대화 추세 */}
-          <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-zinc-800">💬 보드 대화 추세 (7일)</h2>
-              <div className="flex gap-3 text-xs">
-                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-indigo-500 opacity-85" />포스트</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500 opacity-85" />댓글</span>
-              </div>
+          {/* 자율 작업 큐 */}
+          <div className="bg-white rounded-xl border border-zinc-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-zinc-800">🤖 자율 작업 큐</h2>
+              <span className="text-xs text-zinc-400">{devQueue.length}건 대기 중</span>
             </div>
-            <MiniBarChart
-              data={boardTrend as unknown as Record<string, number | string>[]}
-              colorA="#6366f1"
-              colorB="#10b981"
-              labelKey="date"
-              valueKeyA="posts"
-              valueKeyB="comments"
-            />
-
-            {/* 채널 & 상태 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs font-semibold text-zinc-500 mb-2">채널별</div>
-                {Object.entries(channelMap).length > 0 ? (
-                  Object.entries(channelMap)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([ch, n]) => (
-                      <div key={ch} className="flex justify-between text-xs py-0.5">
-                        <span className="text-zinc-600">#{ch}</span>
-                        <span className="font-medium text-indigo-600">{n}</span>
+            {devQueue.length > 0 ? (
+              <div className="space-y-2.5">
+                {devQueue.map(item => (
+                  <div key={item.id} className="flex gap-3 py-2 border-b border-zinc-50 last:border-0">
+                    <div className="shrink-0 mt-0.5">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                        (item.priority ?? 0) >= 10 ? 'bg-red-50 text-red-600' :
+                        (item.priority ?? 0) >= 5  ? 'bg-amber-50 text-amber-600' :
+                        'bg-zinc-50 text-zinc-500'
+                      }`}>
+                        P{item.priority ?? 0}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-zinc-700 line-clamp-2 leading-snug">{item.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {item.assignee && (
+                          <span className="text-[10px] text-zinc-400">{item.assignee}</span>
+                        )}
+                        {(item.retries ?? 0) > 0 && (
+                          <span className="text-[10px] text-amber-500">재시도 {item.retries}/{item.maxRetries}</span>
+                        )}
+                        <span className="text-[10px] text-zinc-300 ml-auto">{item.createdAt.slice(0, 10)}</span>
                       </div>
-                    ))
-                ) : (
-                  <div className="text-xs text-zinc-400">데이터 없음</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-400">대기 중인 작업 없음</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── 5. 팀 스코어카드 + Discord 에러 ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+          {/* 팀 스코어카드 */}
+          {scorecard?.teams && (
+            <div className="bg-white rounded-xl border border-zinc-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-zinc-800">🏆 팀 스코어카드</h2>
+                {scorecard.lastDecay && (
+                  <span className="text-xs text-zinc-400">마지막 감소: {scorecard.lastDecay.slice(0, 10)}</span>
                 )}
               </div>
-              <div>
-                <div className="text-xs font-semibold text-zinc-500 mb-2">상태별</div>
-                {[
-                  { status: 'open',        label: '열린 토론',  color: 'text-blue-600' },
-                  { status: 'resolved',    label: '해결됨',     color: 'text-emerald-600' },
-                  { status: 'concluded',   label: '종결됨',     color: 'text-zinc-500' },
-                  { status: 'in-progress', label: '진행 중',    color: 'text-amber-600' },
-                ].map(({ status, label, color }) => {
-                  const n = postRows.filter(p => p.status === status).length;
-                  if (!n) return null;
+              <div className="space-y-2">
+                {Object.entries(scorecard.teams).map(([teamId, info]) => {
+                  const statusColor = info.status === 'NORMAL' ? 'text-emerald-600'
+                    : info.status === 'WARNING' ? 'text-amber-600'
+                    : 'text-red-600';
+                  const recentOutcomes = (info.history ?? []).slice(-3);
                   return (
-                    <div key={status} className="flex justify-between text-xs py-0.5">
-                      <span className="text-zinc-600">{label}</span>
-                      <span className={`font-medium ${color}`}>{n}</span>
+                    <div key={teamId} className="flex items-center gap-3 py-2 border-b border-zinc-50 last:border-0">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${TEAM_COLOR[teamId] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                        {TEAM_LABEL[teamId] ?? teamId}
+                      </span>
+                      <div className="flex-1 flex items-center gap-2">
+                        <span className="text-xs text-emerald-600 font-medium">+{info.merit}</span>
+                        <span className="text-xs text-red-500 font-medium">-{info.penalty}</span>
+                      </div>
+                      {/* 최근 의사결정 결과 도트 */}
+                      <div className="flex gap-1">
+                        {recentOutcomes.map((h, i) => (
+                          <span
+                            key={i}
+                            title={`${h.ts.slice(0, 10)}: ${h.decision.slice(0, 40)}`}
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              h.outcome === 'success' ? 'bg-emerald-400' :
+                              h.outcome === 'skipped' ? 'bg-zinc-300' : 'bg-red-400'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className={`text-xs font-semibold shrink-0 ${statusColor}`}>{info.status}</span>
                     </div>
                   );
                 })}
               </div>
+              {scorecard.thresholds && (
+                <div className="text-[10px] text-zinc-400 mt-3">
+                  임계값 — 경고: {scorecard.thresholds.warning}, 보호관찰: {scorecard.thresholds.probation}
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* ── 3. 에이전트 활동 + Discord 에러 (2열) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-          {/* 에이전트 활동 */}
+          {/* Discord 에러 현황 */}
           <div className="bg-white rounded-xl border border-zinc-200 p-5">
-            <h2 className="font-semibold text-zinc-800 mb-4">🤖 에이전트 댓글 활동</h2>
-            {agentActivity.length > 0 ? (
-              <div className="space-y-2">
-                {agentActivity.map(a => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-600 w-20 truncate">{a.name || a.id}</span>
-                    <div className="flex-1 h-5 bg-zinc-50 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-400 rounded transition-all"
-                        style={{ width: `${(a.count / maxAgentCount) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-zinc-700 w-6 text-right">{a.count}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-zinc-400">아직 에이전트 활동 없음</div>
-            )}
-          </div>
-
-          {/* Discord 에러 */}
-          <div className="bg-white rounded-xl border border-zinc-200 p-5">
-            <h2 className="font-semibold text-zinc-800 mb-4">⚠️ Discord 에러 현황</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-zinc-800">⚠️ Discord 에러 현황</h2>
+              <span className="text-xs text-zinc-400">총 {errorTracker?.errors?.length ?? 0}건 누적</span>
+            </div>
             {topDiscordErrors.length > 0 ? (
               <>
-                <div className="space-y-1.5 mb-4">
-                  {topDiscordErrors.map(([msg, cnt]) => (
-                    <div key={msg} className="flex justify-between items-center text-xs py-1 border-b border-zinc-50">
-                      <span className="text-zinc-600 truncate max-w-[75%]">{msg}</span>
-                      <span className="font-bold text-red-500 ml-2 shrink-0">{cnt}회</span>
-                    </div>
-                  ))}
+                <div className="space-y-1.5 mb-3">
+                  {topDiscordErrors.map(([msg, cnt]) => {
+                    const maxCnt = topDiscordErrors[0]?.[1] ?? 1;
+                    return (
+                      <div key={msg} className="space-y-0.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-zinc-600 truncate max-w-[78%]">{msg}</span>
+                          <span className="font-bold text-red-500 shrink-0 ml-1">{cnt}회</span>
+                        </div>
+                        <div className="h-1 bg-zinc-100 rounded overflow-hidden">
+                          <div className="h-full bg-red-300 rounded" style={{ width: `${(cnt / maxCnt) * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="text-xs text-zinc-400">
-                  최근 에러 {recentDiscordErrors.length > 0 ? new Date(recentDiscordErrors[0].timestamp).toLocaleString('ko-KR') : '-'}
-                </div>
+                {(errorTracker?.errors?.length ?? 0) > 0 && (
+                  <div className="text-xs text-zinc-400">
+                    최근: {new Date((errorTracker!.errors.at(-1)!.timestamp)).toLocaleString('ko-KR')}
+                  </div>
+                )}
               </>
             ) : (
-              <div className="text-sm text-emerald-600 font-medium">✅ Discord 에러 없음</div>
+              <div className="text-sm text-emerald-600">✅ Discord 에러 없음</div>
             )}
           </div>
         </div>
 
-        {/* ── 4. 로드맵 (dev_tasks 칸반) ── */}
-        <section className="bg-white rounded-xl border border-zinc-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-zinc-800">🗺️ 개발 로드맵</h2>
-            <Link href="/dev-tasks" className="text-xs text-indigo-500 hover:underline">전체 보기 →</Link>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {KANBAN_COLS.map(col => {
-              const tasks = kanban[col] ?? [];
-              return (
-                <div key={col}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TASK_STATUS_STYLE[col]}`}>
-                      {TASK_STATUS_LABEL[col]}
-                    </span>
-                    <span className="text-xs text-zinc-400">{tasks.length}</span>
-                  </div>
-                  {tasks.length > 0 ? (
-                    <div className="space-y-2">
-                      {tasks.slice(0, 5).map(t => (
-                        <Link
-                          key={t.id}
-                          href={`/dev-tasks/${t.id}`}
-                          className="block bg-zinc-50 hover:bg-zinc-100 rounded-lg p-2.5 transition-colors"
-                        >
-                          <div className="text-xs font-medium text-zinc-700 line-clamp-2 leading-tight">{t.title}</div>
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${PRIORITY_STYLE[t.priority] ?? PRIORITY_STYLE.medium}`}>
-                              {t.priority === 'high' ? '긴급' : t.priority === 'medium' ? '중간' : '낮음'}
-                            </span>
-                            <span className="text-[10px] text-zinc-400">{t.created_at.slice(5, 10)}</span>
-                          </div>
-                        </Link>
-                      ))}
-                      {tasks.length > 5 && (
-                        <div className="text-xs text-zinc-400 text-center">+{tasks.length - 5}개 더</div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-zinc-300 italic">없음</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 5. 채널별 최근 대화 ── */}
-        <section className="bg-white rounded-xl border border-zinc-200 p-5">
-          <h2 className="font-semibold text-zinc-800 mb-4">📨 채널별 최근 대화 (Discord)</h2>
-          {Object.keys(discordHistory).length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {Object.entries(discordHistory)
-                .sort((a, b) => (b[1][0]?.time ?? '').localeCompare(a[1][0]?.time ?? ''))
-                .map(([channel, entries]) => (
-                  <div key={channel} className="space-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-indigo-600">#{channel}</span>
-                      <span className="text-xs text-zinc-400">{entries.length}건</span>
-                    </div>
-                    {entries.map((e, i) => (
-                      <div key={i} className="bg-zinc-50 rounded-lg p-2.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-semibold text-zinc-500">{e.user}</span>
-                          <span className="text-[10px] text-zinc-400">{e.time.slice(5)}</span>
-                        </div>
-                        <p className="text-xs text-zinc-600 line-clamp-2 leading-relaxed">{e.snippet}</p>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <div className="text-sm text-zinc-400">최근 대화 기록 없음</div>
-          )}
-        </section>
-
-        {/* ── 6. 최근 보드 포스트 ── */}
-        {recentPosts.length > 0 && (
+        {/* ── 6. 보드 최근 포스트 (실제 데이터 있을 때만) ── */}
+        {totalPosts > 0 && (
           <section className="bg-white rounded-xl border border-zinc-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-zinc-800">📝 최근 보드 포스트</h2>
-              <Link href="/" className="text-xs text-indigo-500 hover:underline">전체 보기 →</Link>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-zinc-800">📝 보드 최근 포스트</h2>
+              <Link href="/" className="text-xs text-indigo-500 hover:underline">전체 {totalPosts}개 →</Link>
             </div>
-            <div className="space-y-2">
-              {recentPosts.slice(0, 8).map(p => {
-                const statusCol = p.status === 'open' ? 'bg-blue-100 text-blue-700'
+            <div className="space-y-1">
+              {recentPosts.slice(0, 6).map(p => {
+                const sc = p.status === 'open' ? 'bg-blue-100 text-blue-700'
                   : p.status === 'in-progress' ? 'bg-amber-100 text-amber-700'
                   : p.status === 'resolved' || p.status === 'concluded' ? 'bg-emerald-100 text-emerald-700'
                   : 'bg-zinc-100 text-zinc-500';
-                const statusLabel = p.status === 'open' ? '열림'
-                  : p.status === 'in-progress' ? '진행'
-                  : p.status === 'resolved' ? '해결'
-                  : p.status === 'concluded' ? '종결'
-                  : p.status;
+                const sl = { open: '열림', 'in-progress': '진행', resolved: '해결', concluded: '종결' }[p.status] ?? p.status;
                 return (
-                  <Link
-                    key={p.id}
-                    href={`/posts/${p.id}`}
-                    className="flex items-center gap-3 py-2 border-b border-zinc-50 hover:bg-zinc-50 rounded px-2 -mx-2 transition-colors"
-                  >
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${statusCol}`}>{statusLabel}</span>
+                  <Link key={p.id} href={`/posts/${p.id}`}
+                    className="flex items-center gap-3 py-2 border-b border-zinc-50 hover:bg-zinc-50 rounded px-2 -mx-2 transition-colors">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${sc}`}>{sl}</span>
                     <span className="text-sm text-zinc-700 flex-1 truncate">{p.title}</span>
                     <span className="text-xs text-zinc-400 shrink-0">#{p.channel}</span>
-                    <span className="text-xs text-zinc-400 shrink-0">💬 {p.comment_count}</span>
+                    <span className="text-xs text-zinc-400 shrink-0">💬{p.comment_count}</span>
                     <span className="text-xs text-zinc-400 shrink-0">{p.created_at.slice(5, 10)}</span>
                   </Link>
                 );

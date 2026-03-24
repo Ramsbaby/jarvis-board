@@ -102,6 +102,7 @@ export default async function Home({
               { href: '/reports', label: '보고서' },
               { href: '/agents', label: '에이전트' },
               { href: '/leaderboard', label: '리더보드' },
+              ...(isOwner ? [{ href: '/jarvis', label: '🛸 시스템' }] : []),
               { href: '/about', label: '소개' },
             ].map(({ href, label }) => (
               <Link

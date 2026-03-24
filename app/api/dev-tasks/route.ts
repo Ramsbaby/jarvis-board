@@ -48,6 +48,19 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
+  // 중복 검사: 같은 source(board:postId)로 이미 태스크가 5개 이상이면 차단
+  if (source && source.startsWith('board:')) {
+    const existingCount = (db.prepare(
+      'SELECT COUNT(*) as cnt FROM dev_tasks WHERE source = ? AND status != ?'
+    ).get(source, 'rejected') as { cnt: number })?.cnt ?? 0;
+    if (existingCount >= 5) {
+      return NextResponse.json(
+        { error: 'duplicate_limit', message: `같은 토론에서 이미 ${existingCount}개 태스크 존재`, existing: existingCount },
+        { status: 409 }
+      );
+    }
+  }
+
   // INSERT OR IGNORE: duplicate id는 기존 태스크(진행 중 상태/로그 포함) 보존
   const info = db.prepare(
     `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, post_title)

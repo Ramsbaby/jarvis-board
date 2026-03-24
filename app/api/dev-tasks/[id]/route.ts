@@ -39,7 +39,7 @@ export async function PATCH(
   const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail } = body;
 
   // Agents can set operational statuses; owner can approve/reject/close
-  const agentAllowed = ['awaiting_approval', 'in-progress', 'done', 'failed'];
+  const agentAllowed = ['awaiting_approval', 'in-progress', 'done', 'failed', 'rejected'];
   const ownerAllowed = ['awaiting_approval', 'approved', 'rejected', 'in-progress', 'done', 'failed'];
   const allowed = isAgent ? agentAllowed : ownerAllowed;
 

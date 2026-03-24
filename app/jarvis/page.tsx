@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { getDb } from '@/lib/db';
 import Link from 'next/link';
 import RefreshButton from './RefreshButton';
 import MobileBottomNav from '@/components/MobileBottomNav';
@@ -308,6 +309,21 @@ export default async function JarvisDashboardPage() {
 
   const isLocalEnv = existsSync(join(JARVIS_HOME, 'state', 'health.json'));
 
+  // ── Railway 환경: board_settings에서 Mac mini 메트릭 읽기 ──
+  let remoteMetrics: {
+    disk?: { used_pct: number; free_gb: number; total_gb: number };
+    scorecard?: TeamScorecard;
+    health?: { discord_bot: string; memory_mb: number; crash_count: number };
+    synced_at?: string;
+  } | null = null;
+  if (!isLocalEnv) {
+    try {
+      const _db = getDb();
+      const _row = _db.prepare("SELECT value FROM board_settings WHERE key='system_metrics'").get() as { value: string } | undefined;
+      if (_row) remoteMetrics = JSON.parse(_row.value);
+    } catch { /* DB 미접근 시 무시 */ }
+  }
+
   // ── 데이터 수집 ──
   const [launchAgents] = await Promise.all([readLaunchAgents()]);
 
@@ -330,17 +346,25 @@ export default async function JarvisDashboardPage() {
   } = parseDiscordJsonl();
   const todayDecisions = readTodayDecisions();
   const devQueue = readDevQueue();
-  const scorecard = readTeamScorecard();
+  const scorecard = readTeamScorecard() ?? remoteMetrics?.scorecard ?? null;
 
-  // ── 시스템 리소스 (execSync) ──
+  // ── 시스템 리소스 ──
   let diskPct = 0, diskFree = '?', diskTotal = '?';
   let ragDbSize = '?', ragInboxCount = 0, ragChunks = 0;
+  // Railway 환경: Mac mini가 push한 데이터 사용 (df -h /는 Railway 컨테이너 디스크를 반환하므로 부정확)
+  if (!isLocalEnv && remoteMetrics?.disk) {
+    diskPct = remoteMetrics.disk.used_pct;
+    diskFree = `${remoteMetrics.disk.free_gb} GB`;
+    diskTotal = `${remoteMetrics.disk.total_gb} GB`;
+  }
   try {
     const { execSync } = await import('child_process');
-    const df = execSync('df -h / | tail -1', { timeout: 2000 }).toString().trim().split(/\s+/);
-    diskPct = parseInt(df[4] ?? '0', 10);
-    diskFree = df[3] ?? '?';
-    diskTotal = df[1] ?? '?';
+    if (isLocalEnv) {
+      const df = execSync('df -h / | tail -1', { timeout: 2000 }).toString().trim().split(/\s+/);
+      diskPct = parseInt(df[4] ?? '0', 10);
+      diskFree = df[3] ?? '?';
+      diskTotal = df[1] ?? '?';
+    }
     ragDbSize = execSync(
       `du -sh "${join(JARVIS_HOME, 'rag', 'lancedb')}" 2>/dev/null | cut -f1`,
       { timeout: 2000 }
@@ -429,7 +453,7 @@ export default async function JarvisDashboardPage() {
             <span className="text-lg">🌐</span>
             <span>
               <span className="font-semibold">Railway 배포 환경</span>
-              {' '}— Jarvis 로컬 데이터에 접근 불가. 보드 DB 데이터만 표시됩니다.
+              {' '}— Mac mini 동기화 데이터 사용 중.{remoteMetrics?.synced_at ? ` 마지막 동기화: ${remoteMetrics.synced_at.replace('T', ' ').slice(0, 16)} UTC` : ' 동기화 대기 중 (첫 sync 5분 이내).'}
             </span>
           </div>
         )}

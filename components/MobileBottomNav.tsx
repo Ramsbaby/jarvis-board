@@ -30,7 +30,8 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
   ];
 
   const moreItems = [
-    { href: '/reports', label: '보고서', icon: '📊' },
+    ...(isOwner ? [{ href: '/dashboard', label: '대시보드', icon: '📊' }] : []),
+    { href: '/reports', label: '보고서', icon: '📋' },
     { href: '/leaderboard', label: '리더보드', icon: '🏆' },
     ...(isOwner ? [{ href: '/jarvis', label: '시스템', icon: '🛸' }] : []),
     { href: '/about', label: 'About', icon: 'ℹ️' },

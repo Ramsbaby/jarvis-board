@@ -313,7 +313,14 @@ export default async function JarvisDashboardPage() {
   let remoteMetrics: {
     disk?: { used_pct: number; free_gb: number; total_gb: number };
     scorecard?: TeamScorecard;
-    health?: { discord_bot: string; memory_mb: number; crash_count: number };
+    health?: { discord_bot: string; memory_mb: number; crash_count: number; last_check?: string; stale_claude_killed?: number };
+    cron_stats?: { rate: number; ok7: number; fail7: number; total7: number; daily: CronDaily[]; topErrors: { task: string; count: number; lastAt: string; type?: string }[]; recentFailed: { task: string; lastRun: string; lastStatus: string; failCount: number; failType?: string }[] };
+    discord_stats?: { claudeCount: number; avgElapsed: number; p95Elapsed: number; stopReasons: Record<string, number>; lastHealth: BotHealth | null; restartCount: number; botErrors: number; totalHuman: number; channelActivity: { id: string; name: string; human: number; bot: number; claudes: number; totalElapsed: number }[] };
+    rag_stats?: { dbSize: string; inboxCount: number; stuck: boolean; lastLine: string; chunks: number; rebuilding: RagRebuilding | null };
+    launch_agents?: LaunchEntry[];
+    circuit_breakers?: CircuitEntry[];
+    decisions_today?: Decision[];
+    dev_queue?: DevQueueItem[];
     synced_at?: string;
   } | null = null;
   if (!isLocalEnv) {
@@ -324,38 +331,84 @@ export default async function JarvisDashboardPage() {
     } catch { /* DB 미접근 시 무시 */ }
   }
 
-  // ── 데이터 수집 ──
-  const [launchAgents] = await Promise.all([readLaunchAgents()]);
+  // ── 데이터 수집 — Railway에서는 remoteMetrics 우선, 로컬에서는 파일 직접 읽기 ──
+  const [launchAgentsLocal] = await Promise.all([isLocalEnv ? readLaunchAgents() : Promise.resolve([] as LaunchEntry[])]);
+  const launchAgents: LaunchEntry[] = isLocalEnv ? launchAgentsLocal : (remoteMetrics?.launch_agents ?? []);
 
-  const health = safeJson<{
+  const healthLocal = isLocalEnv ? safeJson<{
     last_check: string; discord_bot: string; memory_mb: number;
     crash_count: number; stale_claude_killed: number;
-  }>(join(JARVIS_HOME, 'state', 'health.json'));
+  }>(join(JARVIS_HOME, 'state', 'health.json')) : null;
+  const health = healthLocal ?? (remoteMetrics?.health ? {
+    last_check: remoteMetrics.health.last_check ?? '',
+    discord_bot: remoteMetrics.health.discord_bot,
+    memory_mb: remoteMetrics.health.memory_mb,
+    crash_count: remoteMetrics.health.crash_count,
+    stale_claude_killed: remoteMetrics.health.stale_claude_killed ?? 0,
+  } : null);
 
-  const errorTracker = safeJson<{
+  const errorTracker = isLocalEnv ? safeJson<{
     errors: { channelId: string; errorMessage: string; timestamp: number }[];
-  }>(join(JARVIS_HOME, 'state', 'error-tracker.json'));
+  }>(join(JARVIS_HOME, 'state', 'error-tracker.json')) : null;
 
-  const ragRebuilding = readRagRebuilding();
-  const ragStatus = detectRagStuck();
-  const circuitBreakers = readCircuitBreakers();
-  const { daily: cronDaily, topErrors: cronErrors, topToday: cronToday, recentFailed: cronRecentFailed } = parseCronLog();
-  const {
-    channelActivity, claudeCount, avgElapsed, p95Elapsed,
-    stopReasons, lastHealth, restartCount, botErrors, totalHuman,
-  } = parseDiscordJsonl();
-  const todayDecisions = readTodayDecisions();
-  const devQueue = readDevQueue();
+  const ragRebuilding = isLocalEnv ? readRagRebuilding() : (remoteMetrics?.rag_stats?.rebuilding ?? null);
+  const ragStatusLocal = isLocalEnv ? detectRagStuck() : null;
+  const ragStatus = ragStatusLocal ?? {
+    stuck: remoteMetrics?.rag_stats?.stuck ?? false,
+    pidCycling: 0,
+    lastLine: remoteMetrics?.rag_stats?.lastLine ?? '',
+  };
+
+  const circuitBreakers = isLocalEnv ? readCircuitBreakers() : (remoteMetrics?.circuit_breakers ?? []);
+
+  // ── 크론 통계 ──
+  let cronDaily: CronDaily[], cronErrors: { task: string; count: number; lastAt: string; type?: string }[], cronToday: { task: string; ok: number; fail: number; total: number }[], cronRecentFailed: { task: string; lastRun: string; lastStatus: string; failCount: number; failType?: string }[];
+  if (isLocalEnv) {
+    const parsed = parseCronLog();
+    cronDaily = parsed.daily; cronErrors = parsed.topErrors; cronToday = parsed.topToday; cronRecentFailed = parsed.recentFailed;
+  } else {
+    const r = remoteMetrics?.cron_stats;
+    cronDaily = r?.daily ?? Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return { date: d.toISOString().slice(0, 10), ok: 0, fail: 0 }; });
+    cronErrors = r?.topErrors ?? [];
+    cronToday = [];
+    cronRecentFailed = r?.recentFailed ?? [];
+  }
+
+  // ── Discord 통계 ──
+  let channelActivity: ReturnType<typeof parseDiscordJsonl>['channelActivity'];
+  let claudeCount: number, avgElapsed: number, p95Elapsed: number;
+  let stopReasons: Record<string, number>, lastHealth: BotHealth | null;
+  let restartCount: number, botErrors: number, totalHuman: number;
+  if (isLocalEnv) {
+    const parsed = parseDiscordJsonl();
+    channelActivity = parsed.channelActivity; claudeCount = parsed.claudeCount; avgElapsed = parsed.avgElapsed;
+    p95Elapsed = parsed.p95Elapsed; stopReasons = parsed.stopReasons; lastHealth = parsed.lastHealth;
+    restartCount = parsed.restartCount; botErrors = parsed.botErrors; totalHuman = parsed.totalHuman;
+  } else {
+    const r = remoteMetrics?.discord_stats;
+    channelActivity = {};
+    (r?.channelActivity ?? []).forEach(ch => { channelActivity[ch.id] = { human: ch.human, bot: ch.bot, claudes: ch.claudes, totalElapsed: ch.totalElapsed }; });
+    claudeCount = r?.claudeCount ?? 0; avgElapsed = r?.avgElapsed ?? 0; p95Elapsed = r?.p95Elapsed ?? 0;
+    stopReasons = r?.stopReasons ?? {}; lastHealth = r?.lastHealth ?? null;
+    restartCount = r?.restartCount ?? 0; botErrors = r?.botErrors ?? 0; totalHuman = r?.totalHuman ?? 0;
+  }
+
+  const todayDecisions = isLocalEnv ? readTodayDecisions() : (remoteMetrics?.decisions_today ?? []);
+  const devQueue = isLocalEnv ? readDevQueue() : (remoteMetrics?.dev_queue ?? []);
   const scorecard = readTeamScorecard() ?? remoteMetrics?.scorecard ?? null;
 
   // ── 시스템 리소스 ──
   let diskPct = 0, diskFree = '?', diskTotal = '?';
   let ragDbSize = '?', ragInboxCount = 0, ragChunks = 0;
-  // Railway 환경: Mac mini가 push한 데이터 사용 (df -h /는 Railway 컨테이너 디스크를 반환하므로 부정확)
   if (!isLocalEnv && remoteMetrics?.disk) {
     diskPct = remoteMetrics.disk.used_pct;
     diskFree = `${remoteMetrics.disk.free_gb} GB`;
     diskTotal = `${remoteMetrics.disk.total_gb} GB`;
+  }
+  if (!isLocalEnv && remoteMetrics?.rag_stats) {
+    ragDbSize = remoteMetrics.rag_stats.dbSize;
+    ragInboxCount = remoteMetrics.rag_stats.inboxCount;
+    ragChunks = remoteMetrics.rag_stats.chunks;
   }
   try {
     const { execSync } = await import('child_process');
@@ -364,34 +417,27 @@ export default async function JarvisDashboardPage() {
       diskPct = parseInt(df[4] ?? '0', 10);
       diskFree = df[3] ?? '?';
       diskTotal = df[1] ?? '?';
-    }
-    ragDbSize = execSync(
-      `du -sh "${join(JARVIS_HOME, 'rag', 'lancedb')}" 2>/dev/null | cut -f1`,
-      { timeout: 2000 }
-    ).toString().trim() || '?';
-    ragInboxCount = parseInt(
-      execSync(`ls "${join(JARVIS_HOME, 'inbox')}" 2>/dev/null | wc -l`, { timeout: 2000 }).toString().trim(),
-      10
-    ) || 0;
-    // 현재 rebuild 세션의 누적 청크 수
-    const ragLogLines = safeLines(join(JARVIS_HOME, 'logs', 'rag-index.log'));
-    let rebuildStart = -1;
-    for (let i = ragLogLines.length - 1; i >= 0; i--) {
-      if (ragLogLines[i].includes('Fresh rebuild')) { rebuildStart = i; break; }
-    }
-    if (rebuildStart >= 0) {
-      for (let i = rebuildStart; i < ragLogLines.length; i++) {
-        const m = ragLogLines[i].match(/Batch add: (\d+) chunks/);
-        if (m) ragChunks += parseInt(m[1], 10);
+      ragDbSize = execSync(`du -sh "${join(JARVIS_HOME, 'rag', 'lancedb')}" 2>/dev/null | cut -f1`, { timeout: 2000 }).toString().trim() || '?';
+      ragInboxCount = parseInt(execSync(`ls "${join(JARVIS_HOME, 'inbox')}" 2>/dev/null | wc -l`, { timeout: 2000 }).toString().trim(), 10) || 0;
+      const ragLogLines = safeLines(join(JARVIS_HOME, 'logs', 'rag-index.log'));
+      let rebuildStart = -1;
+      for (let i = ragLogLines.length - 1; i >= 0; i--) {
+        if (ragLogLines[i].includes('Fresh rebuild')) { rebuildStart = i; break; }
+      }
+      if (rebuildStart >= 0) {
+        for (let i = rebuildStart; i < ragLogLines.length; i++) {
+          const m = ragLogLines[i].match(/Batch add: (\d+) chunks/);
+          if (m) ragChunks += parseInt(m[1], 10);
+        }
       }
     }
-  } catch { /* 로컬 환경 아니면 무시 */ }
+  } catch { /* 무시 */ }
 
   // ── 집계 ──
-  const cronOk7 = cronDaily.reduce((s, d) => s + d.ok, 0);
-  const cronFail7 = cronDaily.reduce((s, d) => s + d.fail, 0);
+  const cronOk7 = remoteMetrics?.cron_stats?.ok7 ?? cronDaily.reduce((s, d) => s + d.ok, 0);
+  const cronFail7 = remoteMetrics?.cron_stats?.fail7 ?? cronDaily.reduce((s, d) => s + d.fail, 0);
   const cronTotal7 = cronOk7 + cronFail7;
-  const cronRate = cronTotal7 > 0 ? Math.round((cronOk7 / cronTotal7) * 100) : 0;
+  const cronRate = remoteMetrics?.cron_stats?.rate ?? (cronTotal7 > 0 ? Math.round((cronOk7 / cronTotal7) * 100) : 0);
 
   const hasAlerts = circuitBreakers.length > 0 || ragStatus.stuck;
   const ragLastTs = ragStatus.lastLine.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/)?.[1]?.replace('T', ' ');
@@ -913,41 +959,70 @@ export default async function JarvisDashboardPage() {
             <div className="bg-white rounded-xl border border-zinc-200 p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-zinc-800">🏆 팀 스코어카드</h2>
-                {scorecard.lastDecay && (
-                  <span className="text-xs text-zinc-400">감소: {scorecard.lastDecay.slice(0, 10)}</span>
-                )}
+                <div className="flex items-center gap-3">
+                  {scorecard.lastDecay && (
+                    <span className="text-[10px] text-zinc-400">마지막 감소: {scorecard.lastDecay.slice(0, 10)}</span>
+                  )}
+                  <span className="text-[10px] text-zinc-400">{Object.keys(scorecard.teams).length}개 팀</span>
+                </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {Object.entries(scorecard.teams).map(([teamId, info]) => {
-                  const sc = info.status === 'NORMAL' ? 'text-emerald-600' : info.status === 'WARNING' ? 'text-amber-600' : 'text-red-600';
+                  const netScore = info.merit - info.penalty;
+                  const statusStyle =
+                    info.status === 'NORMAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    info.status === 'WARNING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    info.status === 'PROBATION' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                    'bg-red-50 text-red-700 border-red-200';
+                  const recentHistory = (info.history ?? []).slice(-8);
+                  const lastSuccess = [...(info.history ?? [])].reverse().find(h => h.outcome === 'success');
                   return (
-                    <div key={teamId} className="flex items-center gap-3 py-1.5 border-b border-zinc-50 last:border-0">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${TEAM_COLOR[teamId] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                        {TEAM_LABEL[teamId] ?? teamId}
-                      </span>
-                      <span className="text-xs text-emerald-600 font-medium">+{info.merit}</span>
-                      <span className="text-xs text-red-500 font-medium">-{info.penalty}</span>
-                      <div className="flex-1 flex gap-1">
-                        {(info.history ?? []).slice(-3).map((h, i) => (
-                          <span key={i} title={`${h.ts.slice(0, 10)}: ${h.decision.slice(0, 40)}`} className={`inline-block w-2 h-2 rounded-full ${
-                            h.outcome === 'success' ? 'bg-emerald-400' : h.outcome === 'skipped' ? 'bg-zinc-300' : 'bg-red-400'
-                          }`} />
-                        ))}
+                    <div key={teamId} className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${TEAM_COLOR[teamId] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                          {TEAM_LABEL[teamId] ?? teamId}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold shrink-0 ${statusStyle}`}>
+                          {info.status}
+                        </span>
+                        <div className="flex-1" />
+                        <span className="text-[10px] text-emerald-600 font-medium">+{info.merit}</span>
+                        <span className="text-[10px] text-zinc-400">/</span>
+                        <span className="text-[10px] text-red-500 font-medium">-{info.penalty}</span>
+                        <span className={`text-xs font-bold ml-1 ${netScore >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          ({netScore >= 0 ? '+' : ''}{netScore})
+                        </span>
                       </div>
-                      <span className={`text-xs font-semibold shrink-0 ${sc}`}>{info.status}</span>
+                      <div className="flex items-center gap-1 mb-1.5">
+                        {recentHistory.map((h, i) => (
+                          <span key={i} title={`${h.ts.slice(0, 10)}: ${h.decision.slice(0, 60)}`}
+                            className={`inline-block w-2.5 h-2.5 rounded-full ${
+                              h.outcome === 'success' ? 'bg-emerald-400' :
+                              h.outcome === 'skipped' ? 'bg-zinc-300' : 'bg-red-400'
+                            }`} />
+                        ))}
+                        {recentHistory.length === 0 && <span className="text-[10px] text-zinc-300">기록 없음</span>}
+                      </div>
+                      {lastSuccess && (
+                        <div className="text-[10px] text-zinc-400 truncate">
+                          ✓ {lastSuccess.ts.slice(0, 10)} — {lastSuccess.decision.slice(0, 60)}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
               {scorecard.thresholds && (
-                <div className="text-[10px] text-zinc-400 mt-3">
-                  임계값 — 경고: {scorecard.thresholds.warning}, 보호관찰: {scorecard.thresholds.probation}
+                <div className="text-[10px] text-zinc-400 mt-3 flex gap-3">
+                  <span>경고: ≥{scorecard.thresholds.warning}점</span>
+                  <span>보호관찰: ≥{scorecard.thresholds.probation}점</span>
+                  {scorecard.thresholds.disciplinary && <span>징계: ≥{scorecard.thresholds.disciplinary}점</span>}
                 </div>
               )}
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-zinc-200 p-5 flex items-center justify-center text-sm text-zinc-400">
-              팀 스코어카드 없음
+              팀 스코어카드 없음 {!isLocalEnv && remoteMetrics === null && '(동기화 대기 중)'}
             </div>
           )}
         </div>

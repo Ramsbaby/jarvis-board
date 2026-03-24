@@ -209,6 +209,9 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   const router = useRouter();
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
   const [tab, setTab] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { subscribe } = useEvent();
@@ -280,6 +283,52 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     }
   }
 
+  // Bulk actions
+  async function handleBulkAction(status: 'approved' | 'rejected') {
+    if (selectedIds.size === 0) return;
+    const label = status === 'approved' ? '승인' : '반려';
+    if (!confirm(`선택한 ${selectedIds.size}개 태스크를 ${label}할까요?`)) return;
+    setBulkLoading(true);
+    setActionError(null);
+    let ok = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await fetch(`/api/dev-tasks/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ status, rejection_note: status === 'rejected' ? '일괄 반려' : undefined }),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updated } : t));
+          ok++;
+        }
+      } catch { /* continue */ }
+    }
+    setSelectedIds(new Set());
+    setBulkLoading(false);
+    if (ok < selectedIds.size) setActionError(`${selectedIds.size - ok}건 처리 실패`);
+    router.refresh();
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(ids: string[]) {
+    const allSelected = ids.every(id => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(ids));
+    }
+  }
+
   const grouped = {
     all:               tasks,
     awaiting_approval: tasks.filter(t => t.status === 'awaiting_approval'),
@@ -290,7 +339,10 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     failed:            tasks.filter(t => t.status === 'failed'),
   } as Record<string, DevTask[]>;
 
-  const filtered = grouped[tab] ?? tasks;
+  const tabFiltered = grouped[tab] ?? tasks;
+  const filtered = searchQuery.trim()
+    ? tabFiltered.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()) || (t.detail ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
+    : tabFiltered;
 
   const STATS = [
     { label: '검토 요청됨',      key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
@@ -353,6 +405,58 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         ))}
       </div>
 
+      {/* Search + Bulk actions toolbar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="🔍 태스크 검색 (제목, 상세)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-2 pl-9 text-sm border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+          />
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">🔍</span>
+        </div>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <span className="text-xs font-medium text-indigo-700">{selectedIds.size}개 선택</span>
+            <button
+              onClick={() => handleBulkAction('approved')}
+              disabled={bulkLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+            >
+              ✓ 일괄 승인
+            </button>
+            <button
+              onClick={() => handleBulkAction('rejected')}
+              disabled={bulkLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
+            >
+              ✕ 일괄 반려
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700"
+            >
+              선택 해제
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Select all for current filter */}
+      {filtered.length > 0 && (tab === 'awaiting_approval' || tab === 'rejected' || tab === 'failed') && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            checked={filtered.every(t => selectedIds.has(t.id))}
+            onChange={() => toggleSelectAll(filtered.map(t => t.id))}
+            className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-300"
+          />
+          <span className="text-xs text-zinc-500">전체 선택 ({filtered.length}개)</span>
+        </div>
+      )}
+
       {/* Task list */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
@@ -368,17 +472,33 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
             const diffCfg = task.difficulty ? DIFFICULTY_CONFIG[task.difficulty] : null;
             const impactAreas = parseImpactAreas(task.impact_areas);
 
+            // 유령 태스크 감지: done인데 changed_files가 비어있음
+            const changedFiles = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
+            const isGhostDone = task.status === 'done' && changedFiles.length === 0;
+            const canSelect = ['awaiting_approval', 'rejected', 'failed'].includes(task.status);
+
             return (
               <div
                 key={task.id}
-                className={`rounded-xl border overflow-hidden transition-shadow hover:shadow-md ${st.outerBorder}`}
+                className={`rounded-xl border overflow-hidden transition-shadow hover:shadow-md ${st.outerBorder} ${selectedIds.has(task.id) ? 'ring-2 ring-indigo-400' : ''}`}
               >
                 {/* Status stripe */}
                 {st.stripe && <div className={`h-1 w-full ${st.stripe}`} />}
 
+                <div className={`flex items-start gap-2 p-4 ${st.innerBg}`}>
+                  {/* Checkbox for bulk selection */}
+                  {canSelect && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(task.id)}
+                      onChange={(e) => { e.stopPropagation(); toggleSelect(task.id); }}
+                      className="mt-1 w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-300 flex-shrink-0"
+                    />
+                  )}
+
                 <Link
                   href={`/dev-tasks/${task.id}`}
-                  className={`block p-4 hover:shadow-inner transition-all group ${st.innerBg}`}
+                  className={`block flex-1 hover:shadow-inner transition-all group`}
                 >
                   {/* Context bar: source → assignee → time (맥락 최우선) */}
                   <div className="flex items-center gap-1.5 flex-wrap mb-2">
@@ -416,6 +536,14 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                       <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${st.badgeCls}`}>{st.badgeLabel}</span>
+                        {isGhostDone && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md border font-medium bg-yellow-50 border-yellow-300 text-yellow-700">⚠ 변경 없음</span>
+                        )}
+                        {task.status === 'rejected' && task.rejection_note && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md border bg-zinc-50 border-zinc-200 text-zinc-500 truncate max-w-[180px]" title={task.rejection_note}>
+                            💬 {task.rejection_note.slice(0, 30)}{task.rejection_note.length > 30 ? '…' : ''}
+                          </span>
+                        )}
                         {diffCfg && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${diffCfg.cls}`}>{diffCfg.label}</span>
                         )}
@@ -498,20 +626,20 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   </div>
                 )}
 
-                {/* Approve/Reject — 우측 정렬, 컴팩트 */}
+                {/* Approve/Reject — 우측 정렬, 버튼 크기 확대 */}
                 {isWaiting && (
                   <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-amber-100 bg-amber-50/40">
                     <button
                       onClick={() => handleAction(task.id, 'rejected')}
                       disabled={isLoading}
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
                     >
                       ✕ 반려
                     </button>
                     <button
                       onClick={() => handleAction(task.id, 'approved')}
                       disabled={isLoading}
-                      className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
+                      className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
                     >
                       {isLoading ? (
                         <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
@@ -519,6 +647,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     </button>
                   </div>
                 )}
+                </div>{/* end flex wrapper */}
               </div>
             );
           })}

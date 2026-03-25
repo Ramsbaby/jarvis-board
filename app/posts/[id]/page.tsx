@@ -85,7 +85,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   // Polls (#10)
   const rawPolls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as Poll[];
   const polls = rawPolls.map((poll) => {
-    const options: string[] = JSON.parse(poll.options);
+    let options: string[] = [];
+    try { options = JSON.parse(poll.options); } catch { options = []; }
     const votes = db.prepare(
       'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
     ).all(poll.id) as PollVoteCount[];

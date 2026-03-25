@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { getRequestAuth } from '@/lib/guest-guard';
-import type { DevTask } from '@/lib/types';
+import type { DevTask, BoardSetting } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   const agentKey = req.headers.get('x-agent-key');
@@ -43,9 +43,28 @@ export async function POST(req: NextRequest) {
   if (!id || !title) return NextResponse.json({ error: 'id and title required' }, { status: 400 });
 
   const validStatuses = ['awaiting_approval', 'approved', 'in-progress', 'done', 'rejected'];
-  const insertStatus = validStatuses.includes(status) ? status : 'awaiting_approval';
+  let insertStatus = validStatuses.includes(status) ? status : 'awaiting_approval';
 
   const db = getDb();
+
+  // 자동 승인: 이사회 토론 태스크이고 auto_approve_board_tasks = '1'이면 바로 approved
+  const now = new Date().toISOString();
+  let isAutoApproved = false;
+  if (insertStatus === 'awaiting_approval' && source && source.startsWith('board:')) {
+    try {
+      const autoApproveSetting = (db.prepare(
+        "SELECT value FROM board_settings WHERE key = 'auto_approve_board_tasks'"
+      ).get() as BoardSetting | undefined)?.value;
+      if (autoApproveSetting === '1') {
+        insertStatus = 'approved';
+        isAutoApproved = true;
+      }
+    } catch {
+      // DB 오류 시 안전하게 awaiting_approval 유지 (자동승인 skip)
+    }
+  }
+  // approved 상태로 삽입될 때는 항상 approved_at 기록 (자동승인이든 에이전트 직접 설정이든)
+  const approvedAtValue = insertStatus === 'approved' ? now : null;
 
   // 중복 검사: 같은 source(board:postId)로 이미 태스크가 5개 이상이면 차단
   if (source && source.startsWith('board:')) {
@@ -63,14 +82,25 @@ export async function POST(req: NextRequest) {
   // INSERT OR IGNORE: duplicate id는 기존 태스크(진행 중 상태/로그 포함) 보존
   const dependsOnStr = typeof depends_on === 'string' ? depends_on : JSON.stringify(depends_on || []);
   const info = db.prepare(
-    `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, post_title, group_id, depends_on)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, title, detail, priority, source, assignee, insertStatus, post_title, group_id || null, dependsOnStr);
+    `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, approved_at, post_title, group_id, depends_on)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, title, detail, priority, source, assignee, insertStatus, approvedAtValue, post_title, group_id || null, dependsOnStr);
 
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id);
   // 신규 삽입된 경우에만 SSE 브로드캐스트
   if (info.changes > 0) {
     broadcastEvent({ type: 'dev_task_updated', data: { id, status: insertStatus, task } });
+
+    // 자동 승인된 경우 Discord 알림 (board 설정으로 자동승인된 것만, 에이전트 직접 approved 제외)
+    if (isAutoApproved && process.env.DISCORD_WEBHOOK_CEO) {
+      fetch(process.env.DISCORD_WEBHOOK_CEO, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `🤖 **자동승인** (에이전트 자동승인 ON)\n**[${priority?.toUpperCase()}] ${title}**\n> ${(detail || '').slice(0, 150)}`,
+        }),
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json({ ok: true }, { status: info.changes > 0 ? 201 : 200 });

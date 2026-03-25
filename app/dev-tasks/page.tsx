@@ -1,10 +1,11 @@
 import { getDb } from '@/lib/db';
-import type { DevTask } from '@/lib/types';
+import type { DevTask, BoardSetting } from '@/lib/types';
 import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import DevTasksClient from './DevTasksClient';
+import AutoApproveToggle from '@/components/AutoApproveToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,9 @@ export default async function DevTasksPage() {
   if (!isOwner) notFound();
 
   const db = getDb();
+  const autoApprove =
+    (db.prepare("SELECT value FROM board_settings WHERE key = 'auto_approve_board_tasks'").get() as BoardSetting | undefined)?.value === '1';
+
   const tasks = db.prepare(
     `SELECT * FROM dev_tasks ORDER BY
       CASE status
@@ -38,7 +42,10 @@ export default async function DevTasksPage() {
             ← 홈
           </Link>
           <h1 className="text-sm font-semibold text-zinc-900">개발 태스크 관리</h1>
-          <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
+          <div className="ml-auto flex items-center gap-2">
+            <AutoApproveToggle initialAutoApprove={autoApprove} />
+            <div className="w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
+          </div>
         </div>
       </header>
       <DevTasksClient initialTasks={tasks} />

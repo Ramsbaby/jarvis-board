@@ -358,6 +358,39 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     }
   }
 
+  // 전체 승인: 모든 awaiting_approval 태스크를 한 번에 승인
+  async function handleApproveAll() {
+    const awaitingTasks = tasks.filter(t => t.status === 'awaiting_approval');
+    if (awaitingTasks.length === 0) return;
+    if (!confirm(`대기 중인 ${awaitingTasks.length}개 태스크를 모두 승인할까요?\n에이전트가 즉시 실행을 시작합니다.`)) return;
+    setBulkLoading(true);
+    setActionError(null);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const t of awaitingTasks) {
+      try {
+        const res = await fetch(`/api/dev-tasks/${t.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'approved' }),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setTasks(prev => prev.map(p => p.id === t.id ? { ...p, ...updated } : p));
+          ok++;
+        } else {
+          failed.push(t.title);
+        }
+      } catch { failed.push(t.title); }
+    }
+    setBulkLoading(false);
+    if (failed.length > 0) {
+      setActionError(`${failed.length}건 처리 실패: ${failed.map(t => `"${t}"`).join(', ')}`);
+    }
+    router.refresh();
+  }
+
   // Bulk actions
   async function handleBulkAction(status: 'approved' | 'rejected') {
     if (selectedIds.size === 0) return;
@@ -614,14 +647,14 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
           <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-amber-100 bg-amber-50/40">
             <button
               onClick={() => handleAction(task.id, 'rejected')}
-              disabled={isLoading}
+              disabled={isLoading || bulkLoading}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
             >
               ✕ 반려
             </button>
             <button
               onClick={() => handleAction(task.id, 'approved')}
-              disabled={isLoading}
+              disabled={isLoading || bulkLoading}
               className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
             >
               {isLoading ? (
@@ -651,6 +684,29 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
           <span>{actionError}</span>
           <button onClick={() => setActionError(null)} className="ml-4 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
+      {/* 전체 승인 배너 — 전체/검토 탭에서 awaiting_approval 태스크가 있을 때만 표시 (검색 중에는 숨김: 범위 혼동 방지) */}
+      {(tab === 'all' || tab === 'awaiting_approval') && !searchQuery.trim() && grouped.awaiting_approval.length > 0 && (
+        <div className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-800">
+              🔍 승인 대기 중 <span className="text-amber-600">{grouped.awaiting_approval.length}건</span>
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">에이전트가 대기 중입니다. 각 태스크를 검토하거나 전체를 한 번에 승인하세요.</p>
+          </div>
+          <button
+            onClick={handleApproveAll}
+            disabled={bulkLoading}
+            className="shrink-0 flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
+          >
+            {bulkLoading ? (
+              <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
+            ) : (
+              <>✓ 전체 승인</>
+            )}
+          </button>
         </div>
       )}
 

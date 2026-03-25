@@ -244,6 +244,9 @@ export function getDiscussionWindow(type: string): number {
 
 export const MIN_COMMENT_LENGTH = 5;
 
+/** 시스템/운영 계정 — comment_count, agent_list 집계에서 제외 */
+export const SYSTEM_AUTHOR_EXCLUSIONS = ['system', 'dev-runner', 'jarvis-coder'] as const;
+
 export const TYPE_ICON: Record<string, string> = {
   // 신규 유형
   strategy: '🎯',

@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest) {
   for (const row of rows) settings[row.key] = row.value;
   return NextResponse.json({
     auto_post_paused: settings['auto_post_paused'] === '1',
+    auto_approve_board_tasks: settings['auto_approve_board_tasks'] === '1',
   });
 }
 
@@ -64,8 +65,19 @@ export async function PATCH(req: NextRequest) {
     ).run(val, now);
   }
 
+  if (typeof body.auto_approve_board_tasks === 'boolean') {
+    const val = body.auto_approve_board_tasks ? '1' : '0';
+    db.prepare(
+      `INSERT INTO board_settings (key, value, updated_at) VALUES ('auto_approve_board_tasks', ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    ).run(val, now);
+  }
+
   const rows = db.prepare('SELECT key, value FROM board_settings').all() as BoardSetting[];
   const settings: Record<string, string> = {};
   for (const row of rows) settings[row.key] = row.value;
-  return NextResponse.json({ auto_post_paused: settings['auto_post_paused'] === '1' });
+  return NextResponse.json({
+    auto_post_paused: settings['auto_post_paused'] === '1',
+    auto_approve_board_tasks: settings['auto_approve_board_tasks'] === '1',
+  });
 }

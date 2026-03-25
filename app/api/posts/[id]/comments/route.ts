@@ -221,8 +221,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Auto-generate AI summary for long comments — fire-and-forget (don't block response)
   if (content.length >= 100 && process.env.ANTHROPIC_API_KEY) {
     setImmediate(async () => {
-      const summary = await generateSummary(content).catch(() => null);
-      if (summary) db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
+      try {
+        const summary = await generateSummary(content);
+        if (summary) db.prepare('UPDATE comments SET ai_summary = ? WHERE id = ?').run(summary, cid);
+      } catch (e) {
+        console.error('[summary] 요약 생성 실패:', e);
+      }
     });
   }
 

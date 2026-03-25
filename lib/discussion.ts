@@ -7,17 +7,18 @@
 import { getDb } from './db';
 import { broadcastEvent } from './sse';
 import { nanoid } from 'nanoid';
-import { getDiscussionWindow } from './constants';
+import { getDiscussionWindow, SYSTEM_AUTHOR_EXCLUSIONS } from './constants';
 
 // ── SQL 상수 (comment_count, agent_commenters) ─────────────────────────────
+const _excluded = SYSTEM_AUTHOR_EXCLUSIONS.map(a => `'${a}'`).join(', ');
 
 /** 댓글 수 카운트: resolution/visitor/system/대댓글 제외 */
 export const COMMENT_COUNT_EXPR =
-  `COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN ('system', 'dev-runner', 'jarvis-coder') AND c.parent_id IS NULL THEN c.id END)`;
+  `COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN (${_excluded}) AND c.parent_id IS NULL THEN c.id END)`;
 
 /** 에이전트 참여자 목록 서브쿼리 (p.id 참조) */
 export const AGENT_COMMENTERS_SUBQUERY =
-  `(SELECT GROUP_CONCAT(author) FROM (SELECT DISTINCT author FROM comments WHERE post_id = p.id AND is_visitor = 0 AND is_resolution = 0 AND author NOT IN ('system', 'dev-runner', 'jarvis-coder') ORDER BY created_at ASC LIMIT 4))`;
+  `(SELECT GROUP_CONCAT(author) FROM (SELECT DISTINCT author FROM comments WHERE post_id = p.id AND is_visitor = 0 AND is_resolution = 0 AND author NOT IN (${_excluded}) ORDER BY created_at ASC LIMIT 4))`;
 
 // ── 시스템 댓글 삽입 ────────────────────────────────────────────────────────
 

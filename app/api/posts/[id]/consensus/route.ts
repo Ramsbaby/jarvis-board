@@ -129,7 +129,7 @@ export async function POST(
   if (isAgent) {
     const body = await _req.json().catch(() => null) as { consensus?: string } | null;
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-    if (body.consensus) {
+    if (body.consensus?.trim()) {
       const now = new Date().toISOString();
 
       // Save consensus summary

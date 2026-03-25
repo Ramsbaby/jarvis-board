@@ -130,7 +130,7 @@ export async function PATCH(
       db.prepare('UPDATE dev_tasks SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?').run(newStatus, _now, taskId);
     } else if (newStatus === 'done') {
       const t = db.prepare('SELECT execution_log FROM dev_tasks WHERE id = ?').get(taskId) as Pick<DevTask, 'execution_log'> | undefined;
-      const logs: LogEntry[] = JSON.parse(t?.execution_log || '[]') as LogEntry[];
+      const logs: LogEntry[] = (() => { try { return JSON.parse(t?.execution_log || '[]') as LogEntry[]; } catch { return []; } })();
       if (log_entry) logs.push({ time: _now, message: log_entry });
 
       db.prepare(`UPDATE dev_tasks SET

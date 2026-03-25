@@ -47,7 +47,8 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
       })
       .catch(() => {});
     return stopPolling;
-  }, [postId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId, autoTrigger]);
 
   const fetchConsensus = async () => {
     setLoading(true);

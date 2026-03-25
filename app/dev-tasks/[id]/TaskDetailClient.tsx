@@ -196,35 +196,38 @@ function renderTitle(title: string): React.ReactNode {
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function TimelineStep({
-  icon, label, sublabel, time, elapsedLabel, done, active, pulse, rejected,
+  icon, label, sublabel, time, elapsedLabel, done, active, pulse, rejected, failed,
 }: {
   icon: string; label: string; sublabel?: string; time?: string;
   elapsedLabel?: string | null; done: boolean; active: boolean;
-  pulse?: boolean; rejected?: boolean;
+  pulse?: boolean; rejected?: boolean; failed?: boolean;
 }) {
   return (
     <div className="flex items-start gap-4">
       <div className="flex flex-col items-center shrink-0 relative z-10">
         <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+          failed   ? 'bg-red-100 border-red-300 text-red-400' :
           rejected ? 'bg-zinc-100 border-zinc-200 text-zinc-300' :
           done     ? 'bg-emerald-500 border-emerald-500 text-white' :
           active   ? 'bg-indigo-500 border-indigo-500 text-white' :
                      'bg-white border-zinc-200 text-zinc-300'
         } ${pulse && active ? 'animate-pulse' : ''}`}>
-          {done ? '✓' : active ? icon : '·'}
+          {done ? '✓' : failed ? '✕' : active ? icon : '·'}
         </div>
       </div>
       <div className="pb-6 min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className={`text-sm font-semibold leading-snug ${
-            rejected ? 'text-zinc-400' : done || active ? 'text-zinc-900' : 'text-zinc-400'
-          }`}>{label}</p>
-          {elapsedLabel && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-medium">{elapsedLabel}</span>
-          )}
-        </div>
+        <p className={`text-sm font-semibold leading-snug ${
+          failed   ? 'text-red-500' :
+          rejected ? 'text-zinc-400' :
+          done || active ? 'text-zinc-900' : 'text-zinc-400'
+        }`}>{label}</p>
         {sublabel && (
-          <p className={`text-[11px] mt-0.5 ${done || active ? 'text-zinc-500' : 'text-zinc-300'}`}>{sublabel}</p>
+          <p className={`text-[11px] mt-0.5 ${
+            failed ? 'text-red-400' : done || active ? 'text-zinc-500' : 'text-zinc-300'
+          }`}>{sublabel}</p>
+        )}
+        {elapsedLabel && (
+          <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-medium">{elapsedLabel}</span>
         )}
         {time && (
           <p className="text-[11px] text-zinc-400 mt-1 tabular-nums">{fmt(time)} · {timeAgo(time)}</p>
@@ -739,7 +742,7 @@ export default function TaskDetailClient({
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 transition-colors shrink-0"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -747,7 +750,9 @@ export default function TaskDetailClient({
             뒤로
           </button>
 
-          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+          <p className="flex-1 min-w-0 text-sm font-semibold text-zinc-700 truncate">{task.title}</p>
+
+          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end shrink-0">
             {/* SSE dot */}
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
@@ -1464,7 +1469,7 @@ export default function TaskDetailClient({
                   >
                     {actionLoading === 'retry' ? (
                       <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
-                    ) : '🔄 재시도 (미제출로 초기화)'}
+                    ) : '🔄 재시도 (검토 대기로 초기화)'}
                   </button>
                 </div>
               )}
@@ -1530,7 +1535,7 @@ export default function TaskDetailClient({
                 ? '작업 중 오류 발생 — 재시도 가능'
                 : '승인 후 Jarvis가 자동으로 코드를 수정합니다'}
               time={task.started_at ?? undefined}
-              done={isDone} active={isLive} pulse={isLive} rejected={isFailed || isRejected}
+              done={isDone} active={isLive} pulse={isLive} failed={isFailed} rejected={isRejected}
             />
 
             {/* Step 4: 완료 */}
@@ -1546,7 +1551,7 @@ export default function TaskDetailClient({
                 : '코드 작업 완료 시 자동으로 기록됩니다'}
               time={task.completed_at ?? undefined}
               elapsedLabel={workTime ? `작업 소요 ${workTime}` : null}
-              done={isDone} active={false} rejected={isRejected || isFailed}
+              done={isDone} active={false} failed={isFailed} rejected={isRejected}
             />
           </div>
         </div>
@@ -1627,7 +1632,7 @@ export default function TaskDetailClient({
               ) : (
                 (logExpanded ? logs : logs.slice(-8)).map((entry, i) => {
                   // 메시지에 박힌 중복 시각 제거 — UI 왼쪽 타임스탬프로 이미 표시됨
-                  const msg = entry.message.replace(/\s*\(\d{2}:\d{2}:\d{2}\)\s*$/, '').trim();
+                  const msg = entry.message.replace(/\s*\([^)]*\d{2}:\d{2}:\d{2}[^)]*\)\s*$/, '').trim();
                   const isErr      = /error|fail|failed/i.test(msg);
                   const isWarn     = /warn|warning/i.test(msg);
                   const isStart    = /^⚙️/.test(msg);

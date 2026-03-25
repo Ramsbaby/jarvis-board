@@ -495,19 +495,17 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   }
 
   // 그룹 전체 삭제 (deletable 상태만 — awaiting_approval | rejected | failed)
+  const GROUP_DELETABLE = ['awaiting_approval', 'rejected', 'failed'];
+
   async function handleGroupDeleteAll(group: TaskGroup) {
-    const DELETABLE = ['awaiting_approval', 'rejected', 'failed'];
-    const deletableCount = [
-      ...group.tasks.filter(t => DELETABLE.includes(t.status)),
-      ...(group.parentTask && DELETABLE.includes(group.parentTask.status) ? [group.parentTask] : []),
-    ].length;
-    const total = group.tasks.length + (group.parentTask ? 1 : 0);
-    const skippable = total - deletableCount;
+    const allInGroup = [...group.tasks, ...(group.parentTask ? [group.parentTask] : [])];
+    const deletableCount = allInGroup.filter(t => GROUP_DELETABLE.includes(t.status)).length;
+    const skippable = allInGroup.length - deletableCount;
 
     const msg = skippable > 0
       ? `그룹 내 삭제 가능한 태스크 ${deletableCount}개를 삭제합니다.\n(진행 중/완료 ${skippable}개는 건너뜁니다)\n\n계속할까요?`
       : `그룹 태스크 ${deletableCount}개를 전체 삭제할까요?`;
-    if (deletableCount === 0 || !confirm(msg)) return;
+    if (!confirm(msg)) return;
 
     setBulkLoading(true);
     setActionError(null);
@@ -518,7 +516,10 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setTasks(prev => prev.filter(t => t.group_id !== group.groupId));
+        // API가 실제 삭제된 id만 반환 — 정확한 id 기준 제거 (partial 삭제 시 살아있는 태스크 보존)
+        const deletedIds: string[] = data.deletedIds ?? [];
+        const deletedSet = new Set(deletedIds);
+        setTasks(prev => prev.filter(t => !deletedSet.has(t.id)));
       } else {
         setActionError(data.error ?? `그룹 삭제 실패 (${res.status})`);
       }
@@ -1001,7 +1002,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                       )}
                       {/* 그룹 전체 삭제 버튼 — deletable 상태 태스크가 있을 때만 표시 */}
                       {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
-                        ['awaiting_approval', 'rejected', 'failed'].includes(t.status)
+                        GROUP_DELETABLE.includes(t.status)
                       ) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}

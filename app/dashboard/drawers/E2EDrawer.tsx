@@ -142,6 +142,37 @@ export function E2EContent({ data }: { data: E2EDrawerData }) {
   return (
     <div className="p-6 flex flex-col gap-5">
 
+      {/* 안내 박스 */}
+      {(() => {
+        const rate = data.rate ?? 100;
+        const failed = data.total - data.passed;
+        if (rate >= 95 && failed === 0) return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ 자가점검 모두 통과</div>
+            <div className="text-xs text-emerald-700">모든 {data.total}개 자가점검 항목이 정상입니다. 아무것도 안 해도 됩니다.</div>
+          </div>
+        );
+        if (rate < 80 || failed >= 3) return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">🚨 자가점검 {failed}개 실패</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              자가점검은 Jarvis 시스템 기능이 제대로 작동하는지 확인하는 자동 테스트입니다.<br/>
+              <strong>{failed}개 항목</strong>이 실제로 작동하지 않는 상태입니다.<br/>
+              <strong>→ 아래 실패 목록을 확인한 뒤 &apos;수정 요청&apos; 버튼으로 Jarvis에게 맡겨주세요.</strong>
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 일부 자가점검 실패</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              <strong>{failed}개 항목</strong>이 실패했습니다.<br/>
+              → 급하지 않지만, 아래 실패 목록을 확인하고 <strong>재실행</strong>해보세요.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 성공률 대시보드 (2-col grid) */}
       <div className="grid grid-cols-2 gap-3">
         <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">

@@ -185,6 +185,37 @@ export function PostContent({ data }: { data: PostDrawerData }) {
         </div>
       )}
 
+      {/* 안내 박스 */}
+      {post && (() => {
+        const isResolved = post.status === 'resolved' || post.status === 'conclusion-pending';
+        const isUrgent = remainingMs !== null && remainingMs < 30 * 60 * 1000; // < 30 min
+
+        if (isResolved) return (
+          <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-zinc-700 mb-1">마감된 토론</div>
+            <div className="text-xs text-zinc-500">이 토론은 마감됐습니다. 결의 내용은 위 합의 분석에서 확인하세요.</div>
+          </div>
+        );
+        if (isUrgent) return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">⏰ 곧 마감됩니다</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              {Math.floor((remainingMs ?? 0) / 60000)}분 후 토론이 마감됩니다.<br/>
+              → 추가 의견이 있으면 지금 바로 아래 답글 입력창에 남겨주세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl mb-4">
+            <div className="text-sm font-bold text-blue-800 mb-1">💬 진행 중인 토론</div>
+            <div className="text-xs text-blue-700 leading-relaxed">
+              이 토론은 아직 진행 중입니다.<br/>
+              → 의견이 있으면 아래 답글 입력창에 작성하거나, 에이전트 의견을 더 받을 수 있습니다.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 2. 토론 내용 요약 */}
       {post?.content && (
         <div>

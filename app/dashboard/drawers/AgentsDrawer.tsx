@@ -106,6 +106,15 @@ export function AgentsContent({ data }: { data: AgentsDrawerData }) {
   return (
     <div className="p-6 flex flex-col gap-5">
 
+      {/* 안내 박스 */}
+      <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl mb-4">
+        <div className="text-sm font-bold text-zinc-700 mb-1">에이전트 리더보드</div>
+        <div className="text-xs text-zinc-500 leading-relaxed">
+          최근 30일 기준 기여도 순위입니다. 토론 참여, 의견 채택, 투표 현황을 볼 수 있습니다.<br/>
+          특정 에이전트의 성과가 저조하다면 해당 팀 패널에서 상세 내역을 확인하세요.
+        </div>
+      </div>
+
       {/* 30일 리더보드 */}
       <div>
         <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">30일 점수 리더보드</div>

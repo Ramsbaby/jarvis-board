@@ -150,6 +150,47 @@ export function BotContent({ data }: { data: BotDrawerData }) {
 
   return (
     <div className="p-6 flex flex-col gap-5">
+      {/* 안내 박스 */}
+      {(() => {
+        const restarts = stats.restartCount ?? 0;
+        const errors = stats.botErrors ?? 0;
+        const silence = stats.lastHealth?.silenceSec ?? 0;
+
+        if (silence > 900) return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">🚨 봇이 응답하지 않습니다</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              Discord 봇이 <strong>{Math.floor(silence / 60)}분째 침묵</strong> 중입니다. 메시지에 응답 안 하는 상태입니다.<br/>
+              <strong>→ 지금 바로 아래 &apos;봇 재시작&apos; 버튼을 눌러주세요.</strong>
+            </div>
+          </div>
+        );
+        if (restarts >= 3) return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 봇이 자주 재시작됩니다</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              오늘 <strong>{restarts}회</strong> 재시작됐습니다. 단순 재시작으로 해결이 안 될 수 있습니다.<br/>
+              → <strong>로그 분석 요청</strong> 버튼으로 Jarvis에게 근본 원인 파악을 맡겨주세요.
+            </div>
+          </div>
+        );
+        if (errors > 5) return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 봇 오류가 감지됐습니다</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              24시간 내 <strong>{errors}건의 오류</strong>가 발생했습니다.<br/>
+              → <strong>로그 분석 요청</strong>으로 원인을 파악하거나, 봇을 재시작해보세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ Discord 봇 정상 동작 중</div>
+            <div className="text-xs text-emerald-700">봇이 정상적으로 응답하고 있습니다. 아무것도 안 해도 됩니다.</div>
+          </div>
+        );
+      })()}
+
       {/* 1. 봇 상태 헤더 */}
       <div className="grid grid-cols-3 gap-3">
         {/* Claude 응답 수 */}

@@ -185,6 +185,53 @@ export function TaskContent({
         </div>
       </div>
 
+      {/* 안내 박스 */}
+      {(() => {
+        if (currentStatus === 'awaiting_approval') return (
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+            <div className="text-sm font-bold text-yellow-900 mb-1">⏳ 지금 결정이 필요합니다</div>
+            <div className="text-xs text-yellow-700 leading-relaxed">
+              Jarvis가 이 작업을 실행하려고 기다리고 있습니다.<br/>
+              <strong>아래 태스크 상세를 읽고 승인 또는 반려해주세요.</strong><br/>
+              <span className="text-[11px] opacity-70">승인하면 Jarvis Coder가 자동으로 코드를 수정합니다.</span>
+            </div>
+          </div>
+        );
+        if (currentStatus === 'in-progress' || currentStatus === 'approved') return (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="text-sm font-bold text-blue-800 mb-1">⚙️ Jarvis가 지금 처리 중입니다</div>
+            <div className="text-xs text-blue-700 leading-relaxed">
+              코드를 분석하고 수정하는 중입니다. 아래 실행 로그에서 진행 상황을 볼 수 있습니다.<br/>
+              <span className="text-[11px] opacity-70">완료되면 상태가 자동으로 바뀝니다.</span>
+            </div>
+          </div>
+        );
+        if (currentStatus === 'done') return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ 작업 완료</div>
+            <div className="text-xs text-emerald-700 leading-relaxed">
+              Jarvis가 코드 수정을 완료했습니다. 아래에서 변경된 파일과 결과를 확인하세요.
+            </div>
+          </div>
+        );
+        if (currentStatus === 'failed') return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl">
+            <div className="text-sm font-bold text-rose-900 mb-1">⚠️ 작업이 실패했습니다</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              코드 작업 중 오류가 발생했습니다. 아래 실행 로그에서 원인을 확인하세요.<br/>
+              <strong>→ 아래로 스크롤해서 &apos;수정 후 재요청&apos; 버튼을 이용해주세요.</strong>
+            </div>
+          </div>
+        );
+        if (currentStatus === 'rejected') return (
+          <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl">
+            <div className="text-sm font-bold text-zinc-700 mb-1">반려된 작업입니다</div>
+            <div className="text-xs text-zinc-500">이 작업은 반려 처리됐습니다. 내용을 수정해 다시 요청할 수 있습니다.</div>
+          </div>
+        );
+        return null;
+      })()}
+
       {/* 2. 태스크 상세 (lazy-loaded) */}
       {detailLoading && (
         <div className="flex items-center gap-3 text-zinc-400 text-sm">

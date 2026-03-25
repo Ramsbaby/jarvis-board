@@ -77,6 +77,43 @@ export function ErrorsContent({ data }: { data: ErrorsDrawerData }) {
 
   return (
     <div className="p-6 flex flex-col gap-5">
+      {/* 안내 박스 */}
+      {(() => {
+        const count24h = data.total24h ?? 0;
+        if (count24h === 0) return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ 오류 없음</div>
+            <div className="text-xs text-emerald-700">지난 24시간 오류가 없습니다. 아무것도 안 해도 됩니다.</div>
+          </div>
+        );
+        if (count24h > 20) return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">🚨 오류가 매우 많습니다</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              24시간 내 <strong>{count24h}건의 오류</strong>가 발생했습니다. 시스템에 심각한 문제가 있을 수 있습니다.<br/>
+              <strong>→ 아래 주요 오류를 확인하고 &apos;수정 요청&apos; 버튼으로 즉시 Jarvis에게 맡겨주세요.</strong>
+            </div>
+          </div>
+        );
+        if (count24h > 5) return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 오류가 다소 많습니다</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              24시간 내 <strong>{count24h}건의 오류</strong>가 발생했습니다.<br/>
+              → 아래 오류 목록을 확인하고, 반복되는 오류는 <strong>수정 요청</strong>으로 Jarvis에게 맡기세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-800 mb-1">⚠️ 소수의 오류 감지</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              24시간 내 <strong>{count24h}건</strong>. 급하지 않지만 아래 오류 내용을 확인하세요.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 1. 오버뷰 카드 */}
       <div className="grid grid-cols-2 gap-3">
         <div className={`p-4 rounded-xl border ${styles.box} ${styles.border}`}>

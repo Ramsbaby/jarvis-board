@@ -175,6 +175,38 @@ function CronContent({ data }: { data: { task: string; status: string; failCount
 
   return (
     <div className="p-6 flex flex-col h-full">
+      {/* 안내 박스 */}
+      {(() => {
+        if (data.circuitOpen) return (
+          <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-orange-900 mb-1">🔒 자동화 작업이 차단됐습니다</div>
+            <div className="text-xs text-orange-700 leading-relaxed">
+              이 작업이 <strong>연속 {data.failCount}회 실패</strong>해서 자동으로 멈췄습니다.<br/>
+              <strong className="mt-1.5 block">→ 지금 할 일:</strong>
+              1. 아래 로그로 실패 원인 확인<br/>
+              2. 원인이 보이면 <strong>수정 요청</strong> 버튼으로 Jarvis에게 맡기세요<br/>
+              3. 수정 완료 후 <strong>회로차단 해제</strong> 버튼 클릭
+            </div>
+          </div>
+        );
+        if (data.status === 'FAILED') return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">⚠️ 자동화 작업이 실패했습니다</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              최근 <strong>{data.failCount}회 연속 실패</strong>했습니다.<br/>
+              <strong className="mt-1.5 block">→ 지금 할 일:</strong>
+              아래 로그를 확인한 뒤 <strong>지금 실행</strong>으로 수동 재실행하거나,<br/>
+              원인이 코드 문제라면 <strong>수정 요청</strong>으로 Jarvis에게 맡기세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ 정상 동작 중</div>
+            <div className="text-xs text-emerald-700">이 자동화 작업은 정상 실행 중입니다. 아무것도 안 해도 됩니다.</div>
+          </div>
+        );
+      })()}
       {/* Status badge */}
       <div className="flex items-center gap-3 mb-4">
         <span className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -273,6 +305,46 @@ function ServiceContent({ data }: { data: { name: string; pid: string | null; ex
 
   return (
     <div className="p-6 flex flex-col h-full">
+      {/* 안내 박스 */}
+      {(() => {
+        if (!data.loaded) return (
+          <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-zinc-700 mb-1">❓ 서비스가 로드되지 않았습니다</div>
+            <div className="text-xs text-zinc-600">LaunchAgent가 등록되지 않은 상태입니다. <strong>재시작</strong> 버튼을 눌러보세요.</div>
+          </div>
+        );
+        if (data.pid) return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ 서비스 정상 실행 중</div>
+            <div className="text-xs text-emerald-700">프로세스가 정상 동작 중입니다. 아무것도 안 해도 됩니다.</div>
+          </div>
+        );
+        if (data.exitCode === 127) return (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">🚨 서비스가 실행되지 않습니다</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              실행 파일을 찾을 수 없어서 서비스가 꺼져 있습니다.<br/>
+              <strong className="mt-1.5 block">→ 지금 할 일:</strong>
+              <strong>재시작</strong> 버튼을 먼저 눌러보고, 그래도 안 되면 <strong>수정 요청</strong>으로 Jarvis에게 맡기세요.
+            </div>
+          </div>
+        );
+        if (data.exitCode === -15) return (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-blue-800 mb-1">🔄 재시작 진행 중</div>
+            <div className="text-xs text-blue-700">launchd가 서비스를 재시작하고 있습니다. 잠시 기다리면 자동으로 켜집니다.</div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 서비스가 종료됐습니다</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              서비스가 실행되지 않고 있습니다.<br/>
+              → <strong>재시작</strong> 버튼을 눌러 다시 시작하세요.
+            </div>
+          </div>
+        );
+      })()}
       <div className="mb-4 p-4 bg-zinc-50 rounded-xl">
         <div className="flex items-center justify-between">
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusColor}`}>{statusText}</span>
@@ -337,13 +409,40 @@ function RagContent({ data }: { data: { dbSize: string; inboxCount: number; chun
 
   return (
     <div className="p-6 flex flex-col h-full">
-      {/* What is RAG - explanation */}
-      <div className="mb-5 p-4 bg-blue-50 rounded-xl border border-blue-100">
+      <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
         <div className="text-sm font-semibold text-blue-900 mb-1">💡 RAG이 뭔가요?</div>
         <div className="text-xs text-blue-700 leading-relaxed">
-          자비스의 <strong>장기 기억 시스템</strong>입니다. 디스코드 메시지, 문서, 대화 내용 등을 벡터 DB에 저장해서, 질문할 때 관련 내용을 꺼내 답변에 활용합니다.
+          자비스의 <strong>장기 기억 시스템</strong>입니다. 디스코드 메시지, 문서 등을 저장해 질문할 때 관련 내용을 꺼내 씁니다.
         </div>
       </div>
+      {(() => {
+        if (riskLevel === 'critical') return (
+          <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl mb-4">
+            <div className="text-sm font-bold text-rose-900 mb-1">🚨 즉시 처리가 필요합니다!</div>
+            <div className="text-xs text-rose-700 leading-relaxed">
+              대기 건이 <strong>{data.inboxCount.toLocaleString()}건</strong>으로 위험 수준입니다.<br/>
+              이대로 두면 자비스가 일시 중단될 수 있습니다.<br/>
+              <strong>→ 지금 바로 아래 &apos;인박스 지금 처리&apos; 버튼을 눌러주세요.</strong>
+            </div>
+          </div>
+        );
+        if (riskLevel === 'warning') return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 대기 건이 쌓이고 있습니다</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              <strong>{data.inboxCount.toLocaleString()}건</strong>이 처리 대기 중입니다.<br/>
+              급하지 않으면 자동 처리를 기다려도 됩니다.<br/>
+              → 지금 처리하려면 <strong>&apos;인박스 지금 처리&apos;</strong> 버튼을 누르세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-emerald-800 mb-1">✓ 기억 시스템 정상</div>
+            <div className="text-xs text-emerald-700">인박스가 잘 처리되고 있습니다. 아무것도 안 해도 됩니다.</div>
+          </div>
+        );
+      })()}
 
       {/* Inbox explanation */}
       <div className={`mb-4 p-4 rounded-xl border ${
@@ -415,10 +514,17 @@ function CircuitBreakerContent({ data }: { data: { name: string; failCount: numb
 
   return (
     <div className="p-6 flex flex-col h-full">
-      <div className="mb-5 p-4 bg-orange-50 rounded-xl border border-orange-200">
-        <div className="text-sm font-semibold text-orange-900 mb-1">🔒 회로차단(Circuit Breaker)이란?</div>
+      <div className="mb-4 p-4 bg-orange-50 rounded-xl border border-orange-200">
+        <div className="text-sm font-bold text-orange-900 mb-1">🔒 자동화가 안전 차단됐습니다</div>
         <div className="text-xs text-orange-700 leading-relaxed">
-          크론 작업이 연속 3회 이상 실패하면 자동으로 차단됩니다. 차단 중에는 1시간 동안 실행이 중지되어 과부하를 방지합니다.
+          <strong>&apos;{data.name}&apos;</strong> 작업이 <strong>연속 {data.failCount}회 실패</strong>해서 자동으로 멈췄습니다.<br/>
+          과부하를 막기 위한 안전장치입니다. 쿨다운 <strong>{minutes}분</strong> 남았습니다.
+        </div>
+        <div className="mt-2 p-2 bg-orange-100 rounded-lg text-xs text-orange-800 font-medium">
+          → 지금 할 일:<br/>
+          1. 아래 로그로 실패 원인 파악<br/>
+          2. 코드 문제면 <strong>수정 요청</strong> 클릭 → Jarvis 자동 수정<br/>
+          3. 수정 완료 후 <strong>차단 해제 후 재시도</strong> 클릭
         </div>
       </div>
 
@@ -462,6 +568,30 @@ function CircuitBreakerContent({ data }: { data: { name: string; failCount: numb
 function HealthContent({ data }: { data: { overall: string; issues: Array<{ severity: string; message: string }>; bot: string; cronRate: number; disk: { used_pct: number; free_gb: number }; memory_mb?: number } }) {
   return (
     <div className="p-6">
+      {/* 전체 상태 안내 */}
+      {(() => {
+        const isGood = data.overall === 'green';
+        const isBad = data.overall === 'red';
+        return (
+          <div className={`p-4 rounded-xl border mb-4 ${
+            isGood ? 'bg-emerald-50 border-emerald-200' :
+            isBad ? 'bg-rose-50 border-rose-200' :
+            'bg-amber-50 border-amber-200'
+          }`}>
+            <div className={`text-sm font-bold mb-1 ${isGood ? 'text-emerald-800' : isBad ? 'text-rose-900' : 'text-amber-900'}`}>
+              {isGood ? '✓ 전체 시스템 정상' : isBad ? '🚨 시스템에 문제가 있습니다' : '⚠️ 일부 항목 주의 필요'}
+            </div>
+            <div className={`text-xs leading-relaxed ${isGood ? 'text-emerald-700' : isBad ? 'text-rose-700' : 'text-amber-700'}`}>
+              {isGood
+                ? '모든 서비스가 정상 동작 중입니다. 아무것도 안 해도 됩니다.'
+                : isBad
+                ? `${data.issues?.length ?? 0}건의 문제가 감지됐습니다. 아래 항목을 확인하고 각 패널에서 조치해주세요.`
+                : `${data.issues?.length ?? 0}건의 주의 사항이 있습니다. 급하지 않지만 확인을 권장합니다.`
+              }
+            </div>
+          </div>
+        );
+      })()}
       <div className="space-y-3">
         {/* Bot */}
         <div className={`p-4 rounded-xl border ${data.bot === 'healthy' ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
@@ -510,9 +640,14 @@ function HealthContent({ data }: { data: { overall: string; issues: Array<{ seve
             <div className="text-sm font-semibold text-zinc-700 mb-2">감지된 문제</div>
             <ul className="space-y-1.5">
               {data.issues.map((issue, i) => (
-                <li key={i} className={`text-xs flex items-start gap-2 ${issue.severity === 'critical' ? 'text-rose-700' : 'text-amber-700'}`}>
-                  <span className="mt-0.5 shrink-0">{issue.severity === 'critical' ? '🔴' : '🟡'}</span>
-                  {issue.message}
+                <li key={i} className={`text-xs flex flex-col gap-0.5 ${issue.severity === 'critical' ? 'text-rose-700' : 'text-amber-700'}`}>
+                  <span className="flex items-center gap-1.5">
+                    <span className="shrink-0">{issue.severity === 'critical' ? '🔴' : '🟡'}</span>
+                    <span className="font-medium">{issue.message}</span>
+                  </span>
+                  {issue.severity === 'critical' && (
+                    <span className="pl-5 text-[11px] opacity-80">→ 해당 패널을 열어 즉시 조치해주세요</span>
+                  )}
                 </li>
               ))}
             </ul>

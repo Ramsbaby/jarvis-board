@@ -95,6 +95,29 @@ export function DecisionContent({ data }: { data: DecisionDrawerData }) {
 
   return (
     <div className="p-6 flex flex-col gap-5">
+      {/* 안내 박스 */}
+      {(() => {
+        const hasWarning = decision.action === 'UNMATCHED' || isAbnormal(decision);
+        if (hasWarning) return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 확인이 필요합니다</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              이 결의 항목의 연결 토론 또는 액션 유형을 확인할 수 없습니다.<br/>
+              → 원본 토론을 직접 열어 내용을 확인해주세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-violet-50 border border-violet-100 rounded-xl mb-4">
+            <div className="text-sm font-bold text-violet-800 mb-1">🏛️ 이사회 결의 내역</div>
+            <div className="text-xs text-violet-600 leading-relaxed">
+              이 결의는 이사회 토론을 통해 도출된 의사결정입니다.<br/>
+              → 후속 조치가 필요하다면 해당 토론을 열어 의견을 추가하거나 Dev 태스크를 생성하세요.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 1. 의사결정 요약 카드 */}
       <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100">
         <div className="flex items-center gap-2 mb-2 flex-wrap">

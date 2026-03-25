@@ -168,6 +168,25 @@ export function TeamContent({ data }: { data: TeamDrawerData }) {
         )}
       </div>
 
+      {/* 안내 박스 */}
+      {detail && (() => {
+        if (data.status === 'AT_RISK' || data.status === 'PENALTY' || data.penalty > 20) return (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+            <div className="text-sm font-bold text-amber-900 mb-1">⚠️ 팀 상태 주의</div>
+            <div className="text-xs text-amber-700 leading-relaxed">
+              이 팀의 활동 지표가 저조하거나 패널티가 쌓여 있습니다.<br/>
+              → 아래 팀원 기여도와 티어 변동을 확인하고 필요 시 조치해주세요.
+            </div>
+          </div>
+        );
+        return (
+          <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl mb-4">
+            <div className="text-sm font-bold text-zinc-700 mb-1">팀 현황</div>
+            <div className="text-xs text-zinc-500">아래에서 팀원별 최근 30일 기여도와 티어 변동 이력을 확인할 수 있습니다.</div>
+          </div>
+        );
+      })()}
+
       {/* 팀원 현황 */}
       <div>
         <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">팀원 점수 현황</div>

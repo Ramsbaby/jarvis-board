@@ -100,18 +100,18 @@ interface DashboardData {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const CH_NAME: Record<string, string> = {
-  '1468386844621144065': 'jarvis-main',
-  '1469190688083280065': 'jarvis-dev',
-  '1469190686145384513': 'jarvis-ceo',
-  '1475786634510467186': 'workgroup-board',
-  '1471694919339868190': 'jarvis-career',
-  '1474650972310605886': 'news',
-  '1484008782853050483': 'jarvis-boram',
+  '1468386844621144065': 'jarvis',
+  '1469905074661757049': 'jarvis-dev',
+  '1471694919339868190': 'jarvis-blog',
+  '1469190688083280065': 'jarvis-system',
+  '1469190686145384513': 'jarvis-market',
   '1470559565258162312': 'jarvis-lite',
-  '1469905074661757049': 'jarvis-blog',
-  '1472965899790061680': 'quiet-ch2',
-  '1470011814803935274': 'quiet-ch1',
+  '1474650972310605886': 'jarvis-news-webhook',
+  '1475786634510467186': 'jarvis-ceo',
   '1469999923633328279': 'jarvis-family',
+  '1470011814803935274': 'jarvis-preply-tutor',
+  '1484008782853050483': 'workgroup-board',
+  '1472965899790061680': 'jarvis-boram',
 };
 
 const LA_SHORT: Record<string, string> = {

@@ -1,10 +1,19 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, Play, RotateCcw, Bot, AlertTriangle, CheckCircle2, Terminal } from 'lucide-react';
+import { BotContent } from './drawers/BotDrawer';
+import { DecisionContent } from './drawers/DecisionDrawer';
+import { ErrorsContent } from './drawers/ErrorsDrawer';
+import { TeamContent } from './drawers/TeamDrawer';
+import { AgentsContent } from './drawers/AgentsDrawer';
+import { E2EContent } from './drawers/E2EDrawer';
+import { TaskContent } from './drawers/TaskDrawer';
+import { PostContent } from './drawers/PostDrawer';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type DrawerType = 'cron' | 'service' | 'rag' | 'cb' | 'health';
+export type DrawerType = 'cron' | 'service' | 'rag' | 'cb' | 'health'
+  | 'bot' | 'decision' | 'team' | 'task' | 'post' | 'e2e-full' | 'agents' | 'errors-full';
 
 export interface DrawerSpec {
   type: DrawerType;
@@ -482,6 +491,14 @@ export function Drawer({ spec, onClose }: { spec: DrawerSpec | null; onClose: ()
           {spec?.type === 'rag' && <RagContent data={spec.data as Parameters<typeof RagContent>[0]['data']} />}
           {spec?.type === 'cb' && <CircuitBreakerContent data={spec.data as Parameters<typeof CircuitBreakerContent>[0]['data']} />}
           {spec?.type === 'health' && <HealthContent data={spec.data as Parameters<typeof HealthContent>[0]['data']} />}
+          {spec?.type === 'bot' && <BotContent data={spec.data as Parameters<typeof BotContent>[0]['data']} />}
+          {spec?.type === 'decision' && <DecisionContent data={spec.data as Parameters<typeof DecisionContent>[0]['data']} />}
+          {spec?.type === 'errors-full' && <ErrorsContent data={spec.data as Parameters<typeof ErrorsContent>[0]['data']} />}
+          {spec?.type === 'team' && <TeamContent data={spec.data as Parameters<typeof TeamContent>[0]['data']} />}
+          {spec?.type === 'agents' && <AgentsContent data={spec.data as Parameters<typeof AgentsContent>[0]['data']} />}
+          {spec?.type === 'e2e-full' && <E2EContent data={spec.data as Parameters<typeof E2EContent>[0]['data']} />}
+          {spec?.type === 'task' && <TaskContent data={spec.data as Parameters<typeof TaskContent>[0]['data']} />}
+          {spec?.type === 'post' && <PostContent data={spec.data as Parameters<typeof PostContent>[0]['data']} />}
         </div>
       </div>
     </>

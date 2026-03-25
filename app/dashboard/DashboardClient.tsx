@@ -306,7 +306,7 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
 
 // ── 섹션 2: 내 할 일 ──────────────────────────────────────────────────────────
 
-function ApprovalCard({ items, taskCount }: { items: DashboardData['attention']['awaitingApproval']; taskCount: number }) {
+function ApprovalCard({ items, taskCount, onOpen }: { items: DashboardData['attention']['awaitingApproval']; taskCount: number; onOpen?: (spec: DrawerSpec) => void }) {
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
@@ -321,14 +321,31 @@ function ApprovalCard({ items, taskCount }: { items: DashboardData['attention'][
       ) : (
         <div className="space-y-1.5">
           {items.slice(0, 5).map(task => (
-            <Link key={task.id} href={`/dev-tasks/${task.id}`} className="block group">
+            <div
+              key={task.id}
+              className="block group cursor-pointer"
+              onClick={() => onOpen?.({
+                type: 'task',
+                title: task.title,
+                subtitle: `우선순위: ${task.priority}`,
+                data: {
+                  id: task.id,
+                  title: task.title,
+                  priority: task.priority,
+                  status: 'awaiting_approval',
+                  detail: undefined,
+                  expected_impact: task.expected_impact,
+                  created_at: task.created_at,
+                },
+              })}
+            >
               <div className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
                 <span className={`mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0 ${PRIORITY_COLOR[task.priority] ?? PRIORITY_COLOR.low}`}>
                   {PRIORITY_LABEL[task.priority] ?? task.priority}
                 </span>
                 <span className="text-xs text-zinc-700 group-hover:text-indigo-600 transition-colors leading-tight line-clamp-2">{task.title}</span>
               </div>
-            </Link>
+            </div>
           ))}
           <Link href="/dev-tasks" className="block text-[11px] text-indigo-500 hover:text-indigo-700 mt-1 pl-1">
             전체 보기 ({taskCount}건) →
@@ -339,7 +356,7 @@ function ApprovalCard({ items, taskCount }: { items: DashboardData['attention'][
   );
 }
 
-function OwnerInputCard({ items }: { items: DashboardData['attention']['needsOwnerInput'] }) {
+function OwnerInputCard({ items, onOpen }: { items: DashboardData['attention']['needsOwnerInput']; onOpen?: (spec: DrawerSpec) => void }) {
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
@@ -354,7 +371,23 @@ function OwnerInputCard({ items }: { items: DashboardData['attention']['needsOwn
       ) : (
         <div className="space-y-1.5">
           {items.slice(0, 5).map(post => (
-            <Link key={post.id} href={`/posts/${post.id}`} className="block group">
+            <div
+              key={post.id}
+              className="block group cursor-pointer"
+              onClick={() => onOpen?.({
+                type: 'post',
+                title: post.title,
+                subtitle: `댓글 ${post.comment_count ?? 0}개`,
+                data: {
+                  id: post.id,
+                  title: post.title,
+                  type: post.type,
+                  status: 'open',
+                  created_at: post.created_at,
+                  comment_count: post.comment_count,
+                },
+              })}
+            >
               <div className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-zinc-700 group-hover:text-indigo-600 transition-colors leading-tight line-clamp-2">{post.title}</p>
@@ -363,7 +396,7 @@ function OwnerInputCard({ items }: { items: DashboardData['attention']['needsOwn
                   )}
                 </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}
@@ -371,7 +404,7 @@ function OwnerInputCard({ items }: { items: DashboardData['attention']['needsOwn
   );
 }
 
-function ClosingSoonCard({ items }: { items: DashboardData['attention']['closingSoon'] }) {
+function ClosingSoonCard({ items, onOpen }: { items: DashboardData['attention']['closingSoon']; onOpen?: (spec: DrawerSpec) => void }) {
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
@@ -386,7 +419,22 @@ function ClosingSoonCard({ items }: { items: DashboardData['attention']['closing
       ) : (
         <div className="space-y-1.5">
           {items.slice(0, 5).map(post => (
-            <Link key={post.id} href={`/posts/${post.id}`} className="block group">
+            <div
+              key={post.id}
+              className="block group cursor-pointer"
+              onClick={() => onOpen?.({
+                type: 'post',
+                title: post.title,
+                subtitle: `${post.remaining_minutes}분 남음`,
+                data: {
+                  id: post.id,
+                  title: post.title,
+                  type: post.type,
+                  status: 'open',
+                  remaining_minutes: post.remaining_minutes,
+                },
+              })}
+            >
               <div className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-zinc-700 group-hover:text-indigo-600 transition-colors line-clamp-1">{post.title}</p>
@@ -395,7 +443,7 @@ function ClosingSoonCard({ items }: { items: DashboardData['attention']['closing
                   {post.remaining_minutes}분
                 </span>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}
@@ -405,7 +453,7 @@ function ClosingSoonCard({ items }: { items: DashboardData['attention']['closing
 
 // ── 섹션 3: Jarvis 오늘 활동 ──────────────────────────────────────────────────
 
-function TodayActivityCard({ sm, today }: { sm?: DashboardData['sysMetrics']; today: DashboardData['todaySummary'] }) {
+function TodayActivityCard({ sm, today, onOpen }: { sm?: DashboardData['sysMetrics']; today: DashboardData['todaySummary']; onOpen?: (spec: DrawerSpec) => void }) {
   const ds = sm?.discord_stats;
   const cs = sm?.cron_stats;
 
@@ -434,9 +482,20 @@ function TodayActivityCard({ sm, today }: { sm?: DashboardData['sysMetrics']; to
       <div className="flex items-center gap-2 mb-3">
         <span>📈</span>
         <Label>오늘 Jarvis 활동</Label>
-        <span className="ml-auto text-[10px] text-zinc-400">
+        <span className="text-[10px] text-zinc-400">
           {new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
         </span>
+        <button
+          className="ml-auto text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors"
+          onClick={() => onOpen?.({
+            type: 'bot',
+            title: 'Discord 봇 활동 상세',
+            subtitle: '채널별 메시지 · 응답 시간 · 재시작 이력',
+            data: { discord_stats: sm?.discord_stats ?? null },
+          })}
+        >
+          상세 →
+        </button>
       </div>
 
       {/* Row 1: 봇 활동 */}
@@ -527,7 +586,7 @@ function TodayActivityCard({ sm, today }: { sm?: DashboardData['sysMetrics']; to
 
 // ── 섹션 4: 오늘 Jarvis 결정 (접기, 기본 열림) ────────────────────────────────
 
-function DecisionsSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function DecisionsSection({ sm, onOpen }: { sm?: DashboardData['sysMetrics']; onOpen?: (spec: DrawerSpec) => void }) {
   const [open, setOpen] = useState(true);
   const decisions = sm?.decisions_today ?? [];
 
@@ -553,7 +612,19 @@ function DecisionsSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
               {decisions.map((d, i) => {
                 const isUnmatched = d.action === 'UNMATCHED' || d.result === 'NEEDS_MANUAL_REVIEW';
                 return (
-                  <div key={i} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${isUnmatched ? 'bg-orange-50' : 'hover:bg-zinc-50'}`}>
+                  <div
+                    key={i}
+                    className={`flex items-start gap-2 rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${isUnmatched ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-zinc-50'}`}
+                    onClick={() => onOpen?.({
+                      type: 'decision',
+                      title: d.decision?.slice(0, 50) || '의사결정 상세',
+                      subtitle: d.team || '',
+                      data: {
+                        decision: d,
+                        allDecisions: decisions,
+                      },
+                    })}
+                  >
                     {isUnmatched && <span className="text-[10px] text-orange-500 font-bold mt-0.5 flex-shrink-0">⚠</span>}
                     {!isUnmatched && <span className="text-[10px] text-zinc-300 mt-0.5 flex-shrink-0">•</span>}
                     {d.team && (
@@ -580,7 +651,7 @@ function DecisionsSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
 
 // ── 섹션 5: 팀 현황 (접기, 기본 닫힘) ─────────────────────────────────────────
 
-function TeamOverviewSection({ data }: { data: DashboardData['teamOverview'] }) {
+function TeamOverviewSection({ data, onOpen }: { data: DashboardData['teamOverview']; onOpen?: (spec: DrawerSpec) => void }) {
   const [open, setOpen] = useState(false);
 
   const normalCount = data.teams.filter(t => t.status === 'NORMAL').length;
@@ -624,8 +695,25 @@ function TeamOverviewSection({ data }: { data: DashboardData['teamOverview'] }) 
                 : team.status === 'AT_RISK' ? 'bg-amber-50 text-amber-700 border-amber-200'
                 : 'bg-red-50 text-red-700 border-red-200';
               const statusLabel = team.status === 'NORMAL' ? '정상' : team.status === 'AT_RISK' ? '주의' : '패널티';
+              const statusSubtitle = team.status === 'NORMAL' ? '정상 운영' : team.status === 'AT_RISK' ? '위험 상태' : '제재 중';
               return (
-                <div key={team.name} className="bg-white border border-zinc-200 rounded-xl p-2.5 shadow-sm">
+                <div
+                  key={team.name}
+                  className="bg-white border border-zinc-200 rounded-xl p-2.5 shadow-sm cursor-pointer hover:bg-zinc-50 transition-colors"
+                  onClick={() => onOpen?.({
+                    type: 'team',
+                    title: TEAM_LABEL[team.name] ?? team.name,
+                    subtitle: statusSubtitle,
+                    data: {
+                      teamKey: team.name,
+                      teamLabel: TEAM_LABEL[team.name] ?? team.name,
+                      teamEmoji: '🏢',
+                      status: team.status,
+                      merit: team.merit,
+                      penalty: team.penalty,
+                    },
+                  })}
+                >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold text-zinc-800">{TEAM_LABEL[team.name] ?? team.name}</span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
@@ -708,7 +796,7 @@ function CronTaskTable({ sm, onRowClick }: { sm?: DashboardData['sysMetrics']; o
   );
 }
 
-function DiscordChannelCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function DiscordChannelCard({ sm, onOpen }: { sm?: DashboardData['sysMetrics']; onOpen?: (spec: DrawerSpec) => void }) {
   const channels = sm?.discord_stats?.channelActivity ?? [];
   const restarts = sm?.discord_stats?.restartCount ?? 0;
   const errs = sm?.discord_stats?.botErrors ?? 0;
@@ -722,8 +810,19 @@ function DiscordChannelCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
       <div className="flex items-center gap-2 mb-2">
         <span>💬</span>
         <Label>Discord 채널별 활동</Label>
-        {restarts > 0 && <span className="ml-auto text-[10px] text-amber-600">재시작 {restarts}회</span>}
+        {restarts > 0 && <span className="text-[10px] text-amber-600">재시작 {restarts}회</span>}
         {errs > 0 && <span className="text-[10px] text-red-500">에러 {errs}건</span>}
+        <button
+          className="ml-auto text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors"
+          onClick={() => onOpen?.({
+            type: 'bot',
+            title: 'Discord 채널 활동',
+            subtitle: '채널별 인간/봇 메시지 현황',
+            data: { discord_stats: sm?.discord_stats ?? null },
+          })}
+        >
+          상세 →
+        </button>
       </div>
       <div className="space-y-1.5">
         {channels.slice(0, 6).map(ch => {
@@ -803,7 +902,7 @@ function RagCard({ sm, onOpen }: { sm?: DashboardData['sysMetrics']; onOpen?: (s
   );
 }
 
-function DevQueueCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function DevQueueCard({ sm, onOpen }: { sm?: DashboardData['sysMetrics']; onOpen?: (spec: DrawerSpec) => void }) {
   const queue = (sm?.dev_queue ?? []).filter(i => i.status === 'pending');
   return (
     <Card>
@@ -817,7 +916,21 @@ function DevQueueCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
       ) : (
         <div className="space-y-1">
           {queue.slice(0, 6).map((item, idx) => (
-            <div key={item.id ?? idx} className="flex items-center gap-2">
+            <div
+              key={item.id ?? idx}
+              className="flex items-center gap-2 cursor-pointer hover:bg-zinc-50 rounded px-1 -mx-1 py-0.5 transition-colors"
+              onClick={() => onOpen?.({
+                type: 'task',
+                title: item.name,
+                subtitle: `상태: ${item.status}`,
+                data: {
+                  id: item.id || item.name,
+                  title: item.name,
+                  priority: item.priority != null ? (item.priority <= 1 ? 'urgent' : item.priority <= 2 ? 'high' : 'medium') : 'medium',
+                  status: item.status,
+                },
+              })}
+            >
               <span className={`text-[10px] font-bold w-5 flex-shrink-0 ${(item.priority ?? 0) >= 8 ? 'text-red-500' : (item.priority ?? 0) >= 5 ? 'text-amber-500' : 'text-zinc-400'}`}>
                 P{item.priority ?? 0}
               </span>
@@ -931,7 +1044,13 @@ function LaunchAgentsDetail({ sm, onRowClick }: { sm?: DashboardData['sysMetrics
   );
 }
 
-function EngineeringSection({ sm, onOpen, nowSec }: { sm?: DashboardData['sysMetrics']; onOpen?: (spec: DrawerSpec) => void; nowSec: number }) {
+function EngineeringSection({ sm, onOpen, nowSec, e2e, errors }: {
+  sm?: DashboardData['sysMetrics'];
+  onOpen?: (spec: DrawerSpec) => void;
+  nowSec: number;
+  e2e?: DashboardData['e2e'];
+  errors?: DashboardData['errors'];
+}) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -948,10 +1067,71 @@ function EngineeringSection({ sm, onOpen, nowSec }: { sm?: DashboardData['sysMet
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <CronTaskTable sm={sm} onRowClick={onOpen} />
           <LaunchAgentsDetail sm={sm} onRowClick={onOpen} />
-          <DiscordChannelCard sm={sm} />
+          <DiscordChannelCard sm={sm} onOpen={onOpen} />
           <RagCard sm={sm} onOpen={onOpen} />
-          <DevQueueCard sm={sm} />
+          <DevQueueCard sm={sm} onOpen={onOpen} />
           <CircuitBreakerCard sm={sm} onRowClick={onOpen} nowSec={nowSec} />
+          {e2e && (
+            <Card>
+              <div className="flex items-center gap-2 mb-2">
+                <span>🧪</span>
+                <Label>E2E 테스트</Label>
+                <span className={`ml-auto text-[10px] font-semibold ${e2e.rate >= 95 ? 'text-emerald-600' : e2e.rate >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                  {e2e.passed}/{e2e.total} ({e2e.rate}%)
+                </span>
+                <button
+                  className="text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors"
+                  onClick={() => onOpen?.({
+                    type: 'e2e-full',
+                    title: 'E2E 테스트 상세',
+                    subtitle: `${e2e.passed}/${e2e.total} 통과 · ${e2e.rate}%`,
+                    data: {
+                      passed: e2e.passed,
+                      total: e2e.total,
+                      rate: e2e.rate,
+                      lastRun: e2e.lastRun,
+                      failures: e2e.failures,
+                    },
+                  })}
+                >
+                  상세 →
+                </button>
+              </div>
+              <div className="w-full bg-zinc-100 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${e2e.rate >= 95 ? 'bg-emerald-500' : e2e.rate >= 80 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${e2e.rate}%` }}
+                />
+              </div>
+            </Card>
+          )}
+          {errors && (
+            <Card>
+              <div className="flex items-center gap-2 mb-2">
+                <span>🔴</span>
+                <Label>오류 현황</Label>
+                <span className={`ml-auto text-[10px] font-semibold ${errors.total24h >= 20 ? 'text-red-600' : errors.total24h >= 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  24h: {errors.total24h}건
+                </span>
+                <button
+                  className="text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors"
+                  onClick={() => onOpen?.({
+                    type: 'errors-full',
+                    title: '오류 현황 상세',
+                    subtitle: `24시간 ${errors.total24h}건 · 누적 ${errors.totalAll}건`,
+                    data: {
+                      total24h: errors.total24h,
+                      totalAll: errors.totalAll,
+                      topErrors: errors.topErrors,
+                    },
+                  })}
+                >
+                  상세 →
+                </button>
+              </div>
+              <div className="text-xs text-zinc-500">누적 {errors.totalAll}건</div>
+            </Card>
+          )}
         </div>
       )}
     </div>
@@ -1139,17 +1319,64 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
           </div>
         </section>
 
+        {/* 섹션 2: 내 할 일 */}
+        {(attention.awaitingApproval.length > 0 || attention.needsOwnerInput.length > 0 || attention.closingSoon.length > 0) && (
+          <section className="mb-4">
+            <SectionHeader>내 할 일</SectionHeader>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <ApprovalCard items={attention.awaitingApproval} taskCount={d.tasks.awaiting} onOpen={openDrawer} />
+              <OwnerInputCard items={attention.needsOwnerInput} onOpen={openDrawer} />
+              <ClosingSoonCard items={attention.closingSoon} onOpen={openDrawer} />
+            </div>
+          </section>
+        )}
+
         {/* 섹션 3: 오늘 활동 */}
-        <TodayActivityCard sm={sm} today={today} />
+        <TodayActivityCard sm={sm} today={today} onOpen={openDrawer} />
 
         {/* 섹션 4: 오늘 Jarvis 결정 */}
-        <DecisionsSection sm={sm} />
+        <DecisionsSection sm={sm} onOpen={openDrawer} />
 
         {/* 섹션 5: 팀 현황 */}
-        <TeamOverviewSection data={team} />
+        <TeamOverviewSection data={team} onOpen={openDrawer} />
+
+        {/* 섹션 5b: 에이전트 리더보드 */}
+        {d.agents.top5.length > 0 && (
+          <div className="mb-4">
+            <Card>
+              <div className="flex items-center gap-2 mb-2">
+                <span>🏆</span>
+                <Label>에이전트 TOP 5</Label>
+                <button
+                  className="ml-auto text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors"
+                  onClick={() => openDrawer({
+                    type: 'agents',
+                    title: '에이전트 리더보드',
+                    subtitle: '30일 점수 · 투표 분석 · 티어 변화',
+                    data: {
+                      top5: d.agents.top5,
+                      tierChanges: d.agents.tierChanges,
+                    },
+                  })}
+                >
+                  상세 →
+                </button>
+              </div>
+              <div className="space-y-1">
+                {d.agents.top5.slice(0, 5).map((agent, i) => (
+                  <div key={agent.agent_id} className="flex items-center gap-2">
+                    <span className="w-4 text-center text-[10px] font-bold text-zinc-400">{i + 1}</span>
+                    <span className="text-[11px] text-zinc-700 flex-1 truncate">{agent.agent_id}</span>
+                    <span className="text-[10px] text-zinc-500 tabular-nums">{agent.score.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* 섹션 6: 엔지니어링 상세 */}
-        <EngineeringSection sm={sm} onOpen={openDrawer} nowSec={nowSec} />
+        <EngineeringSection sm={sm} onOpen={openDrawer} nowSec={nowSec} e2e={d.e2e} errors={d.errors} />
 
       </main>
 

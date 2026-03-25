@@ -20,6 +20,29 @@ export async function GET(_req: NextRequest) {
   });
 }
 
+// Agent용 — board_metrics_url 등 내부 설정 저장
+export async function POST(req: NextRequest) {
+  const agentKey = req.headers.get('x-agent-key');
+  if (!agentKey || agentKey !== process.env.AGENT_API_KEY) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const body = await req.json().catch(() => null) as { key?: string; value?: string } | null;
+  if (!body?.key || typeof body.value !== 'string') {
+    return NextResponse.json({ error: 'key, value required' }, { status: 400 });
+  }
+  const ALLOWED_KEYS = ['board_metrics_url'];
+  if (!ALLOWED_KEYS.includes(body.key)) {
+    return NextResponse.json({ error: 'disallowed key' }, { status: 400 });
+  }
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO board_settings (key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+  ).run(body.key, body.value, now);
+  return NextResponse.json({ ok: true, key: body.key });
+}
+
 export async function PATCH(req: NextRequest) {
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE)?.value;

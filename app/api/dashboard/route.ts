@@ -146,10 +146,27 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  // ── 0. system_metrics (Mac Mini → board_settings, 5분마다 push) ──
-  const smRow = db.prepare("SELECT value FROM board_settings WHERE key = 'system_metrics'").get() as { value: string } | undefined;
+  // ── 0. sysMetrics — Mac Mini 실시간 pull 우선, 실패 시 캐시 fallback ──
   let sysMetrics: Record<string, unknown> | null = null;
-  if (smRow?.value) { try { sysMetrics = JSON.parse(smRow.value); } catch { /* ignore */ } }
+
+  // 1순위: Mac Mini 실시간 endpoint (dashboard-tunnel.sh가 URL 등록)
+  const metricsUrlRow = db.prepare("SELECT value FROM board_settings WHERE key = 'board_metrics_url'").get() as { value: string } | undefined;
+  if (metricsUrlRow?.value) {
+    try {
+      const agentKey = process.env.AGENT_API_KEY ?? '';
+      const res = await fetch(metricsUrlRow.value, {
+        headers: { 'x-agent-key': agentKey },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) sysMetrics = await res.json() as Record<string, unknown>;
+    } catch { /* Mac Mini 오프라인 or 재시작 중 — fallback */ }
+  }
+
+  // 2순위: 5분 캐시 (sync-system-metrics.sh가 push한 데이터)
+  if (!sysMetrics) {
+    const smRow = db.prepare("SELECT value FROM board_settings WHERE key = 'system_metrics'").get() as { value: string } | undefined;
+    if (smRow?.value) { try { sysMetrics = JSON.parse(smRow.value); } catch { /* ignore */ } }
+  }
 
   // ── 1. System health ──
   const health = readJsonFile<{

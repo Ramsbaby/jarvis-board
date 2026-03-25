@@ -64,11 +64,11 @@ function useAction() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ id, title: `🔧 ${title}`, detail, priority, source: 'dashboard:fix', assignee: 'jarvis-coder', status: 'awaiting_approval' }),
+        body: JSON.stringify({ id, title: `🔧 ${title}`, detail, priority, source: 'dashboard:fix', assignee: 'jarvis-coder', status: 'approved' }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || '태스크 생성 실패');
-      setResult({ ok: true, message: 'Dev 큐에 등록됨 → Dev 태스크에서 승인하면 Jarvis Coder가 처리합니다' });
+      setResult({ ok: true, message: 'Dev 큐에 등록됨 → Jarvis Coder가 곧 처리합니다' });
     } catch (e) {
       setResult({ ok: false, message: (e as Error).message });
     } finally {

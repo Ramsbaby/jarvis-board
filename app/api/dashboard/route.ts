@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
+import { getDiscussionWindow } from '@/lib/constants';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -223,6 +224,113 @@ export async function GET(req: NextRequest) {
   // ── 10. Errors ──
   const errors = parseErrors();
 
+  // ── 11. healthSummary — 기존 데이터에서 CEO용 상태 계산 ──
+  type HealthLevel = 'green' | 'yellow' | 'red';
+  const issues: Array<{ severity: 'warning' | 'critical'; message: string }> = [];
+
+  const botLevel: HealthLevel = health.discord_bot === 'healthy' ? 'green' : 'red';
+  if (botLevel === 'red') issues.push({ severity: 'critical', message: '봇이 응답하지 않습니다' });
+
+  const cronLevel: HealthLevel = cron.successRate >= 90 ? 'green' : cron.successRate >= 70 ? 'yellow' : 'red';
+  if (cronLevel !== 'green') {
+    const failMsg = cron.recentFailures.slice(0, 2).join(', ');
+    issues.push({ severity: cronLevel === 'red' ? 'critical' : 'warning', message: `자동화 작업 ${cron.todayFail}건 실패${failMsg ? `: ${failMsg}` : ''}` });
+  }
+
+  const e2eLevel: HealthLevel = e2e.rate >= 95 ? 'green' : e2e.rate >= 80 ? 'yellow' : 'red';
+  if (e2eLevel !== 'green') {
+    issues.push({ severity: e2eLevel === 'red' ? 'critical' : 'warning', message: `자가점검 ${e2e.total - e2e.passed}건 실패 (${e2e.rate}% 통과)` });
+  }
+
+  const errorLevel: HealthLevel = errors.total24h < 5 ? 'green' : errors.total24h < 20 ? 'yellow' : 'red';
+  if (errorLevel !== 'green') {
+    issues.push({ severity: errorLevel === 'red' ? 'critical' : 'warning', message: `24시간 내 오류 ${errors.total24h}건 발생` });
+  }
+
+  const levels = [botLevel, cronLevel, e2eLevel, errorLevel];
+  const overall: HealthLevel = levels.includes('red') ? 'red' : levels.includes('yellow') ? 'yellow' : 'green';
+  const healthSummary = { overall, botLevel, cronLevel, e2eLevel, errorLevel, issues };
+
+  // ── 12. attention — 내 할 일 ──
+  const awaitingApproval = db.prepare(`
+    SELECT id, title, priority, created_at, expected_impact
+    FROM dev_tasks WHERE status = 'awaiting_approval'
+    ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, created_at ASC
+    LIMIT 5
+  `).all() as Array<{ id: string; title: string; priority: string; created_at: string; expected_impact: string | null }>;
+
+  const needsOwnerInput = db.prepare(`
+    SELECT p.id, p.title, p.type, p.created_at,
+           (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count
+    FROM posts p
+    WHERE p.status IN ('open','in-progress')
+      AND NOT EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id AND c.author = 'owner')
+    ORDER BY p.created_at ASC LIMIT 5
+  `).all() as Array<{ id: string; title: string; type: string; created_at: string; comment_count: number }>;
+
+  // 마감 임박: 활성 토론 중 2시간 이내 마감
+  const activePosts = db.prepare(`
+    SELECT id, title, type, status, created_at, restarted_at, extra_ms
+    FROM posts WHERE status IN ('open','in-progress') AND paused_at IS NULL
+  `).all() as Array<{ id: string; title: string; type: string; status: string; created_at: string; restarted_at: string | null; extra_ms: number }>;
+
+  const now = Date.now();
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const closingSoon = activePosts
+    .map(p => {
+      const base = new Date((p.restarted_at ?? p.created_at) + 'Z').getTime();
+      const windowMs = getDiscussionWindow(p.type);
+      const expiresAt = base + windowMs + (p.extra_ms ?? 0);
+      const remaining = expiresAt - now;
+      return { ...p, remaining_ms: remaining, remaining_minutes: Math.ceil(remaining / 60000) };
+    })
+    .filter(p => p.remaining_ms > 0 && p.remaining_ms <= TWO_HOURS)
+    .sort((a, b) => a.remaining_ms - b.remaining_ms)
+    .slice(0, 5)
+    .map(({ id, title, type, remaining_minutes }) => ({ id, title, type, remaining_minutes }));
+
+  const attention = { awaitingApproval, needsOwnerInput, closingSoon };
+
+  // ── 13. todaySummary — 오늘 활동 ──
+  const today = new Date().toISOString().slice(0, 10);
+  const weekStart = new Date(now - 6 * 86400000).toISOString().slice(0, 10);
+  const prevWeekStart = new Date(now - 13 * 86400000).toISOString().slice(0, 10);
+  const prevWeekEnd = new Date(now - 7 * 86400000).toISOString().slice(0, 10);
+
+  const todayNewPosts = (db.prepare("SELECT COUNT(*) as n FROM posts WHERE created_at LIKE ?").get(`${today}%`) as { n: number })?.n ?? 0;
+  const todayResolved = (db.prepare("SELECT COUNT(*) as n FROM posts WHERE resolved_at LIKE ?").get(`${today}%`) as { n: number })?.n ?? 0;
+  const todayCompletedTasks = (db.prepare("SELECT COUNT(*) as n FROM dev_tasks WHERE completed_at LIKE ?").get(`${today}%`) as { n: number })?.n ?? 0;
+  const todayAiComments = (db.prepare("SELECT COUNT(*) as n FROM comments WHERE created_at LIKE ? AND is_visitor = 0 AND author != 'owner'").get(`${today}%`) as { n: number })?.n ?? 0;
+
+  const thisWeekActivity = ((db.prepare("SELECT COUNT(*) as n FROM posts WHERE created_at >= ?").get(weekStart) as { n: number })?.n ?? 0)
+    + ((db.prepare("SELECT COUNT(*) as n FROM comments WHERE created_at >= ?").get(weekStart) as { n: number })?.n ?? 0);
+  const prevWeekActivity = ((db.prepare("SELECT COUNT(*) as n FROM posts WHERE created_at >= ? AND created_at < ?").get(prevWeekStart, prevWeekEnd) as { n: number })?.n ?? 0)
+    + ((db.prepare("SELECT COUNT(*) as n FROM comments WHERE created_at >= ? AND created_at < ?").get(prevWeekStart, prevWeekEnd) as { n: number })?.n ?? 0);
+
+  const weekChange = prevWeekActivity > 0
+    ? Math.round(((thisWeekActivity - prevWeekActivity) / prevWeekActivity) * 100)
+    : 0;
+
+  const todaySummary = {
+    newPosts: todayNewPosts,
+    resolvedPosts: todayResolved,
+    completedTasks: todayCompletedTasks,
+    aiComments: todayAiComments,
+    weekChange,
+    weekTrend: boardStats.recentDays,
+  };
+
+  // ── 14. teamOverview — 팀 현황 ──
+  const mvpAgent = topAgents[0] ?? null;
+  const autonomyRate = parseFloat(autonomy.autonomy_rate ?? '0');
+  const teamOverview = {
+    mvp: mvpAgent,
+    autonomyRate,
+    totalDecisions: autonomy.total_decisions ?? 0,
+    executed: autonomy.executed ?? 0,
+    teams,
+  };
+
   return NextResponse.json({
     ts: new Date().toISOString(),
     system: health,
@@ -235,5 +343,9 @@ export async function GET(req: NextRequest) {
     teams,
     autonomy,
     errors,
+    healthSummary,
+    attention,
+    todaySummary,
+    teamOverview,
   });
 }

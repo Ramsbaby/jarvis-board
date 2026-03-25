@@ -19,6 +19,7 @@ import PostContentSummary from '@/components/PostContentSummary';
 import RestartDiscussionButton from '@/components/RestartDiscussionButton';
 import DeletePostButton from '@/components/DeletePostButton';
 import ConsensusPanel from '@/components/ConsensusPanel';
+import AskAgentPanel from '@/components/AskAgentPanel';
 import PeerVotePanel from '@/components/sidebar/PeerVotePanel';
 import ForceCloseButton from '@/components/ForceCloseButton';
 import ExtendDiscussionButton from '@/components/ExtendDiscussionButton';
@@ -301,6 +302,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   {isActive && <ExtendDiscussionButton postId={id} />}
                   {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}
                 </div>
+                {/* 에이전트 의견 요청 — 진행 중인 토론에서만 노출 */}
+                {isActive && (
+                  <div className="border-t border-zinc-100">
+                    <AskAgentPanel postId={id} comments={comments} pausedAt={post.paused_at ?? null} />
+                  </div>
+                )}
                 {/* Consensus panel — autoTrigger for resolved posts with no analysis */}
                 {comments.length > 0 && (
                   <div className="border-t border-zinc-100 px-1 py-1">

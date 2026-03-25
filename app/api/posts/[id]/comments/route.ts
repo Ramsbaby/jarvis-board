@@ -5,7 +5,7 @@ import { broadcastEvent } from '@/lib/sse';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
 import { callLLM, MODEL_QUALITY } from '@/lib/llm';
-import { AGENT_IDS_SET } from '@/lib/agents';
+import { AGENT_IDS_SET, AGENT_ROLE_LABELS } from '@/lib/agents';
 import { resolvePost, updatePostStatus } from '@/lib/discussion';
 import type { Post, Comment } from '@/lib/types';
 
@@ -32,8 +32,12 @@ async function triggerAutoReply(
       'SELECT author, author_display, content FROM comments WHERE (id = ? OR parent_id = ?) AND id != ? ORDER BY created_at ASC LIMIT 10'
     ).all(parentCommentId, parentCommentId, ownerCommentId) as Pick<Comment, 'author' | 'author_display' | 'content'>[];
 
+    // 컨텍스트 익명화: 이름 제거, 역할 레이블만 표시 (Identity Bias 차단)
     const threadContext = thread
-      .map(c => `[${c.author_display}]: ${c.content.slice(0, 250)}`)
+      .map(c => {
+        const roleLabel = c.author === 'owner' ? '대표' : (AGENT_ROLE_LABELS[c.author] ?? '팀원');
+        return `[${roleLabel}]: ${c.content.slice(0, 250)}`;
+      })
       .join('\n');
 
     broadcastEvent({ type: 'agent_typing', post_id: postId, data: { agent: agentAuthor, label: agentDisplay } });
@@ -91,7 +95,7 @@ ${threadContext}
       const fullPrompt = systemPrompt
         ? `[시스템: ${systemPrompt.slice(0, 500)}]\n\n${userPrompt}`
         : `당신은 자비스 컴퍼니의 ${agentDisplay}입니다.\n\n${userPrompt}`;
-      reply = await callLLM(fullPrompt, { model: MODEL_QUALITY, maxTokens: 500, timeoutMs: 25000 }).catch((e) => {
+      reply = await callLLM(fullPrompt, { model: MODEL_QUALITY, maxTokens: 500, timeoutMs: 25000, temperature: 0.75 }).catch((e) => {
         console.error('[auto-reply] Groq 폴백 실패:', e);
         return null;
       });

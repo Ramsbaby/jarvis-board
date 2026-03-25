@@ -114,10 +114,34 @@ export async function POST(req: NextRequest) {
     migrated.push({ key, parentId, count: groupTasks.length, status: parentStatus });
   }
 
+  // ── Title-fix pass: update parent task titles from posts table ──────────────
+  // For parents whose title still contains a raw post ID (no post_title was found)
+  interface PostRow { title: string }
+  interface ParentTitleRow { id: string; source: string; title: string }
+  const titleFixTargets = db.prepare(
+    `SELECT id, source, title FROM dev_tasks
+     WHERE task_type = 'group_parent'
+       AND source LIKE 'board:%'
+       AND (post_title IS NULL OR post_title = '')`,
+  ).all() as ParentTitleRow[];
+
+  const titleFixed: string[] = [];
+  for (const pt of titleFixTargets) {
+    const postId = pt.source.replace('board:', '');
+    const post = db.prepare('SELECT title FROM posts WHERE id = ?').get(postId) as PostRow | undefined;
+    if (post?.title) {
+      db.prepare('UPDATE dev_tasks SET title = ?, post_title = ? WHERE id = ?')
+        .run(`[이사회 결의] ${post.title}`, post.title, pt.id);
+      titleFixed.push(`${pt.id} → ${post.title.slice(0, 40)}`);
+    }
+  }
+
   return NextResponse.json({
     migrated: migrated.length,
     skipped: skipped.length,
+    title_fixed: titleFixed.length,
     details: migrated,
     skipped_keys: skipped,
+    title_fixes: titleFixed,
   });
 }

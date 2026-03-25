@@ -91,7 +91,9 @@ interface DashboardData {
       recentFailed?: Array<{ task: string; lastRun: string; failCount: number; lastStatus: string }>;
       taskStatus?: Record<string, { lastRun: string; lastStatus: string; failCount: number }>;
     };
-    decisions_today?: Array<{ action?: string; task?: string; ts?: string }>;
+    decisions_today?: Array<{ ts?: string; decision?: string; team?: string; action?: string; status?: string; result?: string }>;
+    dev_queue?: Array<{ id: string; name: string; priority?: number; status: string; assignee?: string; createdAt?: string }>;
+    scorecard?: { teams?: Record<string, { merit: number; penalty: number; status: string }> };
   } | null;
 }
 
@@ -638,6 +640,125 @@ function ErrorsCard({ data }: { data: DashboardData['errors'] }) {
   );
 }
 
+const TEAM_LABEL: Record<string, string> = {
+  infra: '인프라', council: '이사회', record: '기록', career: '커리어',
+  brand: '브랜드', academy: '아카데미', strategy: '전략',
+};
+const TEAM_COLOR: Record<string, string> = {
+  infra: 'bg-blue-100 text-blue-700', council: 'bg-purple-100 text-purple-700',
+  record: 'bg-zinc-100 text-zinc-600', career: 'bg-amber-100 text-amber-700',
+  brand: 'bg-pink-100 text-pink-700', academy: 'bg-emerald-100 text-emerald-700',
+  strategy: 'bg-indigo-100 text-indigo-700',
+};
+
+function DiscordChannelCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const channels = sm?.discord_stats?.channelActivity ?? [];
+  const p95 = sm?.discord_stats?.avgElapsed;
+  const restarts = sm?.discord_stats?.restartCount ?? 0;
+  const errs = sm?.discord_stats?.botErrors ?? 0;
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-2">
+        <span>💬</span><Label>Discord 채널별 활동</Label>
+        {restarts > 0 && <span className="ml-auto text-[10px] text-amber-600">재시작 {restarts}회</span>}
+        {errs > 0 && <span className="text-[10px] text-red-500">에러 {errs}건</span>}
+      </div>
+      {channels.length === 0 ? (
+        <div className="text-xs text-zinc-400">데이터 없음</div>
+      ) : (
+        <div className="space-y-1">
+          {channels.slice(0, 6).map(ch => {
+            const total = ch.human + ch.claudes;
+            const barPct = total > 0 ? Math.round((ch.claudes / Math.max(...channels.map(c => c.human + c.claudes))) * 100) : 0;
+            return (
+              <div key={ch.id} className="flex items-center gap-2">
+                <span className="text-[11px] text-zinc-600 w-28 truncate flex-shrink-0">{ch.name ?? ch.id.slice(-6)}</span>
+                <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barPct}%` }} />
+                </div>
+                <span className="text-[10px] text-zinc-400 tabular-nums w-16 text-right flex-shrink-0">
+                  👤{ch.human} 🤖{ch.claudes}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {p95 !== undefined && p95 > 0 && (
+        <div className="mt-2 pt-2 border-t border-zinc-100 text-[11px] text-zinc-400">평균 응답 {p95}s</div>
+      )}
+    </Card>
+  );
+}
+
+function DecisionsCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const decisions = sm?.decisions_today ?? [];
+  const confirmed = decisions.filter(d => d.action !== 'UNMATCHED' && d.result !== 'NEEDS_MANUAL_REVIEW');
+  const unmatched = decisions.filter(d => d.action === 'UNMATCHED' || d.result === 'NEEDS_MANUAL_REVIEW');
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-2">
+        <span>🧭</span><Label>오늘 결정</Label>
+        <span className="ml-auto text-[10px] text-zinc-400">{decisions.length}건</span>
+        {unmatched.length > 0 && (
+          <span className="text-[10px] font-semibold text-orange-600">수동처리 {unmatched.length}건</span>
+        )}
+      </div>
+      {decisions.length === 0 ? (
+        <div className="text-xs text-zinc-400">오늘 결정 없음</div>
+      ) : (
+        <div className="space-y-1">
+          {unmatched.slice(0, 3).map((d, i) => (
+            <div key={i} className="flex items-start gap-1.5 bg-orange-50 rounded px-2 py-1">
+              <span className="text-[10px] font-medium text-orange-600 mt-0.5">⚠</span>
+              <div className="flex-1 min-w-0">
+                {d.team && <span className={`inline-block text-[10px] px-1 py-0.5 rounded mr-1 ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-500'}`}>{TEAM_LABEL[d.team] ?? d.team}</span>}
+                <span className="text-[11px] text-orange-800 break-words">{d.decision ?? '(내용 없음)'}</span>
+              </div>
+            </div>
+          ))}
+          {confirmed.slice(0, 4).map((d, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span className="text-[10px] text-zinc-300 mt-0.5">•</span>
+              <div className="flex-1 min-w-0">
+                {d.team && <span className={`inline-block text-[10px] px-1 py-0.5 rounded mr-1 ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-500'}`}>{TEAM_LABEL[d.team] ?? d.team}</span>}
+                <span className="text-[11px] text-zinc-600 break-words">{d.decision ?? '(내용 없음)'}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function DevQueueCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const queue = sm?.dev_queue ?? [];
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-2">
+        <span>⚙️</span><Label>Dev 대기열</Label>
+        <span className="ml-auto text-[10px] text-zinc-400">{queue.length}건 대기</span>
+      </div>
+      {queue.length === 0 ? (
+        <div className="text-xs text-zinc-400">대기 중인 작업 없음 ✓</div>
+      ) : (
+        <div className="space-y-1">
+          {queue.slice(0, 6).map(item => (
+            <div key={item.id} className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold w-4 flex-shrink-0 ${(item.priority ?? 0) >= 8 ? 'text-red-500' : (item.priority ?? 0) >= 5 ? 'text-amber-500' : 'text-zinc-400'}`}>
+                P{item.priority ?? 0}
+              </span>
+              <span className="text-[11px] text-zinc-700 flex-1 truncate">{item.name}</span>
+              {item.assignee && <span className="text-[10px] text-zinc-400 flex-shrink-0">{item.assignee}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function EngineeringSection({ data }: { data: DashboardData }) {
   const [open, setOpen] = useState(true);
   const sm = data.sysMetrics;
@@ -658,6 +779,9 @@ function EngineeringSection({ data }: { data: DashboardData }) {
           <ClaudeCard data={data.claude} sm={sm} />
           <E2ECard data={data.e2e} />
           <ErrorsCard data={data.errors} />
+          <DiscordChannelCard sm={sm} />
+          <DecisionsCard sm={sm} />
+          <DevQueueCard sm={sm} />
         </div>
       )}
     </div>

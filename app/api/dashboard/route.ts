@@ -146,10 +146,14 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  // ── 0. sysMetrics — Mac Mini 실시간 pull 우선, 실패 시 캐시 fallback ──
-  let sysMetrics: Record<string, unknown> | null = null;
+  // ── 0. sysMetrics — 풍부한 캐시(discord_stats 등) + 실시간 overlay 병합 ──
+  // fullMetrics: 5분 캐시 (discord_stats, decisions_today, dev_queue, scorecard 포함)
+  let fullMetrics: Record<string, unknown> | null = null;
+  const smRow = db.prepare("SELECT value FROM board_settings WHERE key = 'system_metrics'").get() as { value: string } | undefined;
+  if (smRow?.value) { try { fullMetrics = JSON.parse(smRow.value); } catch { /* ignore */ } }
 
-  // 1순위: Mac Mini 실시간 endpoint (dashboard-tunnel.sh가 URL 등록)
+  // realtimeMetrics: Mac Mini 실시간 (disk/health/cron/CB/LA 최신값)
+  let realtimeMetrics: Record<string, unknown> | null = null;
   const metricsUrlRow = db.prepare("SELECT value FROM board_settings WHERE key = 'board_metrics_url'").get() as { value: string } | undefined;
   if (metricsUrlRow?.value) {
     try {
@@ -158,14 +162,22 @@ export async function GET(req: NextRequest) {
         headers: { 'x-agent-key': agentKey },
         signal: AbortSignal.timeout(3000),
       });
-      if (res.ok) sysMetrics = await res.json() as Record<string, unknown>;
-    } catch { /* Mac Mini 오프라인 or 재시작 중 — fallback */ }
+      if (res.ok) realtimeMetrics = await res.json() as Record<string, unknown>;
+    } catch { /* Mac Mini 오프라인 or 재시작 중 */ }
   }
 
-  // 2순위: 5분 캐시 (sync-system-metrics.sh가 push한 데이터)
-  if (!sysMetrics) {
-    const smRow = db.prepare("SELECT value FROM board_settings WHERE key = 'system_metrics'").get() as { value: string } | undefined;
-    if (smRow?.value) { try { sysMetrics = JSON.parse(smRow.value); } catch { /* ignore */ } }
+  // 병합: 기본은 fullMetrics(풍부), 실시간 있으면 critical 필드 덮어쓰기
+  let sysMetrics: Record<string, unknown> | null = fullMetrics ?? realtimeMetrics ?? null;
+  if (sysMetrics && realtimeMetrics && fullMetrics) {
+    sysMetrics = {
+      ...fullMetrics,
+      disk: realtimeMetrics.disk ?? fullMetrics.disk,
+      health: realtimeMetrics.health ?? fullMetrics.health,
+      cron_stats: realtimeMetrics.cron_stats ?? fullMetrics.cron_stats,
+      launch_agents: realtimeMetrics.launch_agents ?? fullMetrics.launch_agents,
+      circuit_breakers: realtimeMetrics.circuit_breakers ?? fullMetrics.circuit_breakers,
+      synced_at: realtimeMetrics.synced_at,
+    };
   }
 
   // ── 1. System health ──

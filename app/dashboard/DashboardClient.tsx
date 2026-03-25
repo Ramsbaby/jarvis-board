@@ -94,6 +94,7 @@ interface DashboardData {
     decisions_today?: Array<{ ts?: string; decision?: string; team?: string; action?: string; status?: string; result?: string }>;
     dev_queue?: Array<{ id?: string; name: string; priority?: number; status: string; assignee?: string; createdAt?: string }>;
     scorecard?: { teams?: Record<string, { merit: number; penalty: number; status: string }> };
+    dev_daemon?: { alive?: boolean; pid?: number; last_poll?: string; current_task?: string; status?: string };
   } | null;
 }
 
@@ -1283,6 +1284,16 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                   label: '디스크',
                   level: (sm?.disk?.used_pct ?? 0) > 90 ? 'red' : (sm?.disk?.used_pct ?? 0) > 75 ? 'yellow' : 'green',
                   detail: `${sm?.disk?.used_pct ?? '?'}%`,
+                },
+                {
+                  label: 'Dev Daemon',
+                  level: (() => {
+                    const daemon = sm?.dev_daemon;
+                    if (!daemon?.alive) return 'red' as const;
+                    const lastPoll = daemon.last_poll ? new Date(daemon.last_poll).getTime() : 0;
+                    return (Date.now() - lastPoll < 60000) ? 'green' as const : 'yellow' as const;
+                  })(),
+                  detail: sm?.dev_daemon?.alive ? (sm?.dev_daemon?.current_task ? '실행 중' : '대기') : '비활성',
                 },
               ].map(({ label, level, detail }) => (
                 <span key={label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${

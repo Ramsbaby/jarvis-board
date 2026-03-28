@@ -80,6 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         let strengths: string[] = [];
         let weaknesses: string[] = [];
         let betterAnswer: string | null = null;
+        let missingKeywords: string[] = [];
         let nextQuestion: string | null = null;
 
         try {
@@ -90,14 +91,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             strengths = parsed.strengths ?? [];
             weaknesses = parsed.weaknesses ?? [];
             betterAnswer = parsed.better_answer ?? null;
+            missingKeywords = parsed.missing_keywords ?? [];
             nextQuestion = parsed.next_question ?? null;
           }
         } catch { /* keep nulls */ }
 
         const feedbackId = nanoid();
         db.prepare(
-          `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?)`
-        ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer);
+          `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+        ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
 
         if (nextQuestion) {
           db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);

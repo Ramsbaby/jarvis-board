@@ -8,6 +8,20 @@ export const COMPANIES = [
   { id: 'sk', name: 'SK D&D', emoji: '⚪', desc: '현 직장 레거시 탈출 스토리·IoT 플랫폼', style: 'border-zinc-200 bg-zinc-50', highlight: false },
 ] as const;
 
+/** 카테고리별 필수 키워드 — LLM이 답변에서 누락된 키워드를 감지하는 데 사용 */
+export const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'distributed-tx': ['Saga', 'TCC', '2PC', '보상 트랜잭션', '이벤트 소싱', '아웃박스', 'CQRS', '멱등성'],
+  'concurrency': ['낙관적 락', '비관적 락', 'Redis 분산락', '데드락', 'CAS', '원자적 연산', '스핀락'],
+  'payment-arch': ['승인', '취소', '매입', '대사', '정산', '멱등성', '이중 결제 방지', '결제 상태 머신'],
+  'mysql-tuning': ['인덱스', '실행 계획', 'EXPLAIN', '커버링 인덱스', '파티셔닝', '쿼리 최적화', 'N+1'],
+  'kafka': ['파티션', '컨슈머 그룹', '오프셋', 'at-least-once', 'exactly-once', '리밸런싱', '배압'],
+  'java-spring': ['JVM', 'GC', 'WebFlux', 'Reactor', 'IoC', 'AOP', 'gRPC', 'Protobuf'],
+  'cs-basics': ['프로세스', '스레드', 'TCP', 'HTTP', 'ACID', '정규화', 'B-Tree'],
+  'system-design': ['로드 밸런서', 'Circuit Breaker', 'Auto Scaling', 'CDN', 'API Gateway', 'CAP 정리'],
+  'behavioral': ['STAR', '갈등', '기술 부채', '회고', '의사결정'],
+  'live-coding': ['시간복잡도', 'O(n)', '엣지 케이스', '테스트 케이스'],
+};
+
 export const CATEGORIES = [
   { id: 'distributed-tx', name: '분산 트랜잭션', emoji: '🔄', desc: 'Saga, TCC, 2PC, 보상 트랜잭션', priority: 1 },
   { id: 'concurrency', name: '동시성 제어', emoji: '🔒', desc: '낙관적/비관적 락, Redis 분산락', priority: 1 },
@@ -52,13 +66,17 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
   const difficultyLabel = { junior: '주니어(3~5년)', mid: '미드(5~7년)', senior: '시니어(9년+)' }[difficulty] ?? 'mid';
   const company = companyNames[companyId] ?? '테크 기업';
   const category = categoryHints[categoryId] ?? '기술 면접';
+  const keywords = CATEGORY_KEYWORDS[categoryId] ?? [];
+  const keywordsLine = keywords.length > 0
+    ? `\n- 이 카테고리의 핵심 키워드 목록: [${keywords.join(', ')}]\n  → 지원자가 답변에서 언급하지 않은 키워드를 missing_keywords 배열에 포함하세요.`
+    : '';
 
   return `당신은 ${company} 면접관으로서 지원자의 기술 면접 답변을 평가합니다.
 
 [평가 맥락]
 - 카테고리: ${category}
 - 난이도 기준: ${difficultyLabel}
-- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)
+- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)${keywordsLine}
 
 [평가 기준]
 - 기술 정확도, 실무 경험 연결, 구체성, 깊이를 종합 평가
@@ -70,6 +88,7 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
   "strengths": ["잘한 점을 구체적으로"],
   "weaknesses": ["부족한 점을 구체적으로"],
   "better_answer": "이렇게 답했으면 더 좋았을 구체적인 예시 답변 (3~5문장)",
+  "missing_keywords": ["언급 안 한 핵심 키워드1", "키워드2"],
   "next_question": "이 답변에 대한 꼬리 질문 또는 새로운 관련 질문"
 }
 

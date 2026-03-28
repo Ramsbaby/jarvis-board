@@ -13,6 +13,7 @@ interface Message {
   strengths?: string;
   weaknesses?: string;
   better_answer?: string | null;
+  missing_keywords?: string | null;
   created_at: string;
 }
 
@@ -28,12 +29,13 @@ interface Session {
 function FeedbackCard({ msg }: { msg: Message }) {
   let strengths: string[] = [];
   let weaknesses: string[] = [];
+  let missingKeywords: string[] = [];
   try { strengths = JSON.parse(msg.strengths ?? '[]'); } catch { /* empty */ }
   try { weaknesses = JSON.parse(msg.weaknesses ?? '[]'); } catch { /* empty */ }
+  try { missingKeywords = JSON.parse(msg.missing_keywords ?? '[]'); } catch { /* empty */ }
 
   const score = msg.score ?? 0;
-  // 상세 피드백이 있으면 기본 열림, 없으면 닫힘
-  const hasDetail = strengths.length > 0 || weaknesses.length > 0 || !!msg.better_answer;
+  const hasDetail = strengths.length > 0 || weaknesses.length > 0 || !!msg.better_answer || missingKeywords.length > 0;
   const [open, setOpen] = useState(hasDetail);
 
   const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600';
@@ -64,6 +66,16 @@ function FeedbackCard({ msg }: { msg: Message }) {
             <div>
               <p className="text-[11px] font-bold text-red-600 uppercase tracking-wider mb-1">❌ 부족한 점</p>
               <ul className="space-y-1">{weaknesses.map((w, i) => <li key={i} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-red-400 shrink-0">•</span>{w}</li>)}</ul>
+            </div>
+          )}
+          {missingKeywords.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5">
+              <p className="text-[11px] font-bold text-orange-700 mb-1.5">🔑 언급 안 한 핵심 키워드</p>
+              <div className="flex flex-wrap gap-1.5">
+                {missingKeywords.map((kw, i) => (
+                  <span key={i} className="text-[11px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-semibold">{kw}</span>
+                ))}
+              </div>
             </div>
           )}
           {msg.better_answer && (
@@ -145,7 +157,7 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ status: 'completed', total_score: avg }),
     });
-    router.push('/interview');
+    router.push(`/interview/${sessionId}/report`);
   }
 
   const company = COMPANIES.find(c => c.id === session?.company);

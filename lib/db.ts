@@ -305,11 +305,14 @@ export function getDb(): Database.Database {
         strengths TEXT,
         weaknesses TEXT,
         better_answer TEXT,
+        missing_keywords TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_interview_messages_session ON interview_messages(session_id);
       CREATE INDEX IF NOT EXISTS idx_interview_sessions_created ON interview_sessions(created_at DESC);
     `);
+    // 기존 DB 마이그레이션: missing_keywords 컬럼 추가 (없을 경우에만)
+    try { _db.exec('ALTER TABLE interview_messages ADD COLUMN missing_keywords TEXT'); } catch { /* 이미 존재 */ }
   }
   return _db;
 }

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { COMPANIES, CATEGORIES, DIFFICULTIES } from '@/lib/interview-data';
+import { COMPANIES, CATEGORIES, DIFFICULTIES, COMPANY_PASS_CRITERIA } from '@/lib/interview-data';
 
 interface Message {
   id: string;
@@ -57,7 +57,13 @@ export default function ReportClient({ session, messages }: { session: Session; 
   const feedbacks = messages.filter(m => m.role === 'feedback');
   const questions = messages.filter(m => m.role === 'question');
   const scores = feedbacks.map(f => f.score).filter((s): s is number => s != null);
-  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+
+  // 합격 판정 계산
+  const criteria = COMPANY_PASS_CRITERIA[session.company];
+  const passScore = criteria?.passScore ?? 75;
+  const passed = avgScore != null && avgScore >= passScore;
+  const passGap = avgScore != null ? Math.abs(avgScore - passScore) : 0;
 
   // 반복된 약점 집계
   const allWeaknesses = feedbacks.flatMap(f => parseJson<string[]>(f.weaknesses, []));
@@ -69,8 +75,9 @@ export default function ReportClient({ session, messages }: { session: Session; 
   // 권고 메시지
   function getRecommendation(): string {
     if (avgScore == null) return '다음에도 꾸준히 연습해보세요.';
-    if (avgScore >= 80) return `${category?.name} 카테고리는 충분합니다. 다음 필수 카테고리로 넘어가세요.`;
-    if (avgScore >= 60) return `기초는 있으나 심화가 부족합니다. ${category?.name} 동일 카테고리를 시니어 난이도로 재도전하세요.`;
+    const rounded = Math.round(avgScore);
+    if (rounded >= 80) return `${category?.name} 카테고리는 충분합니다. 다음 필수 카테고리로 넘어가세요.`;
+    if (rounded >= 60) return `기초는 있으나 심화가 부족합니다. ${category?.name} 동일 카테고리를 시니어 난이도로 재도전하세요.`;
     return `${category?.name} 카테고리 핵심 개념을 먼저 정리한 뒤 다시 도전하세요. 오늘 better_answer를 3번 읽고 내일 재시험을 권장합니다.`;
   }
 
@@ -106,7 +113,7 @@ export default function ReportClient({ session, messages }: { session: Session; 
           {/* 핵심 수치 */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-zinc-50 rounded-xl p-3 text-center">
-              <p className={`text-3xl font-black tabular-nums ${scoreColor(avgScore)}`}>{avgScore ?? '-'}</p>
+              <p className={`text-3xl font-black tabular-nums ${scoreColor(avgScore != null ? Math.round(avgScore) : null)}`}>{avgScore != null ? Math.round(avgScore) : '-'}</p>
               <p className="text-[11px] text-zinc-400 mt-0.5">평균 점수</p>
             </div>
             <div className="bg-zinc-50 rounded-xl p-3 text-center">
@@ -114,11 +121,40 @@ export default function ReportClient({ session, messages }: { session: Session; 
               <p className="text-[11px] text-zinc-400 mt-0.5">문제 수</p>
             </div>
             <div className="bg-zinc-50 rounded-xl p-3 text-center">
-              <p className={`text-lg font-bold ${scoreColor(avgScore)} mt-1`}>{avgScore != null ? scoreLabel(avgScore) : '-'}</p>
+              <p className={`text-lg font-bold ${scoreColor(avgScore != null ? Math.round(avgScore) : null)} mt-1`}>{avgScore != null ? scoreLabel(Math.round(avgScore)) : '-'}</p>
               <p className="text-[11px] text-zinc-400 mt-0.5">종합 평가</p>
             </div>
           </div>
         </div>
+
+        {/* 합격 판정 카드 */}
+        {criteria && avgScore != null && (
+          <div className={`rounded-xl border-2 p-5 mb-6 ${passed
+            ? 'border-emerald-300 bg-emerald-50'
+            : 'border-amber-300 bg-amber-50'}`}>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">{passed ? '🎯' : '📈'}</span>
+              <div>
+                <p className={`font-bold text-lg ${passed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {passed
+                    ? `합격 가능권 (기준 ${passScore}점 → 현재 ${Math.round(avgScore)}점, +${Math.round(passGap)}점)`
+                    : `합격까지 ${Math.round(passGap)}점 부족 (기준 ${passScore}점)`}
+                </p>
+                <p className="text-sm text-gray-600 mt-0.5">{criteria.description}</p>
+              </div>
+            </div>
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-gray-500 mb-2">✅ 이 회사 합격 포인트</p>
+              <ul className="space-y-1">
+                {criteria.tips.map((tip, i) => (
+                  <li key={i} className="text-sm text-gray-700 flex gap-2">
+                    <span className="text-emerald-500">•</span>{tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         {/* 권고사항 */}
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">

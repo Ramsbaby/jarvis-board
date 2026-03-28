@@ -34,6 +34,58 @@ function scoreColor(score: number | null): string {
   return 'text-red-500';
 }
 
+function ScoreHistoryChart({ sessions, onNavigate }: { sessions: InterviewSession[]; onNavigate: (id: string) => void }) {
+  const recentSessions = sessions
+    .filter(s => s.status === 'completed' && s.total_score != null)
+    .slice(0, 10)
+    .reverse(); // 오래된 것이 왼쪽
+
+  if (recentSessions.length === 0) return null;
+
+  const maxScore = 100;
+  const chartHeight = 80;
+  const barWidth = 24;
+  const gap = 8;
+  const svgWidth = recentSessions.length * (barWidth + gap);
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-bold text-zinc-700">📈 점수 추이 (최근 {recentSessions.length}회)</h2>
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 overflow-x-auto">
+        <svg width={svgWidth} height={chartHeight + 30} className="block">
+          {/* 70점 기준선 */}
+          <line
+            x1={0} y1={(1 - 70 / maxScore) * chartHeight}
+            x2={svgWidth} y2={(1 - 70 / maxScore) * chartHeight}
+            stroke="#fbbf24" strokeDasharray="4,4" strokeWidth={1}
+          />
+          {recentSessions.map((s, i) => {
+            const score = s.total_score ?? 0;
+            const barH = (score / maxScore) * chartHeight;
+            const x = i * (barWidth + gap);
+            const y = chartHeight - barH;
+            const color = score >= 80 ? '#10b981' : score >= 65 ? '#f59e0b' : '#ef4444';
+            const company = COMPANIES.find(c => c.id === s.company);
+            return (
+              <g key={s.id} className="cursor-pointer" onClick={() => onNavigate(s.id)}>
+                <title>{company?.name} · {score}점</title>
+                <rect x={x} y={y} width={barWidth} height={barH} fill={color} rx={4} opacity={0.85} />
+                <text x={x + barWidth / 2} y={chartHeight + 14} textAnchor="middle" fontSize={10} fill="#6b7280">
+                  {Math.round(score)}
+                </text>
+                <text x={x + barWidth / 2} y={chartHeight + 26} textAnchor="middle" fontSize={9} fill="#9ca3af">
+                  {company?.emoji ?? ''}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        <p className="text-[10px] text-amber-500 mt-1">— 70점 기준선</p>
+      </div>
+    </div>
+  );
+}
+
 function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
   if (sessions.length === 0) return null;
   const now = new Date().getTime();
@@ -205,6 +257,9 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
             </div>
           </div>
         )}
+
+        {/* 점수 히스토리 차트 */}
+        <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
 
         {/* 면접 이력 */}
         <SessionHistory sessions={sessions} />

@@ -89,11 +89,59 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
   "weaknesses": ["부족한 점을 구체적으로"],
   "better_answer": "이렇게 답했으면 더 좋았을 구체적인 예시 답변 (3~5문장)",
   "missing_keywords": ["언급 안 한 핵심 키워드1", "키워드2"],
-  "next_question": "이 답변에 대한 꼬리 질문 또는 새로운 관련 질문"
+  "next_question": "점수가 70 미만이면 weaknesses[0]를 집중 공략하는 압박 후속 질문(예: '방금 [약점]을 언급하셨는데 구체적으로 어떻게 해결하셨나요?'). 70 이상이면 연관 심화 주제 확장 질문. senior 난이도는 항상 압박 스타일."
 }
+
+[꼬리질문 생성 규칙]
+- 점수 < 70: weaknesses의 첫 번째 항목을 집중 공략하는 압박 꼬리질문. '방금 말씀하신 [약점]에 대해 더 구체적으로 설명해 주시겠어요?' 스타일로 생성.
+- 점수 >= 70: 답변에서 언급된 개념과 연관된 더 깊은 주제로 확장하는 심화 질문.
+- 난이도가 senior이면: 점수와 무관하게 항상 압박 스타일의 꼬리질문을 생성하세요.
 
 JSON 외 다른 텍스트는 절대 출력하지 마세요.`;
 }
+
+// 회사별 합격 기준 점수 및 메시지
+export const COMPANY_PASS_CRITERIA: Record<string, {
+  passScore: number;
+  description: string;
+  tips: string[];
+}> = {
+  kakaopay: {
+    passScore: 75,
+    description: '카카오페이는 결제 정합성과 분산 트랜잭션 이해도를 최우선으로 평가합니다.',
+    tips: ['Saga/TCC 패턴 완벽 숙지', '멱등성 처리 실무 경험 강조', '장애 시 데이터 정합성 보장 방법'],
+  },
+  kakao: {
+    passScore: 78,
+    description: '카카오는 CS 기초와 코드 품질, 알고리즘적 사고를 중시합니다.',
+    tips: ['자료구조/알고리즘 기초 탄탄히', '코드 리뷰 경험과 품질 기준 정리', '기술 부채 해결 경험'],
+  },
+  naver: {
+    passScore: 72,
+    description: '네이버는 실무 경험의 깊이와 구체적 수치를 증명 요구합니다.',
+    tips: ['모든 답변에 구체적 수치 포함', '장애 대응 경험 STAR 방식으로 정리', '대용량 트래픽 처리 경험'],
+  },
+  toss: {
+    passScore: 80,
+    description: '토스는 시스템 디자인과 장애 대응 능력, 숫자로 증명하는 문화입니다.',
+    tips: ['시스템 설계 시 병목 지점 먼저 언급', '모든 결정에 데이터 근거 제시', 'Circuit Breaker/장애 격리 패턴'],
+  },
+  line: {
+    passScore: 75,
+    description: '라인은 글로벌 스케일 트래픽과 다국어/다지역 서비스 안정성을 봅니다.',
+    tips: ['글로벌 분산 서비스 경험', '다중 리전 데이터 동기화', 'SLA/SLO 기반 설계'],
+  },
+  coupang: {
+    passScore: 73,
+    description: '쿠팡은 실용주의와 빠른 실행, 비용 효율성을 중시합니다.',
+    tips: ['ROI 중심 기술 선택 근거 준비', '실행 속도와 품질 균형 경험', '대규모 주문/재고 처리 아키텍처'],
+  },
+  sk: {
+    passScore: 68,
+    description: 'SK D&D는 IoT 플랫폼과 계약/정산 자동화 실무 경험을 중시합니다.',
+    tips: ['레거시 시스템 개선 경험', 'IoT 데이터 처리 파이프라인', '계약/정산 도메인 이해'],
+  },
+};
 
 export function getSystemPrompt(companyId: string, categoryId: string, difficulty: string): string {
   const companyPersonas: Record<string, string> = {

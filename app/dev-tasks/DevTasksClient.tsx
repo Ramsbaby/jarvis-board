@@ -722,15 +722,57 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
           </div>
         )}
 
-        {/* Delete — rejected / failed 태스크 */}
-        {(task.status === 'rejected' || task.status === 'failed') && (
+        {/* Delete + Retry — rejected 태스크 */}
+        {task.status === 'rejected' && (
           <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
+            <button
+              onClick={() => handleAction(task.id, 'awaiting_approval')}
+              disabled={isLoading || bulkLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-600 border border-zinc-300 hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              {isLoading ? <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin inline-block" /> : '↩ 재검토 요청'}
+            </button>
+            <button
+              onClick={() => handleDelete(task.id)}
+              disabled={isLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              🗑 삭제
+            </button>
+          </div>
+        )}
+
+        {/* Retry + Delete — failed 태스크 */}
+        {task.status === 'failed' && (
+          <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-red-100 bg-red-50/30">
+            <button
+              onClick={() => handleAction(task.id, 'awaiting_approval')}
+              disabled={isLoading || bulkLoading}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
+            >
+              {isLoading ? (
+                <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
+              ) : '↺ 다시 시도'}
+            </button>
             <button
               onClick={() => handleDelete(task.id)}
               disabled={isLoading}
               className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
             >
               {isLoading ? <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin inline-block" /> : '🗑 삭제'}
+            </button>
+          </div>
+        )}
+
+        {/* Cancel (approved → awaiting_approval) — 아직 작업 시작 전에 승인 취소 가능 */}
+        {task.status === 'approved' && (
+          <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-teal-100 bg-teal-50/30">
+            <button
+              onClick={() => handleAction(task.id, 'awaiting_approval')}
+              disabled={isLoading || bulkLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              {isLoading ? <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin inline-block" /> : '↩ 승인 취소'}
             </button>
           </div>
         )}

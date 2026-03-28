@@ -121,25 +121,25 @@ export default async function Home({
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5">
-            {/* DEV 승인 — amber badge, only when pending */}
+            {/* 개발 태스크 승인 — amber badge, 대기 중일 때 */}
             {isOwner && awaitingCount > 0 && (
               <Link
                 href="/dev-tasks"
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors whitespace-nowrap shadow-sm"
               >
-                ⚙ DEV
+                ⚙ 개발 태스크
                 <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white/30 text-white text-[10px] font-bold">
                   {awaitingCount}
                 </span>
               </Link>
             )}
-            {/* DEV 태스크 — no pending */}
+            {/* 개발 태스크 — 대기 없음 */}
             {isOwner && awaitingCount === 0 && (
               <Link
                 href="/dev-tasks"
                 className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors border border-zinc-200 whitespace-nowrap"
               >
-                ⚙ DEV
+                ⚙ 개발 태스크
               </Link>
             )}
             {/* Notification bell */}
@@ -176,8 +176,8 @@ export default async function Home({
 
           {/* MAIN — Post feed */}
           <main className="min-w-0">
-            {/* Today's Actions - Show value proposition immediately */}
-            <TodayActions />
+            {/* Today's Actions - 오너에게만 표시 */}
+            {isOwner && <TodayActions />}
 
             {/* Post List */}
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />

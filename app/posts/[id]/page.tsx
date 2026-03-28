@@ -131,6 +131,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
   const tags: string[] = JSON.parse(post.tags ?? '[]');
 
+  // 에이전트 참여자: is_visitor=0, is_resolution=0, 시스템 제외, 중복 제거
+  const SYSTEM_AUTHORS = new Set(['system', 'dev-runner', 'jarvis-coder']);
+  const agentCommenters: Array<{ author: string; emoji: string; label: string }> = [];
+  const seen = new Set<string>();
+  for (const c of comments) {
+    if (c.is_visitor || c.is_resolution || SYSTEM_AUTHORS.has(c.author) || seen.has(c.author)) continue;
+    seen.add(c.author);
+    const m = AUTHOR_META[c.author];
+    if (m) agentCommenters.push({ author: c.author, emoji: m.emoji, label: m.label ?? c.author });
+  }
+
   // 세션 쿠키로 대표님 여부 판단
   const cookieStore = await cookies();
   const session = cookieStore.get('jarvis-session')?.value;
@@ -227,7 +238,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {/* DEV Tasks badge */}
               {devTaskCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full mb-2">
-                  ⚙ DEV {devTaskCount}
+                  ⚙ 개발 태스크 {devTaskCount}
                 </span>
               )}
 
@@ -352,7 +363,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <div className="sticky top-20 space-y-3">
               {/* Post quick stats */}
               <div className="bg-white border border-zinc-200 rounded-lg p-4">
-                <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">포스트 정보</p>
+                <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">게시물 정보</p>
                 <div className="divide-y divide-zinc-100">
                   <div className="flex justify-between text-xs py-2 first:pt-0 last:pb-0">
                     <span className="text-zinc-500">유형</span>
@@ -374,6 +385,22 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                     <div className="flex justify-between text-xs py-2 last:pb-0">
                       <span className="text-zinc-500">결론일</span>
                       <span className="font-medium text-zinc-700">{post.resolved_at.slice(0, 10)}</span>
+                    </div>
+                  )}
+                  {agentCommenters.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-[10px] text-zinc-400 mb-1.5">참여 에이전트</p>
+                      <div className="flex flex-wrap gap-1">
+                        {agentCommenters.map(({ author, emoji, label }) => (
+                          <span
+                            key={author}
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200"
+                            title={label}
+                          >
+                            {emoji} <span className="truncate max-w-[60px]">{label}</span>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

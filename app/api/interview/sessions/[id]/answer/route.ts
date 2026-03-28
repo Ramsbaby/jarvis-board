@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { getFeedbackSystemPrompt } from '@/lib/interview-data';
+import Anthropic from '@anthropic-ai/sdk';
 
 function nanoid() {
   return `iv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -25,104 +26,178 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const answerId = nanoid();
   db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'answer', ?)`).run(answerId, id, answer);
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return new Response('GROQ_API_KEY missing', { status: 500 });
+  const feedbackSystemPrompt = getFeedbackSystemPrompt(session.company, session.category, session.difficulty);
+  const feedbackUserPrompt = `[면접 질문]\n${questionContent ?? '이전 질문'}\n\n[지원자 답변]\n${answer}\n\n위 답변을 평가하여 JSON 형식으로 출력하세요.`;
 
-  const systemPrompt = getFeedbackSystemPrompt(session.company, session.category, session.difficulty);
-  const prompt = `[면접 질문]\n${questionContent ?? '이전 질문'}\n\n[지원자 답변]\n${answer}\n\n위 답변을 평가하여 JSON 형식으로 출력하세요.`;
+  const useClaudeApi = !!process.env.ANTHROPIC_API_KEY;
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 1200,
-      temperature: 0.3,
-      stream: true,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-    }),
-  });
+  if (useClaudeApi) {
+    // Claude claude-sonnet-4-5 스트리밍
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  if (!groqRes.ok) return new Response(JSON.stringify({ error: 'LLM error' }), { status: 500 });
-
-  const encoder = new TextEncoder();
-  let fullText = '';
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const reader = groqRes.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? ''; // 마지막 불완전한 줄은 다음 청크와 합침
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(data);
-              const token = parsed.choices?.[0]?.delta?.content ?? '';
-              if (token) {
-                fullText += token;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
-              }
-            } catch { /* skip */ }
-          }
-        }
-
-        let score: number | null = null;
-        let strengths: string[] = [];
-        let weaknesses: string[] = [];
-        let betterAnswer: string | null = null;
-        let missingKeywords: string[] = [];
-        let nextQuestion: string | null = null;
+    const stream = new ReadableStream({
+      async start(controller) {
+        const enc = new TextEncoder();
+        let fullText = '';
 
         try {
+          const claudeStream = anthropic.messages.stream({
+            model: 'claude-sonnet-4-5',
+            max_tokens: 1024,
+            system: feedbackSystemPrompt,
+            messages: [{ role: 'user', content: feedbackUserPrompt }],
+          });
+
+          for await (const chunk of claudeStream) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              const token = chunk.delta.text;
+              fullText += token;
+              controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+            }
+          }
+
+          // JSON 파싱 및 DB 저장
+          let parsed: Record<string, unknown> = {};
           const jsonMatch = fullText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            score = parsed.score ?? null;
-            strengths = parsed.strengths ?? [];
-            weaknesses = parsed.weaknesses ?? [];
-            betterAnswer = parsed.better_answer ?? null;
-            missingKeywords = parsed.missing_keywords ?? [];
-            nextQuestion = parsed.next_question ?? null;
+            try { parsed = JSON.parse(jsonMatch[0]); } catch { /* keep empty */ }
           }
-        } catch { /* keep nulls */ }
 
-        const feedbackId = nanoid();
-        db.prepare(
-          `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
-        ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+          const score = typeof parsed.score === 'number' ? parsed.score : null;
+          const strengths = Array.isArray(parsed.strengths) ? parsed.strengths : [];
+          const weaknesses = Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [];
+          const betterAnswer = parsed.better_answer ?? '';
+          const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords : [];
+          const nextQuestion = parsed.next_question ?? null;
 
-        if (nextQuestion) {
-          db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
+          // DB에 피드백 저장
+          const feedbackId = nanoid();
+          db.prepare(
+            `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
+             VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+          ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+
+          // 다음 질문 저장
+          if (nextQuestion) {
+            db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
+              .run(nanoid(), id, nextQuestion);
+          }
+
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+          controller.close();
+        } catch {
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null })}\n\n`));
+          controller.close();
         }
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
-        controller.close();
-      } catch (err) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err) })}\n\n`));
-        controller.close();
       }
-    },
-  });
+    });
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // Railway/Nginx 버퍼링 방지
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      }
+    });
+  } else {
+    // 기존 Groq 로직 (fallback)
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return new Response('GROQ_API_KEY missing', { status: 500 });
+
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1200,
+        temperature: 0.3,
+        stream: true,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: feedbackSystemPrompt },
+          { role: 'user', content: feedbackUserPrompt },
+        ],
+      }),
+    });
+
+    if (!groqRes.ok) return new Response(JSON.stringify({ error: 'LLM error' }), { status: 500 });
+
+    const encoder = new TextEncoder();
+    let fullText = '';
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = groqRes.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? ''; // 마지막 불완전한 줄은 다음 청크와 합침
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(data);
+                const token = parsed.choices?.[0]?.delta?.content ?? '';
+                if (token) {
+                  fullText += token;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+                }
+              } catch { /* skip */ }
+            }
+          }
+
+          let score: number | null = null;
+          let strengths: string[] = [];
+          let weaknesses: string[] = [];
+          let betterAnswer: string | null = null;
+          let missingKeywords: string[] = [];
+          let nextQuestion: string | null = null;
+
+          try {
+            const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              score = parsed.score ?? null;
+              strengths = parsed.strengths ?? [];
+              weaknesses = parsed.weaknesses ?? [];
+              betterAnswer = parsed.better_answer ?? null;
+              missingKeywords = parsed.missing_keywords ?? [];
+              nextQuestion = parsed.next_question ?? null;
+            }
+          } catch { /* keep nulls */ }
+
+          const feedbackId = nanoid();
+          db.prepare(
+            `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+          ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+
+          if (nextQuestion) {
+            db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
+          }
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+          controller.close();
+        } catch (err) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err) })}\n\n`));
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Railway/Nginx 버퍼링 방지
+      },
+    });
+  }
 }

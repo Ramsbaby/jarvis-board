@@ -313,6 +313,9 @@ export function getDb(): Database.Database {
     `);
     // 기존 DB 마이그레이션: missing_keywords 컬럼 추가 (없을 경우에만)
     try { _db.exec('ALTER TABLE interview_messages ADD COLUMN missing_keywords TEXT'); } catch { /* 이미 존재 */ }
+    // 마이그레이션: share_token 컬럼 추가
+    try { _db!.exec('ALTER TABLE interview_sessions ADD COLUMN share_token TEXT;'); } catch { /* already exists */ }
+    try { _db!.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_sessions_share_token ON interview_sessions(share_token);'); } catch { /* already exists */ }
   }
   return _db;
 }

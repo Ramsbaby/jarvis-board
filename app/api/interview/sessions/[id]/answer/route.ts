@@ -29,6 +29,80 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const feedbackSystemPrompt = getFeedbackSystemPrompt(session.company, session.category, session.difficulty);
   const feedbackUserPrompt = `[면접 질문]\n${questionContent ?? '이전 질문'}\n\n[지원자 답변]\n${answer}\n\n위 답변을 평가하여 JSON 형식으로 출력하세요.`;
 
+  // Claude Relay 우선 (CLAUDE_RELAY_URL이 설정된 경우)
+  const claudeRelayUrl = process.env.CLAUDE_RELAY_URL;
+  const claudeRelayToken = process.env.CLAUDE_RELAY_TOKEN || 'jarvis-claude-relay-2026';
+
+  if (claudeRelayUrl) {
+    // 릴레이 호출 (non-streaming, 응답 후 SSE done 이벤트 발송)
+    const stream = new ReadableStream({
+      async start(controller) {
+        const enc = new TextEncoder();
+        try {
+          const relayRes = await fetch(`${claudeRelayUrl}/feedback`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${claudeRelayToken}`,
+            },
+            body: JSON.stringify({ systemPrompt: feedbackSystemPrompt, userPrompt: feedbackUserPrompt }),
+            signal: AbortSignal.timeout(90000),
+          });
+
+          if (!relayRes.ok) throw new Error(`Relay error: ${relayRes.status}`);
+          const relayData = await relayRes.json() as { ok: boolean; content: string };
+          const fullText = relayData.content || '';
+
+          // 토큰 스트리밍 시뮬레이션 (50자씩)
+          for (let i = 0; i < fullText.length; i += 50) {
+            controller.enqueue(enc.encode(`data: ${JSON.stringify({ token: fullText.slice(i, i + 50) })}\n\n`));
+          }
+
+          // JSON 파싱
+          let parsed: Record<string, unknown> = {};
+          const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { /* keep empty */ } }
+
+          const score = typeof parsed.score === 'number' ? parsed.score : null;
+          const strengths = Array.isArray(parsed.strengths) ? parsed.strengths as string[] : [];
+          const weaknesses = Array.isArray(parsed.weaknesses) ? parsed.weaknesses as string[] : [];
+          const betterAnswer = typeof parsed.better_answer === 'string' ? parsed.better_answer : '';
+          const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords as string[] : [];
+          const nextQuestion = typeof parsed.next_question === 'string' ? parsed.next_question : null;
+
+          // DB 저장
+          const feedbackId = nanoid();
+          db.prepare(
+            `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
+             VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+          ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+
+          if (nextQuestion) {
+            db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
+              .run(nanoid(), id, nextQuestion);
+          }
+
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+          controller.close();
+        } catch (err) {
+          console.error('[claude-relay] error:', err);
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null })}\n\n`));
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      }
+    });
+  }
+  // else: 기존 ANTHROPIC_API_KEY 분기 또는 Groq fallback으로 계속...
+
   const useClaudeApi = !!process.env.ANTHROPIC_API_KEY;
 
   if (useClaudeApi) {

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { COMPANIES, CATEGORIES, DIFFICULTIES, COMPANY_PASS_CRITERIA } from '@/lib/interview-data';
 import { apiFetch } from '@/lib/api-fetch';
 import { BetterAnswerSection } from '@/components/interview/BetterAnswerSection';
@@ -127,6 +128,8 @@ export default function ReportClient({
   messages: Message[];
   readOnly?: boolean;
 }) {
+  const router = useRouter();
+  const [retryLoading, setRetryLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
 
@@ -187,6 +190,27 @@ export default function ReportClient({
 
   // Quick action URL for retry
   const retryUrl = `/interview?company=${session.company}&category=${session.category}&difficulty=${session.difficulty}`;
+
+  async function handleFocusRetry() {
+    if (topMissingKw.length === 0) return;
+    setRetryLoading(true);
+    try {
+      const result = await apiFetch<{ sessionId: string }>('/api/interview/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: session.company,
+          category: session.category,
+          difficulty: session.difficulty,
+          focusKeywords: topMissingKw,
+        }),
+      });
+      if (!result.ok) throw new Error(result.message);
+      router.push(`/interview/${result.data.sessionId}`);
+    } catch {
+      setRetryLoading(false);
+    }
+  }
 
   return (
     <>
@@ -375,6 +399,15 @@ export default function ReportClient({
                   📓 오답노트 보기
                 </Link>
               </div>
+              {topMissingKw.length > 0 && (
+                <button
+                  onClick={handleFocusRetry}
+                  disabled={retryLoading}
+                  className="w-full py-3 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {retryLoading ? '준비 중...' : `💥 약점 집중 재도전 — ${topMissingKw.slice(0, 3).join(', ')} 집중 공략`}
+                </button>
+              )}
             </div>
           )}
         </main>

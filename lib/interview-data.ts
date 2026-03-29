@@ -198,7 +198,7 @@ export const COMPANY_PASS_CRITERIA: Record<string, {
   },
 };
 
-export function getSystemPrompt(companyId: string, categoryId: string, difficulty: string): string {
+export function getSystemPrompt(companyId: string, categoryId: string, difficulty: string, focusKeywords?: string[]): string {
   // 카카오페이 전용: 카테고리별 질문 풀 주입
   const kakaoPayQuestions = KAKAOPAY_QUESTIONS[categoryId] ?? KAKAOPAY_QUESTIONS['distributed-tx'];
   const questionPool = kakaoPayQuestions.map((q, i) => `  ${i + 1}. ${q}`).join('\n');
@@ -246,6 +246,10 @@ ${questionPool}`,
   const persona = companyPersonas[companyId] ?? companyPersonas['kakao'];
   const categoryHint = categoryHints[categoryId] ?? '기술 면접 질문';
 
+  const focusBlock = focusKeywords && focusKeywords.length > 0
+    ? `\n\n[이번 세션 집중 공략 키워드 — 최우선 출제]\n지원자가 이전 세션에서 언급하지 못한 핵심 키워드: [${focusKeywords.join(', ')}]\n→ 반드시 이 키워드들이 필요한 시나리오 기반 질문을 첫 2~3문제에 우선 출제하세요.`
+    : '';
+
   return `${persona}
 
 ${CANDIDATE_PROFILE}
@@ -266,5 +270,5 @@ ${CANDIDATE_PROFILE}
 [질문 생성 규칙]
 - 첫 번째 메시지에서는 질문만 하세요 (인사 없이 바로 질문).
 - 질문은 구체적이고 시나리오 기반이어야 합니다.
-- 지원자의 SK D&D IoT 플랫폼 경험과 연결지어 질문할 수 있습니다.`;
+- 지원자의 SK D&D IoT 플랫폼 경험과 연결지어 질문할 수 있습니다.${focusBlock}`;
 }

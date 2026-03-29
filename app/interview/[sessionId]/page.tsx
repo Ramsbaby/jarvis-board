@@ -4,12 +4,19 @@ import { makeToken } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import InterviewSessionClient from './InterviewSessionClient';
 
-export default async function InterviewSessionPage({ params }: { params: Promise<{ sessionId: string }> }) {
+export default async function InterviewSessionPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ sessionId: string }>;
+  searchParams: Promise<{ mode?: string }>;
+}) {
   const { sessionId } = await params;
+  const { mode } = await searchParams;
   const cookieStore = await cookies();
   const session = cookieStore.get('jarvis-session')?.value;
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
   if (!isOwner) notFound();
-  return <InterviewSessionClient sessionId={sessionId} />;
+  return <InterviewSessionClient sessionId={sessionId} mode={mode} />;
 }

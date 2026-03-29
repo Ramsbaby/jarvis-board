@@ -107,7 +107,7 @@ function formatElapsed(secs: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function InterviewSessionClient({ sessionId }: { sessionId: string }) {
+export default function InterviewSessionClient({ sessionId, mode }: { sessionId: string; mode?: string }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -174,6 +174,8 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
   }, [lastQuestionId]);
 
   const feedbackCount = messages.filter(m => m.role === 'feedback').length;
+  const isMicroMode = mode === 'micro';
+  const microComplete = isMicroMode && feedbackCount >= 3;
   const questionNumber = feedbackCount + 1;
 
   const submitAnswer = useCallback(async (answerText: string) => {
@@ -253,6 +255,12 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
           <span className="text-sm font-bold text-zinc-800">{company?.emoji} {company?.name}</span>
           <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full">{category?.name}</span>
           <div className="ml-auto flex items-center gap-3">
+            {/* Micro mode indicator */}
+            {isMicroMode && (
+              <span className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">
+                ⚡ 마이크로 {feedbackCount}/3
+              </span>
+            )}
             {/* Question counter */}
             <span className="text-sm font-black text-indigo-600 tabular-nums">Q{questionNumber}</span>
             {/* Elapsed timer */}
@@ -294,6 +302,21 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
           return null;
         })}
 
+        {microComplete && (
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center text-sm shrink-0">⚡</div>
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-4 space-y-3 max-w-[90%]">
+              <p className="text-sm font-black text-amber-800">⚡ 마이크로 드릴 완료!</p>
+              <p className="text-xs text-amber-700 leading-relaxed">3문제를 완료했습니다. 피드백을 확인하고 약점을 파악하세요.</p>
+              <button
+                onClick={handleEnd}
+                className="w-full py-2.5 rounded-xl bg-amber-500 text-white font-bold text-sm hover:bg-amber-600 transition-colors"
+              >
+                📊 결과 보기 →
+              </button>
+            </div>
+          </div>
+        )}
         {streaming && (
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
@@ -310,7 +333,7 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
         <div ref={bottomRef} />
       </div>
 
-      {session?.status !== 'completed' && (
+      {session?.status !== 'completed' && !microComplete && (
         <div className="sticky bottom-0 bg-white border-t border-zinc-200">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <div className="flex gap-2 items-end">

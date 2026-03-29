@@ -27,14 +27,14 @@ export async function POST(req: NextRequest) {
   const { isOwner } = getRequestAuth(req);
   if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { company, category, difficulty = 'mid' } = await req.json();
+  const { company, category, difficulty = 'mid', focusKeywords } = await req.json();
   if (!company || !category) return NextResponse.json({ error: 'company and category required' }, { status: 400 });
 
   const db = getDb();
   const sessionId = nanoid();
   db.prepare(`INSERT INTO interview_sessions (id, company, category, difficulty) VALUES (?, ?, ?, ?)`).run(sessionId, company, category, difficulty);
 
-  const systemPrompt = getSystemPrompt(company, category, difficulty);
+  const systemPrompt = getSystemPrompt(company, category, difficulty, focusKeywords);
   let firstQuestion: string;
   try {
     firstQuestion = await callLLM('면접을 시작합니다. 첫 번째 질문을 해주세요.', {

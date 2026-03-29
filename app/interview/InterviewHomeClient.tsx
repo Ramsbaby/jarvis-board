@@ -113,7 +113,7 @@ function mapKeywordToCategory(keyword: string): string {
 }
 
 interface TodayRecommendProps {
-  onStart: (overrides: { company: string; category: string; difficulty: string }) => void;
+  onStart: (overrides: { company: string; category: string; difficulty: string; mode?: string }) => void;
   loading: boolean;
 }
 
@@ -498,10 +498,11 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleStart(overrides?: { company: string; category: string; difficulty: string }) {
+  async function handleStart(overrides?: { company: string; category: string; difficulty: string; mode?: string }) {
     const co = overrides?.company ?? company;
     const ca = overrides?.category ?? category;
     const di = overrides?.difficulty ?? difficulty;
+    const mo = overrides?.mode;
     setLoading(true);
     setError('');
     try {
@@ -511,7 +512,8 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
         body: JSON.stringify({ company: co, category: ca, difficulty: di }),
       });
       if (!result.ok) throw new Error(result.message);
-      router.push(`/interview/${result.data.sessionId}`);
+      const url = mo ? `/interview/${result.data.sessionId}?mode=${mo}` : `/interview/${result.data.sessionId}`;
+      router.push(url);
     } catch (e) {
       setError(String(e));
       setLoading(false);
@@ -539,6 +541,22 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
 
         {/* 오늘의 추천 카드 — 반복 약점 기반 자동 추천 */}
         <TodayRecommendCard onStart={handleStart} loading={loading} />
+
+        {/* 마이크로 세션 — 8분 집중 드릴 */}
+        <button
+          onClick={() => handleStart({ company: 'kakaopay', category: 'distributed-tx', difficulty: 'senior', mode: 'micro' })}
+          disabled={loading}
+          className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl border-2 border-amber-300 bg-white hover:bg-amber-50 disabled:opacity-50 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⚡</span>
+            <div className="text-left">
+              <p className="text-sm font-black text-zinc-800">8분 집중 드릴</p>
+              <p className="text-[11px] text-zinc-400">3문제 · 시니어 압박 · 오늘의 약점 공략</p>
+            </div>
+          </div>
+          <span className="text-amber-500 font-bold text-sm group-hover:translate-x-0.5 transition-transform">→</span>
+        </button>
 
         {/* Quick Start Banner — 카카오페이 고정 추천 */}
         <div className="rounded-2xl p-5 space-y-3" style={{ background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)' }}>

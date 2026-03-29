@@ -236,8 +236,10 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = agentKey === process.env.AGENT_API_KEY;
   const { isOwner } = getRequestAuth(req);
-  if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isOwner && !isAgent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getDb();
   const task = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(id) as TaskStatusRow | undefined;

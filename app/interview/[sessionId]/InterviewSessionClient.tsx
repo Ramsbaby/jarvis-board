@@ -42,9 +42,8 @@ function BetterAnswerSection({ betterAnswer, score, missingKeywords }: {
   score: number;
   missingKeywords: string[];
 }) {
-  // <60: 자동 펼침(못 답한 경우), 60~79: 접힌 버튼, ≥80: 최소 토글
-  const autoOpen = score < 60;
-  const [open, setOpen] = useState(autoOpen);
+  // 항상 접힌 상태로 시작 — 누르면 확인 가능
+  const [open, setOpen] = useState(false);
   const tips = parseTips(betterAnswer);
 
   // 점수 구간별 UI 설정

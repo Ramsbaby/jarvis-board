@@ -552,9 +552,35 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   // Group filtered children — pass full tasks for parent lookup (parent may be in different tab)
   const { groups: taskGroups, ungrouped: ungroupedTasks } = useMemo(
     () => groupTasks(filtered, tasks),
-     
+
     [filtered, tasks],
   );
+
+  // 같은 논의(post_id)에서 온 여러 그룹을 하나의 버킷으로 묶음
+  // → "하나의 논의에 여러 부모 태스크" 문제 해소
+  interface PostBucket {
+    bucketKey: string;          // post_id or post_title (fallback)
+    postTitle: string;
+    postId: string | null;
+    groups: typeof taskGroups;
+  }
+  const postBuckets = useMemo<PostBucket[]>(() => {
+    const map = new Map<string, PostBucket>();
+    for (const group of taskGroups) {
+      // 그룹 키: post_id 우선, 없으면 post_title, 최후엔 group_id
+      const postId = group.parentTask?.post_id ?? group.tasks[0]?.post_id ?? null;
+      const postTitle = group.label;
+      const key = postId ?? postTitle ?? group.groupId;
+
+      const existing = map.get(key);
+      if (existing) {
+        existing.groups.push(group);
+      } else {
+        map.set(key, { bucketKey: key, postTitle, postId, groups: [group] });
+      }
+    }
+    return Array.from(map.values());
+  }, [taskGroups]);
 
   // Auto-expand groups with active tasks; use parent task status when available
   useEffect(() => {
@@ -803,6 +829,190 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     );
   }
 
+  // ── 그룹 카드 렌더러: postBuckets 단/복수 모두 재사용 ──
+  const renderGroupCard = (group: (typeof taskGroups)[number]) => {
+    const isExpanded = expandedGroups.has(group.groupId);
+    // 진행률은 탭 필터와 무관하게 그룹 전체 자식 기준으로 계산
+    const allGroupChildren = tasks.filter(t => t.group_id === group.groupId && t.task_type !== 'group_parent');
+    const doneCount = allGroupChildren.filter(t => t.status === 'done').length;
+    const failedCount = allGroupChildren.filter(t => t.status === 'failed' || t.status === 'rejected').length;
+    const total = allGroupChildren.length;
+    const allDone = total > 0 && (doneCount + failedCount) === total;
+    const inProgressCount = allGroupChildren.filter(t => t.status === 'in-progress').length;
+    const awaitingCount = allGroupChildren.filter(t => t.status === 'awaiting_approval').length;
+    const pt = group.parentTask;
+    const groupTaskIds = new Set(group.tasks.map(t => t.id));
+    const ptSt = pt ? (STATUS_STYLE[pt.status] ?? STATUS_STYLE.awaiting_approval) : null;
+
+    return (
+      <div key={group.groupId} className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
+        {/* Group header */}
+        <div className="w-full">
+          {/* Status stripe from parent task */}
+          {pt && ptSt?.stripe && <div className={`h-1 w-full ${ptSt.stripe}`} />}
+
+          {/* Main header row */}
+          <div className="flex items-start gap-3 p-4 pb-3">
+            <button
+              onClick={() => toggleGroup(group.groupId)}
+              className="shrink-0 p-1 mt-0.5 rounded hover:bg-indigo-100 transition-colors"
+            >
+              {isExpanded
+                ? <ChevronDown className="w-4 h-4 text-indigo-400" />
+                : <ChevronRight className="w-4 h-4 text-indigo-400" />
+              }
+            </button>
+            <div className="flex-1 min-w-0">
+              {/* Title + collapse toggle */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  {pt ? (
+                    <Link href={`/dev-tasks/${pt.id}`} className="block group/ptitle hover:opacity-80 transition-opacity">
+                      <h3 className="text-sm font-semibold text-zinc-800 leading-snug group-hover/ptitle:text-indigo-700">
+                        🏛️ {group.label}
+                      </h3>
+                    </Link>
+                  ) : (
+                    <h3 className="text-sm font-semibold text-zinc-800 leading-snug">
+                      📦 {group.label}
+                    </h3>
+                  )}
+                  <p className="text-[10px] text-zinc-400 mt-0.5">이사회 토론 · 서브태스크 {total}개</p>
+                </div>
+                <button
+                  onClick={() => toggleGroup(group.groupId)}
+                  className="shrink-0 text-[11px] text-zinc-400 hover:text-zinc-600 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                >
+                  {isExpanded ? '접기 ▲' : `${group.tasks.length}개 보기 ▼`}
+                </button>
+              </div>
+
+              {/* Progress bar */}
+              <div className="flex items-center gap-2 mt-2">
+                <div className="flex-1 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
+                  {total > 0 && (
+                    <div className="h-full flex">
+                      {doneCount > 0 && (
+                        <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${(doneCount / total) * 100}%` }} />
+                      )}
+                      {inProgressCount > 0 && (
+                        <div className="bg-indigo-400 h-full transition-all duration-500" style={{ width: `${(inProgressCount / total) * 100}%` }} />
+                      )}
+                      {failedCount > 0 && (
+                        <div className="bg-zinc-400 h-full transition-all duration-500" style={{ width: `${(failedCount / total) * 100}%` }} />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <span className="text-[10px] tabular-nums shrink-0 font-medium" style={{ color: allDone ? '#059669' : '#71717a' }}>
+                  {doneCount}/{total}
+                  {total > 0 && <span className="font-normal opacity-70"> 완료</span>}
+                </span>
+              </div>
+
+              {/* Non-awaiting status badges */}
+              {awaitingCount === 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                  {pt && ptSt && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ptSt.badgeCls}`}>
+                      {ptSt.badgeLabel}
+                    </span>
+                  )}
+                  {inProgressCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
+                      ⚙ {inProgressCount}개 작업 중
+                    </span>
+                  )}
+                  {allDone && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
+                      🎉 전체 완료
+                    </span>
+                  )}
+                  {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
+                    GROUP_DELETABLE.includes(t.status)
+                  ) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
+                      disabled={bulkLoading}
+                      className="ml-auto text-[10px] px-2 py-1 rounded-md bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors font-medium"
+                    >
+                      🗑 삭제
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── 승인 패널 — awaiting 태스크가 있을 때 표시 ── */}
+          {awaitingCount > 0 && (
+            <div className="mx-3 mb-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-800">🔍 {awaitingCount}개 서브태스크 승인 필요</p>
+                  <p className="text-[11px] text-amber-600 mt-0.5">에이전트가 대기 중 · 승인하면 즉시 실행됩니다</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
+                    GROUP_DELETABLE.includes(t.status)
+                  ) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
+                      disabled={bulkLoading}
+                      className="px-3 py-2 text-xs font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                    >
+                      🗑 그룹 삭제
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleGroupApproveAll(group); }}
+                    disabled={bulkLoading}
+                    className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap min-h-[44px]"
+                  >
+                    {bulkLoading ? (
+                      <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />처리 중</>
+                    ) : `✓ 그룹 전체 승인`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Expanded child tasks */}
+        {isExpanded && (
+          <div className="ml-6 border-l-2 border-indigo-200 pl-4 pb-3 pr-3 space-y-2">
+            {group.tasks.map(task => {
+              const deps = parseDependsOn(task.depends_on);
+              const depsInGroup = deps.filter(d => groupTaskIds.has(d));
+              const allDepsDone = depsInGroup.length === 0 || depsInGroup.every(depId => {
+                const depTask = group.tasks.find(t => t.id === depId);
+                return depTask?.status === 'done';
+              });
+
+              return (
+                <div key={task.id}>
+                  {/* Dependency indicator */}
+                  {depsInGroup.length > 0 && (
+                    <div className="flex items-center gap-1 mb-1 ml-1">
+                      <span className={`w-3 h-3 flex items-center justify-center rounded-full ${allDepsDone ? 'bg-emerald-100' : 'bg-zinc-200'}`}>
+                        {allDepsDone && <Check className="w-2 h-2 text-emerald-600" />}
+                      </span>
+                      <span className="text-[9px] text-zinc-500">
+                        {allDepsDone ? '선행 완료' : `선행 ${depsInGroup.length}개 대기`}
+                      </span>
+                    </div>
+                  )}
+                  {renderTaskCard(task)}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const STATS = [
     { label: '검토 요청됨',      key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
     { label: '승인됨',           key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: true  },
@@ -946,190 +1156,82 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Grouped tasks */}
-          {taskGroups.map(group => {
-            const isExpanded = expandedGroups.has(group.groupId);
-            // 진행률은 탭 필터와 무관하게 그룹 전체 자식 기준으로 계산
-            const allGroupChildren = tasks.filter(t => t.group_id === group.groupId && t.task_type !== 'group_parent');
-            const doneCount = allGroupChildren.filter(t => t.status === 'done').length;
-            const failedCount = allGroupChildren.filter(t => t.status === 'failed' || t.status === 'rejected').length;
-            const total = allGroupChildren.length;
-            const allDone = total > 0 && (doneCount + failedCount) === total;
-            const inProgressCount = allGroupChildren.filter(t => t.status === 'in-progress').length;
-            const awaitingCount = allGroupChildren.filter(t => t.status === 'awaiting_approval').length;
-            const pt = group.parentTask; // shorthand for parent task
+          {/* Grouped tasks — PostBucket layer: 같은 논의의 여러 그룹을 하나로 묶음 */}
+          {postBuckets.map(bucket => {
+            // 단일 그룹 버킷: 기존 그룹 카드 그대로
+            if (bucket.groups.length === 1) {
+              return renderGroupCard(bucket.groups[0]);
+            }
 
-            // Build a set of all task IDs in this group for dependency checking
-            const groupTaskIds = new Set(group.tasks.map(t => t.id));
-
-            // Parent task status style
-            const ptSt = pt ? (STATUS_STYLE[pt.status] ?? STATUS_STYLE.awaiting_approval) : null;
+            // 복수 그룹 버킷: 토론 래퍼 카드 + 서브그룹 나열
+            const allBucketChildren = bucket.groups.flatMap(g =>
+              tasks.filter(t => t.group_id === g.groupId && t.task_type !== 'group_parent')
+            );
+            const bucketDone      = allBucketChildren.filter(t => t.status === 'done').length;
+            const bucketFailed    = allBucketChildren.filter(t => t.status === 'failed' || t.status === 'rejected').length;
+            const bucketProgress  = allBucketChildren.filter(t => t.status === 'in-progress').length;
+            const bucketTotal     = allBucketChildren.length;
+            const bucketAllDone   = bucketTotal > 0 && (bucketDone + bucketFailed) === bucketTotal;
+            const bucketAwaiting  = allBucketChildren.filter(t => t.status === 'awaiting_approval').length;
 
             return (
-              <div key={group.groupId} className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
-                {/* Group header */}
-                <div className="w-full">
-                  {/* Status stripe from parent task */}
-                  {pt && ptSt?.stripe && <div className={`h-1 w-full ${ptSt.stripe}`} />}
-
-                  {/* Main header row */}
-                  <div className="flex items-start gap-3 p-4 pb-3">
-                    <button
-                      onClick={() => toggleGroup(group.groupId)}
-                      className="shrink-0 p-1 mt-0.5 rounded hover:bg-indigo-100 transition-colors"
-                    >
-                      {isExpanded
-                        ? <ChevronDown className="w-4 h-4 text-indigo-400" />
-                        : <ChevronRight className="w-4 h-4 text-indigo-400" />
-                      }
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      {/* Title + collapse toggle */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          {pt ? (
-                            <Link href={`/dev-tasks/${pt.id}`} className="block group/ptitle hover:opacity-80 transition-opacity">
-                              <h3 className="text-sm font-semibold text-zinc-800 leading-snug group-hover/ptitle:text-indigo-700">
-                                🏛️ {group.label}
-                              </h3>
-                            </Link>
-                          ) : (
-                            <h3 className="text-sm font-semibold text-zinc-800 leading-snug">
-                              📦 {group.label}
-                            </h3>
-                          )}
-                          <p className="text-[10px] text-zinc-400 mt-0.5">이사회 토론 · 서브태스크 {total}개</p>
-                        </div>
-                        <button
-                          onClick={() => toggleGroup(group.groupId)}
-                          className="shrink-0 text-[11px] text-zinc-400 hover:text-zinc-600 px-2 py-1 rounded transition-colors whitespace-nowrap"
-                        >
-                          {isExpanded ? '접기 ▲' : `${group.tasks.length}개 보기 ▼`}
-                        </button>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
-                          {total > 0 && (
-                            <div className="h-full flex">
-                              {doneCount > 0 && (
-                                <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${(doneCount / total) * 100}%` }} />
-                              )}
-                              {inProgressCount > 0 && (
-                                <div className="bg-indigo-400 h-full transition-all duration-500" style={{ width: `${(inProgressCount / total) * 100}%` }} />
-                              )}
-                              {failedCount > 0 && (
-                                <div className="bg-zinc-400 h-full transition-all duration-500" style={{ width: `${(failedCount / total) * 100}%` }} />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] tabular-nums shrink-0 font-medium" style={{ color: allDone ? '#059669' : '#71717a' }}>
-                          {doneCount}/{total}
-                          {total > 0 && <span className="font-normal opacity-70"> 완료</span>}
-                        </span>
-                      </div>
-
-                      {/* Non-awaiting status badges */}
-                      {awaitingCount === 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                          {pt && ptSt && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ptSt.badgeCls}`}>
-                              {ptSt.badgeLabel}
-                            </span>
-                          )}
-                          {inProgressCount > 0 && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
-                              ⚙ {inProgressCount}개 작업 중
-                            </span>
-                          )}
-                          {allDone && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
-                              🎉 전체 완료
-                            </span>
-                          )}
-                          {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
-                            GROUP_DELETABLE.includes(t.status)
-                          ) && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
-                              disabled={bulkLoading}
-                              className="ml-auto text-[10px] px-2 py-1 rounded-md bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors font-medium"
-                            >
-                              🗑 삭제
-                            </button>
-                          )}
-                        </div>
+              <div key={bucket.bucketKey} className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
+                {/* Discussion wrapper header */}
+                <div className="px-4 pt-3 pb-2.5 bg-zinc-50/80 border-b border-zinc-100">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {bucket.postId ? (
+                        <Link href={`/posts/${bucket.postId}`} className="block group/btitle hover:opacity-80 transition-opacity">
+                          <h3 className="text-sm font-semibold text-zinc-800 leading-snug group-hover/btitle:text-indigo-700">
+                            📋 {bucket.postTitle}
+                          </h3>
+                        </Link>
+                      ) : (
+                        <h3 className="text-sm font-semibold text-zinc-800 leading-snug">📋 {bucket.postTitle}</h3>
                       )}
+                      <p className="text-[10px] text-zinc-400 mt-0.5">
+                        이사회 토론 · {bucket.groups.length}개 작업 묶음 · 서브태스크 {bucketTotal}개
+                      </p>
                     </div>
-                  </div>
-
-                  {/* ── 승인 패널 — awaiting 태스크가 있을 때 표시 ── */}
-                  {awaitingCount > 0 && (
-                    <div className="mx-3 mb-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-amber-800">🔍 {awaitingCount}개 서브태스크 승인 필요</p>
-                          <p className="text-[11px] text-amber-600 mt-0.5">에이전트가 대기 중 · 승인하면 즉시 실행됩니다</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
-                            GROUP_DELETABLE.includes(t.status)
-                          ) && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
-                              disabled={bulkLoading}
-                              className="px-3 py-2 text-xs font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
-                            >
-                              🗑 그룹 삭제
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleGroupApproveAll(group); }}
-                            disabled={bulkLoading}
-                            className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap min-h-[44px]"
-                          >
-                            {bulkLoading ? (
-                              <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />처리 중</>
-                            ) : `✓ 그룹 전체 승인`}
-                          </button>
-                        </div>
+                    {/* Combined progress */}
+                    <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                      <div className="w-20 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
+                        {bucketTotal > 0 && (
+                          <div className="h-full flex">
+                            {bucketDone > 0 && <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(bucketDone / bucketTotal) * 100}%` }} />}
+                            {bucketProgress > 0 && <div className="bg-indigo-400 h-full transition-all" style={{ width: `${(bucketProgress / bucketTotal) * 100}%` }} />}
+                            {bucketFailed > 0 && <div className="bg-zinc-400 h-full transition-all" style={{ width: `${(bucketFailed / bucketTotal) * 100}%` }} />}
+                          </div>
+                        )}
                       </div>
+                      <span className="text-[10px] tabular-nums font-medium" style={{ color: bucketAllDone ? '#059669' : '#71717a' }}>
+                        {bucketDone}/{bucketTotal}
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {/* Expanded child tasks */}
-                {isExpanded && (
-                  <div className="ml-6 border-l-2 border-indigo-200 pl-4 pb-3 pr-3 space-y-2">
-                    {group.tasks.map(task => {
-                      const deps = parseDependsOn(task.depends_on);
-                      const depsInGroup = deps.filter(d => groupTaskIds.has(d));
-                      const allDepsDone = depsInGroup.length === 0 || depsInGroup.every(depId => {
-                        const depTask = group.tasks.find(t => t.id === depId);
-                        return depTask?.status === 'done';
-                      });
-
-                      return (
-                        <div key={task.id}>
-                          {/* Dependency indicator */}
-                          {depsInGroup.length > 0 && (
-                            <div className="flex items-center gap-1 mb-1 ml-1">
-                              <span className={`w-3 h-3 flex items-center justify-center rounded-full ${allDepsDone ? 'bg-emerald-100' : 'bg-zinc-200'}`}>
-                                {allDepsDone && <Check className="w-2 h-2 text-emerald-600" />}
-                              </span>
-                              <span className="text-[9px] text-zinc-500">
-                                {allDepsDone ? '선행 완료' : `선행 ${depsInGroup.length}개 대기`}
-                              </span>
-                            </div>
-                          )}
-                          {renderTaskCard(task)}
-                        </div>
-                      );
-                    })}
                   </div>
-                )}
+                  {/* Status badges */}
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {bucketAwaiting > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 font-medium">
+                        ⚠ {bucketAwaiting}개 승인 필요
+                      </span>
+                    )}
+                    {bucketAllDone && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
+                        🎉 전체 완료
+                      </span>
+                    )}
+                    {bucketProgress > 0 && !bucketAllDone && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
+                        ⚙ {bucketProgress}개 작업 중
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Sub-group cards */}
+                <div className="p-2 space-y-2">
+                  {bucket.groups.map(g => renderGroupCard(g))}
+                </div>
               </div>
             );
           })}

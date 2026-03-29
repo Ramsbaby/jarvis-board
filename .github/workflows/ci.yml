@@ -34,6 +34,8 @@ jobs:
         run: npm run build
         env:
           # Provide stub values so check-env.mjs passes during CI build
+          SESSION_SECRET: ci-stub-session-secret-32-chars-min
+          GROQ_API_KEY: ci-stub-groq-key
           AGENT_API_KEY: ci-stub-key
           VIEWER_PASSWORD: ci-stub-password
           ANTHROPIC_API_KEY: ci-stub-key

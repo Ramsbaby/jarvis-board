@@ -133,25 +133,6 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
   },
 };
 
-const TAB_BADGE_CLS: Record<string, string> = {
-  awaiting_approval: 'bg-amber-500 text-white',
-  approved:          'bg-teal-500 text-white',
-  'in-progress':     'bg-indigo-500 text-white',
-  done:              'bg-emerald-500 text-white',
-  rejected:          'bg-zinc-400 text-white',
-  failed:            'bg-red-400 text-white',
-};
-
-const STATUS_TABS = [
-  { key: 'all',               label: '전체' },
-  { key: 'awaiting_approval', label: '검토 요청됨' },
-  { key: 'approved',          label: '승인됨' },
-  { key: 'in-progress',       label: 'Jarvis 작업 중' },
-  { key: 'done',              label: '완료' },
-  { key: 'rejected',          label: '반려' },
-  { key: 'failed',            label: '실패' },
-] as const;
-
 // 제목 내 `코드` → 인라인 코드 강조 (경로 전체 표시, 파일명 단축 없음)
 // 미완성 백틱(잘린 제목)도 처리 — 닫힌 척 하고 끝에 … 표시
 function renderTitle(title: string): React.ReactNode {
@@ -1056,45 +1037,48 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         </div>
       )}
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
-        {STATS.map(s => (
-          <button
-            key={s.key}
-            onClick={() => setTab(s.key)}
-            className={`rounded-lg border p-3 flex flex-col gap-1 text-left transition-opacity hover:opacity-80 ${s.color} ${tab === s.key ? 'ring-2 ring-offset-1 ring-current' : ''}`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${s.dot} ${s.pulse ? 'animate-pulse' : ''}`} />
-              <span className="text-[11px] font-medium">{s.label}</span>
-            </div>
-            <span className="text-2xl font-black tabular-nums">{grouped[s.key]?.length ?? 0}</span>
-          </button>
-        ))}
-      </div>
+      {/* Unified status filter — stats + tabs merged into one pill bar */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        {/* 전체 */}
+        <button
+          onClick={() => setTab('all')}
+          className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border transition-all ${
+            tab === 'all'
+              ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+              : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'
+          }`}
+        >
+          전체
+          <span className={`tabular-nums font-black text-sm leading-none ${tab === 'all' ? 'text-white/90' : 'text-zinc-700'}`}>
+            {tasks.length}
+          </span>
+        </button>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 pb-0 -mb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {STATUS_TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors relative -mb-px whitespace-nowrap ${
-              tab === t.key
-                ? 'text-indigo-600 border border-zinc-200 border-b-white bg-white'
-                : 'text-zinc-500 hover:text-zinc-700'
-            }`}
-          >
-            {t.label}
-            {(grouped[t.key]?.length ?? 0) > 0 && (
-              <span className={`ml-1.5 text-[10px] px-1 py-0.5 rounded-full font-bold ${
-                t.key === 'all' ? 'bg-zinc-100 text-zinc-500' : (TAB_BADGE_CLS[t.key] ?? 'bg-zinc-100 text-zinc-500')
-              }`}>
-                {t.key === 'all' ? tasks.length : (grouped[t.key]?.length ?? 0)}
-              </span>
-            )}
-          </button>
-        ))}
+        {STATS.map(s => {
+          const count = grouped[s.key]?.length ?? 0;
+          const isActive = tab === s.key;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setTab(s.key)}
+              className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border transition-all ${
+                isActive
+                  ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+                  : count > 0
+                    ? 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300 hover:text-zinc-800'
+                    : 'bg-white text-zinc-300 border-zinc-100 cursor-default'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot} ${s.pulse && count > 0 && !isActive ? 'animate-pulse' : ''}`} />
+              {s.label}
+              {count > 0 && (
+                <span className={`tabular-nums font-black text-sm leading-none ${isActive ? 'text-white/90' : 'text-zinc-700'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Search + Bulk actions toolbar */}
@@ -1102,13 +1086,21 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         <div className="relative flex-1">
           <input
             type="text"
-            placeholder="🔍 태스크 검색 (제목, 상세)"
+            placeholder="태스크 검색 (제목, 상세)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full px-3 py-2 pl-9 text-sm border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">🔍</span>
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
         </div>
+        <Link
+          href="/dev-tasks/reports"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-white border border-zinc-200 text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors whitespace-nowrap"
+        >
+          📊 품질 리포트
+        </Link>
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
             <span className="text-xs font-medium text-indigo-700">{selectedIds.size}개 선택</span>

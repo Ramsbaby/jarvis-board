@@ -180,6 +180,31 @@ export async function GET(req: NextRequest) {
     };
   }
 
+  // sysMetrics가 null이거나 일부 필드가 없을 때 기본값 제공
+  if (!sysMetrics) {
+    sysMetrics = {
+      synced_at: new Date().toISOString(),
+      disk: { used_pct: 0, free_gb: 0, total_gb: 0 },
+      health: { discord_bot: 'unknown', memory_mb: 0 },
+      discord_stats: {
+        claudeCount: 0,
+        totalHuman: 0,
+        avgElapsed: 0,
+        restartCount: 0,
+        botErrors: 0,
+        lastHealth: { silenceSec: 0, memMB: 0 },
+        channelActivity: []
+      },
+      rag_stats: { dbSize: 'N/A', stuck: false, inboxCount: 0, chunks: 0 },
+      launch_agents: [],
+      circuit_breakers: [],
+      cron_stats: { rate: 100, recentFailed: [], taskStatus: {} },
+      decisions_today: [],
+      dev_queue: [],
+      scorecard: { teams: {} }
+    };
+  }
+
   // ── 1. System health ──
   const health = readJsonFile<{
     discord_bot?: string; memory_mb?: number; crash_count?: number;

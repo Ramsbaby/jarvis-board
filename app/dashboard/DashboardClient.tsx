@@ -217,13 +217,13 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
     : data.overall === 'yellow' ? 'bg-amber-50 border-amber-100'
     : 'bg-red-50 border-red-100';
 
-  // sysMetrics
-  const diskPct = sm?.disk?.used_pct ?? 0;
-  const diskFree = sm?.disk?.free_gb?.toFixed(0) ?? '?';
-  const memMb = sm?.health?.memory_mb ?? sm?.discord_stats?.lastHealth?.memMB ?? 0;
-  const silenceSec = sm?.discord_stats?.lastHealth?.silenceSec ?? 0;
+  // sysMetrics - null 방어 강화
+  const diskPct = sm?.disk?.used_pct ?? null;
+  const diskFree = sm?.disk?.free_gb != null ? sm.disk.free_gb.toFixed(0) : null;
+  const memMb = sm?.health?.memory_mb ?? sm?.discord_stats?.lastHealth?.memMB ?? null;
+  const silenceSec = sm?.discord_stats?.lastHealth?.silenceSec ?? null;
   const ragStuck = sm?.rag_stats?.stuck ?? false;
-  const ragSize = sm?.rag_stats?.dbSize ?? '';
+  const ragSize = sm?.rag_stats?.dbSize ?? null;
   const launchAgents = sm?.launch_agents ?? [];
   const syncedAt = sm?.synced_at;
 
@@ -254,18 +254,22 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
       {sm && (
         <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
           <span className="text-zinc-600">
-            💾 디스크 <span className={diskPct >= 80 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>{diskPct}%</span>
-            <span className="text-zinc-400"> ({diskFree}GB 여유)</span>
-          </span>
-          {memMb > 0 && <span className="text-zinc-600">🧠 메모리 <span className="text-zinc-500">{memMb}MB</span></span>}
-          <span className="text-zinc-600">
-            🤖 봇 마지막 활동{' '}
-            <span className={silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
-              {silenceLabel(silenceSec)}
+            💾 디스크 <span className={diskPct != null && diskPct >= 80 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
+              {diskPct != null ? `${diskPct}%` : 'N/A'}
             </span>
+            {diskFree != null && <span className="text-zinc-400"> ({diskFree}GB 여유)</span>}
           </span>
+          {memMb != null && <span className="text-zinc-600">🧠 메모리 <span className="text-zinc-500">{memMb}MB</span></span>}
+          {silenceSec != null && (
+            <span className="text-zinc-600">
+              🤖 봇 마지막 활동{' '}
+              <span className={silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
+                {silenceLabel(silenceSec)}
+              </span>
+            </span>
+          )}
           <span className={`${ragStuck ? 'text-amber-600 font-semibold' : 'text-zinc-600'}`}>
-            📚 RAG {ragStuck ? '⚠ 점검필요' : '정상'}{ragSize ? ` ${ragSize}` : ''}
+            📚 RAG {ragStuck ? '⚠ 점검필요' : '정상'}{ragSize != null ? ` ${ragSize}` : ''}
           </span>
         </div>
       )}
@@ -502,19 +506,19 @@ function TodayActivityCard({ sm, today, onOpen }: { sm?: DashboardData['sysMetri
       {/* Row 1: 봇 활동 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         <div className="bg-zinc-50 rounded-lg p-2 text-center">
-          <div className="text-2xl font-black text-zinc-900 tabular-nums">{botCalls}</div>
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{botCalls || '-'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">봇 응답</div>
         </div>
         <div className="bg-zinc-50 rounded-lg p-2 text-center">
-          <div className="text-2xl font-black text-zinc-900 tabular-nums">{humanMsgs}</div>
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{humanMsgs || '-'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">사람 메시지</div>
         </div>
         <div className="bg-zinc-50 rounded-lg p-2 text-center">
-          <div className="text-2xl font-black text-zinc-900 tabular-nums">{avgElapsed}</div>
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{avgElapsed || '-'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">평균 응답(초)</div>
         </div>
         <div className={`rounded-lg p-2 text-center ${restarts > 3 ? 'bg-amber-50' : 'bg-zinc-50'}`}>
-          <div className={`text-2xl font-black tabular-nums ${restarts > 3 ? 'text-amber-700' : 'text-zinc-900'}`}>{restarts}</div>
+          <div className={`text-2xl font-black tabular-nums ${restarts > 3 ? 'text-amber-700' : 'text-zinc-900'}`}>{restarts || '-'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">재시작</div>
         </div>
       </div>

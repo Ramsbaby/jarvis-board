@@ -1,3 +1,41 @@
+/** 카카오페이 실전 질문 풀 — 카테고리별 분류, LLM 프롬프트에 주입됨 */
+export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
+  'distributed-tx': [
+    '결제 승인 요청이 성공했지만 이후 매입 처리 중 DB 장애가 발생했습니다. 이 시나리오에서 데이터 정합성을 어떻게 보장하시겠습니까?',
+    'Saga 패턴에서 Choreography와 Orchestration의 차이를 설명하고, 카카오페이 결제 시스템에 어느 방식이 더 적합한지 근거와 함께 말씀해 주세요.',
+    'TCC(Try-Confirm-Cancel) 패턴을 결제 취소 시나리오에 적용한다면 Try/Confirm/Cancel 각 단계에서 무엇을 처리해야 합니까?',
+    '분산 트랜잭션에서 2PC(Two-Phase Commit)를 사용하지 않는 이유를 설명하고, 대안으로 선택한 패턴과 그 이유를 실무 경험을 들어 말씀해 주세요.',
+    '아웃박스 패턴(Transactional Outbox)이 무엇인지 설명하고, 결제 이벤트 발행에 어떻게 활용하는지 구체적으로 설명해 주세요.',
+    '보상 트랜잭션 구현 시 멱등성을 어떻게 보장합니까? 코드 수준의 구체적 구현 방법을 말씀해 주세요.',
+    '이벤트 소싱(Event Sourcing)을 결제 시스템에 적용할 때의 장단점과 실제 적용 시 주의사항을 말씀해 주세요.',
+  ],
+  'payment-arch': [
+    '결제 상태 머신(State Machine)을 설계한다면 어떤 상태와 전이(transition)를 정의하시겠습니까? 부분취소는 어떻게 처리합니까?',
+    '이중 결제(double payment) 방지를 위한 멱등성 키 설계 방법을 설명해 주세요. Redis와 DB를 어떻게 조합합니까?',
+    '결제 대사(reconciliation) 시스템을 설계한다면 어떻게 구현하시겠습니까? 불일치 감지와 자동 복구는 어떻게 처리합니까?',
+    'PG사와의 연동에서 타임아웃이 발생했을 때 Unknown 결제 상태를 어떻게 처리합니까? 상태 조회 재시도 전략을 말씀해 주세요.',
+    '결제 승인 API의 SLA가 99.99%라면 단일 장애점(SPOF) 없는 고가용성 설계를 어떻게 구성하시겠습니까?',
+    '결제 취소와 환불 프로세스에서 카드사/은행과 내부 시스템 간 정합성이 깨지는 경우 어떻게 복구합니까?',
+  ],
+  'concurrency': [
+    '동시에 100개의 결제 요청이 같은 계좌에 들어올 때 잔액 초과 결제를 어떻게 방지합니까? 낙관적 락과 비관적 락 중 무엇을 선택하고 그 이유는?',
+    'Redis 분산락을 이용한 중복 결제 방지 구현 시 락 타임아웃과 만료(TTL) 처리를 어떻게 설계합니까?',
+    '낙관적 락(Optimistic Lock)이 연속 충돌로 실패할 때 재시도 전략을 어떻게 구성합니까? 결제 시스템에서 재시도가 안전한 경우와 위험한 경우를 구분해 주세요.',
+    'DB 레벨 SELECT FOR UPDATE와 애플리케이션 레벨 분산락의 장단점을 결제 시스템 관점에서 비교해 주세요.',
+  ],
+  'kafka': [
+    '결제 이벤트를 Kafka로 발행할 때 at-least-once 보장으로 중복 이벤트가 발생했습니다. 컨슈머에서 멱등성을 어떻게 보장합니까?',
+    'Kafka 컨슈머 리밸런싱 중 결제 완료 이벤트 처리에 실패했습니다. 오프셋 커밋 전략을 어떻게 설계하시겠습니까?',
+    'Kafka를 이용한 Saga 구현에서 보상 이벤트가 순서대로 처리되지 않는 경우 어떻게 처리합니까?',
+    '결제 완료 이벤트가 Kafka에 발행됐지만 정산 서비스 컨슈머가 다운된 상태입니다. 데이터 손실 없이 복구하는 과정을 설명해 주세요.',
+  ],
+  'system-design': [
+    '일일 1,000만 건 결제를 처리하는 시스템을 설계해 주세요. DB 병목 지점과 해결 방안을 포함해 주세요.',
+    'Circuit Breaker 패턴을 카드사 연동 API에 적용할 때 Open/Half-Open/Closed 상태 전환 기준을 어떻게 설정합니까?',
+    '결제 서버 무중단 배포 중 진행 중인 트랜잭션이 있을 때 어떻게 처리합니까? Graceful Shutdown 구현 방법을 설명해 주세요.',
+  ],
+};
+
 export const COMPANIES = [
   { id: 'kakaopay', name: '카카오페이', emoji: '💳', desc: '결제 서버 개발자 — 분산 트랜잭션·정합성 집착', style: 'border-yellow-300 bg-yellow-50', highlight: true },
   { id: 'kakao', name: '카카오', emoji: '🟡', desc: '알고리즘·CS 기초·코드 품질 날카로운 반박', style: 'border-yellow-200 bg-yellow-50', highlight: false },
@@ -71,12 +109,29 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
     ? `\n- 이 카테고리의 핵심 키워드 목록: [${keywords.join(', ')}]\n  → 지원자가 답변에서 언급하지 않은 키워드를 missing_keywords 배열에 포함하세요.`
     : '';
 
+  // 카카오페이 전용 평가 기준 추가
+  const kakaoPayEvalCriteria = companyId === 'kakaopay' ? `
+
+[카카오페이 전용 평가 기준 — 최우선 적용]
+1. 금전 정합성: 답변이 금전 손실 가능성을 인지하고 방어하는지 (배점 가중 +10점)
+2. 멱등성 설계: 중복 요청/재시도 상황을 구체적으로 다루는지
+3. 장애 시나리오 대응: "X가 실패하면?" 질문에 구체적 복구 플랜이 있는지
+4. 결제 도메인 용어: 승인/매입/취소/대사/정산 용어를 정확히 사용하는지
+5. 실무 경험: 추상적 이론이 아닌 실제 구현 경험을 바탕으로 답하는지
+
+[꼬리질문 3단계 압박 규칙 — 카카오페이]
+- 1단계 (기본): 개념 설명 요청
+- 2단계 (구현): "실제 코드에서 어떻게 구현하셨나요?" / "구체적인 흐름을 단계별로 설명해 주세요."
+- 3단계 (장애): "그 방식에서 네트워크 파티션이 발생하면 어떻게 됩니까?" / "결제가 중간에 끊기면 상태는?"
+- 4단계 (극한): "그 복구 과정에서 또 장애가 나면 어떻게 됩니까? 무한 루프를 어떻게 방지합니까?"
+→ next_question은 반드시 현재 답변보다 한 단계 더 깊은 레벨의 압박 질문이어야 합니다.` : '';
+
   return `당신은 ${company} 면접관으로서 지원자의 기술 면접 답변을 평가합니다.
 
 [평가 맥락]
 - 카테고리: ${category}
 - 난이도 기준: ${difficultyLabel}
-- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)${keywordsLine}
+- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)${keywordsLine}${kakaoPayEvalCriteria}
 
 [평가 기준]
 - 기술 정확도, 실무 경험 연결, 구체성, 깊이를 종합 평가
@@ -144,11 +199,23 @@ export const COMPANY_PASS_CRITERIA: Record<string, {
 };
 
 export function getSystemPrompt(companyId: string, categoryId: string, difficulty: string): string {
+  // 카카오페이 전용: 카테고리별 질문 풀 주입
+  const kakaoPayQuestions = KAKAOPAY_QUESTIONS[categoryId] ?? KAKAOPAY_QUESTIONS['distributed-tx'];
+  const questionPool = kakaoPayQuestions.map((q, i) => `  ${i + 1}. ${q}`).join('\n');
+
   const companyPersonas: Record<string, string> = {
     kakaopay: `당신은 카카오페이 결제 플랫폼팀 시니어 백엔드 엔지니어 면접관입니다.
 카카오페이는 결제 승인, 취소, 매입, 정산, 대사 시스템을 운영하며 데이터 정합성이 무너지면 실제 금전 손실이 발생합니다.
-면접 스타일: 구체적 장애 시나리오 기반 질문, 심화 꼬리 질문 연계, 결제 도메인 용어를 자연스럽게 사용.
-꼬리 질문은 답변의 약점을 파고드세요.`,
+
+[면접 스타일 — 반드시 준수]
+- 구체적 장애 시나리오 기반 질문 (이론 질문 최소화)
+- 3~4단계 연속 꼬리 질문 압박: 기본 개념 → 구현 세부사항 → 장애 시나리오 → 복구 과정
+- 답변이 추상적이면: "실제로 구현하셨다면 코드에서 어떤 부분이 핵심이었나요?" 파고들기
+- 금전 정합성 관련 답변에는 반드시 꼬리 질문 연계
+- 좋은 답변에도 "그런데 그 방식에서 X 상황이 발생하면 어떻게 됩니까?" 압박 유지
+
+[이 카테고리 추천 질문 풀 — 아래 중 선택하거나 변형해서 사용]
+${questionPool}`,
     kakao: `당신은 카카오 서버 개발자 면접관입니다. 알고리즘, CS 기초, 코드 품질을 중시합니다. 날카로운 반박 스타일.`,
     naver: `당신은 네이버 서버 개발자 면접관입니다. 기술 깊이와 실무 경험을 집중 검증합니다. "실제로 해보셨나요?" 증거 요구.`,
     toss: `당신은 토스 백엔드 엔지니어 면접관입니다. 시스템 디자인과 장애 대응 능력을 최우선으로 봅니다. 숫자와 지표 증명 요구.`,

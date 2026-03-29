@@ -1,9 +1,101 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMPANIES, CATEGORIES, DIFFICULTIES } from '@/lib/interview-data';
 import { apiFetch } from '@/lib/api-fetch';
+
+interface WeaknessEntry {
+  keyword: string;
+  miss_count: number;
+  affected_sessions: number;
+  avg_score_when_missed: number | null;
+  severity: 'high' | 'medium' | 'low';
+}
+
+interface CategoryBreakdown {
+  category: string;
+  session_count: number;
+  avg_score: number;
+}
+
+interface WeaknessReport {
+  company: string;
+  session_count: number;
+  top_weaknesses: WeaknessEntry[];
+  category_breakdown: CategoryBreakdown[];
+}
+
+function WeaknessWidget({ company }: { company: string }) {
+  const [report, setReport] = useState<WeaknessReport | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<WeaknessReport>(`/api/interview/weakness-report?company=${company}&limit=20`)
+      .then(res => { if (res.ok) setReport(res.data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [company]);
+
+  if (loading) return <div className="text-xs text-zinc-400 text-center py-2">약점 분석 중...</div>;
+  if (!report || report.session_count === 0) return null;
+
+  const sevColor = (s: string) =>
+    s === 'high' ? 'bg-red-100 text-red-700 border-red-200' :
+    s === 'medium' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+    'bg-zinc-100 text-zinc-500 border-zinc-200';
+
+  const catColor = (score: number) =>
+    score >= 75 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-500';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-bold text-zinc-700">🔍 반복 약점 분석</h2>
+        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">{report.session_count}회 세션 기반</span>
+      </div>
+
+      {report.top_weaknesses.length > 0 && (
+        <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-2">
+          <p className="text-[11px] text-zinc-400 mb-3">자주 놓치는 키워드 — 집중 보완 필요</p>
+          <div className="flex flex-wrap gap-1.5">
+            {report.top_weaknesses.slice(0, 10).map(w => (
+              <span key={w.keyword}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-semibold ${sevColor(w.severity)}`}>
+                {w.keyword}
+                <span className="font-normal opacity-70">×{w.miss_count}</span>
+              </span>
+            ))}
+          </div>
+          {report.top_weaknesses[0]?.severity === 'high' && (
+            <p className="text-[11px] text-red-500 font-medium mt-2">
+              ⚠️ <strong>{report.top_weaknesses[0].keyword}</strong>을 {report.top_weaknesses[0].miss_count}번 연속 놓쳤습니다. 최우선 학습 필요.
+            </p>
+          )}
+        </div>
+      )}
+
+      {report.category_breakdown.length > 0 && (
+        <div className="bg-white border border-zinc-200 rounded-xl p-4">
+          <p className="text-[11px] text-zinc-400 mb-3">카테고리별 평균 점수 (낮은 순)</p>
+          <div className="space-y-2">
+            {report.category_breakdown.slice(0, 5).map(cat => {
+              const catInfo = CATEGORIES.find(c => c.id === cat.category);
+              return (
+                <div key={cat.category} className="flex items-center gap-2">
+                  <span className="text-sm">{catInfo?.emoji ?? '📂'}</span>
+                  <span className="text-xs text-zinc-600 flex-1 truncate">{catInfo?.name ?? cat.category}</span>
+                  <span className="text-[10px] text-zinc-400">{cat.session_count}회</span>
+                  <span className={`text-sm font-bold tabular-nums ${catColor(cat.avg_score)}`}>{cat.avg_score}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // 모듈 레벨 순수 함수 — 렌더 중 불순 함수 호출 방지
 function relativeTime(dateStr: string, now: number): string {
@@ -260,6 +352,9 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
 
         {/* 점수 히스토리 차트 */}
         <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
+
+        {/* 반복 약점 분석 위젯 — 카카오페이 세션 데이터 기반 */}
+        <WeaknessWidget company="kakaopay" />
 
         {/* 면접 이력 */}
         <SessionHistory sessions={sessions} />

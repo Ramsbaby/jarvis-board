@@ -19,9 +19,9 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
   ],
   'concurrency': [
     '동시에 100개의 결제 요청이 같은 계좌에 들어올 때 잔액 초과 결제를 어떻게 방지합니까? 낙관적 락과 비관적 락 중 무엇을 선택하고 그 이유는?',
-    'Redis 분산락을 이용한 중복 결제 방지 구현 시 락 타임아웃과 만료(TTL) 처리를 어떻게 설계합니까?',
+    'Redisson watchdog 메커니즘을 설명하고, 결제 처리 중 서버가 갑자기 다운됐을 때 분산락이 어떻게 자동 해제됩니까? 단순 SETNX+TTL 방식과 비교했을 때 Redisson의 장단점을 말씀해 주세요.',
     '낙관적 락(Optimistic Lock)이 연속 충돌로 실패할 때 재시도 전략을 어떻게 구성합니까? 결제 시스템에서 재시도가 안전한 경우와 위험한 경우를 구분해 주세요.',
-    'DB 레벨 SELECT FOR UPDATE와 애플리케이션 레벨 분산락의 장단점을 결제 시스템 관점에서 비교해 주세요.',
+    '계좌 잔액 확인과 차감이 코어뱅킹 서비스와 결제 서버로 분산되어 있을 때 DB의 SELECT FOR UPDATE가 동작하지 않는 이유를 설명하고, 이 상황에서 잔액 초과 결제를 방지하는 방법을 설명해 주세요.',
   ],
   'kafka': [
     '결제 이벤트를 Kafka로 발행할 때 at-least-once 보장으로 중복 이벤트가 발생했습니다. 컨슈머에서 멱등성을 어떻게 보장합니까?',
@@ -33,6 +33,39 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
     '일일 1,000만 건 결제를 처리하는 시스템을 설계해 주세요. DB 병목 지점과 해결 방안을 포함해 주세요.',
     'Circuit Breaker 패턴을 카드사 연동 API에 적용할 때 Open/Half-Open/Closed 상태 전환 기준을 어떻게 설정합니까?',
     '결제 서버 무중단 배포 중 진행 중인 트랜잭션이 있을 때 어떻게 처리합니까? Graceful Shutdown 구현 방법을 설명해 주세요.',
+    '외부 PG사 API 응답이 불규칙할 때 Bulkhead 패턴으로 장애 격리를 어떻게 구현합니까? 스레드 풀 기반 격리와 세마포어 기반 격리의 차이를 결제 시스템 관점에서 설명해 주세요.',
+    'CQRS 패턴을 결제 조회 서비스에 도입할 때 커맨드 DB와 조회 DB 간 일관성을 어떻게 보장합니까? 결제 완료 직후 내역 조회에서 데이터가 보이지 않는 문제를 어떻게 처리합니까?',
+  ],
+  'mysql-tuning': [
+    '결제 이력 테이블(월 1억 건)에서 특정 userId의 최근 3개월 결제 내역 조회에 EXPLAIN을 실행했더니 type=ALL(풀 스캔)이 나왔습니다. 인덱스 전략을 어떻게 설계하겠습니까?',
+    '커버링 인덱스(Covering Index)가 무엇인지 설명하고, `SELECT amount, status FROM payments WHERE user_id=? AND created_at>?` 쿼리에 적용하는 방법과 성능 개선 원리를 설명해 주세요.',
+    '결제 이력 테이블이 5억 건을 초과할 때 파티셔닝 전략을 어떻게 결정합니까? Range 파티셔닝과 Hash 파티셔닝의 장단점을 결제 도메인 관점에서 비교하고, 파티션 프루닝(Pruning)이 적용되는 조건을 설명해 주세요.',
+    '운영 중인 결제 테이블에 인덱스를 무중단으로 추가해야 합니다. Online DDL과 pt-online-schema-change(pt-osc)의 차이를 설명하고, 어떤 상황에서 무엇을 선택합니까?',
+    '결제 승인 내역 조회 API에서 JPA N+1 문제가 발생했습니다. fetch join, EntityGraph, @BatchSize의 동작 방식과 적합한 사용 시나리오를 비교하고, 결제 조회에서 최적 선택을 설명해 주세요.',
+    'MySQL Read Replica를 결제 조회 서비스에 도입할 때 복제 지연(Replication Lag)이 결제 직후 내역 조회 정합성에 미치는 영향과, 복제를 활용하면서도 정합성을 보장하는 전략을 설명해 주세요.',
+  ],
+  'java-spring': [
+    'G1GC와 ZGC의 STW(Stop-The-World) 방식 차이를 설명하고, 결제 API처럼 p99 레이턴시가 중요한 서비스에 어느 GC가 적합한지 근거를 들어 설명해 주세요.',
+    'Spring WebFlux(Reactor)로 결제 API를 구현할 때 JDBC 같은 블로킹 코드가 혼재하면 어떤 문제가 발생합니까? subscribeOn/publishOn을 이용한 Scheduler 분리 전략을 설명해 주세요.',
+    'Spring AOP self-invocation 문제를 설명하고, 같은 클래스 내부에서 @Transactional 메서드를 호출할 때 트랜잭션이 적용되지 않는 이유와 해결 방법을 설명해 주세요.',
+    'JDK 21 Virtual Thread를 결제 서버에 도입할 때 HikariCP 커넥션 풀 고갈 문제가 발생하는 이유를 설명하고, 풀 크기 산정과 pinning 방지 방법을 말씀해 주세요.',
+    'Spring Batch로 월 정산 배치(수천만 건)를 구현할 때 Chunk 크기, 멀티스레드 Step, 파티셔닝 Step의 차이를 설명하고, 정산 도중 일부 실패 시 skip/retry/restart 전략을 어떻게 설계합니까?',
+    '내부 마이크로서비스 간 통신에 gRPC와 REST 중 무엇을 선택하겠습니까? 결제 서버와 코어뱅킹 서비스 간 통신을 예로 들어 Protobuf 직렬화, 스트리밍, 서킷 브레이커 통합을 설명해 주세요.',
+  ],
+  'cs-basics': [
+    'TCP TIME_WAIT 상태가 결제 서버에서 대량 단기 연결 시 포트 고갈 문제를 어떻게 유발합니까? SO_REUSEADDR, tcp_tw_reuse 설정과 커넥션 풀 사용이 각각 어떻게 완화합니까?',
+    'B-Tree 인덱스와 Hash 인덱스의 내부 구조와 탐색 복잡도를 비교하고, `WHERE created_at BETWEEN ? AND ?` 범위 검색과 `WHERE payment_id = ?` 단일 검색에 각각 어떤 인덱스가 더 적합한지 설명해 주세요.',
+    '프로세스, OS 스레드, JVM 스레드, Virtual Thread(JDK 21)의 컨텍스트 스위칭 비용과 메모리 오버헤드를 비교하고, 결제 서버의 동시 요청 처리 모델 선택에 어떻게 반영합니까?',
+    'HTTP/1.1 Keep-Alive와 HTTP/2 멀티플렉싱이 결제 API 클라이언트 성능에 어떻게 다르게 작용합니까? PG사 연동 시 HTTPS 커넥션 재사용이 결제 지연 시간에 미치는 영향을 설명해 주세요.',
+    'MySQL REPEATABLE READ에서 결제 잔액 조회 시 팬텀 리드(Phantom Read)가 발생하는 구체적 시나리오를 설명하고, InnoDB Gap Lock이 이를 어떻게 방지하는지 설명해 주세요.',
+    '결제 서버에서 OOM(OutOfMemoryError) 발생 시 원인 분석 방법을 단계별로 설명해 주세요. Heap Dump 분석, GC 로그 해석, 메모리 릭 패턴(Static 컬렉션, 캐시 미해제, 이벤트 리스너 누수) 진단 방법은?',
+  ],
+  'behavioral': [
+    '팀 내에서 기술적 방향성 차이로 동료와 충돌한 경험이 있다면 STAR 방식으로 말씀해 주세요. 어떤 결론이 났고, 의견을 어떻게 관철하거나 양보했습니까?',
+    'SK D&D에서 기술 부채가 쌓여 있지만 해결을 미룬 것이 있다면 무엇이고, 우선순위를 어떻게 판단했습니까? 비즈니스 요구사항과 기술 부채 해소 사이의 균형을 어떻게 맞췄습니까?',
+    '지금까지 경력에서 가장 심각한 장애를 대응한 경험을 STAR 방식으로 말씀해 주세요. 그 장애 이후 아키텍처나 운영 방식에서 무엇을 구조적으로 바꾸었습니까?',
+    '새로운 기술 도입을 제안했지만 팀이나 조직의 반대에 부딪힌 경험이 있습니까? 어떻게 설득하려 했고 결과는 어땠습니까? 반대 의견에서 납득할 근거가 있었다면 어떻게 의견을 수정했습니까?',
+    '9년 경력에서 가장 잘못된 기술적 판단을 하나 꼽는다면 무엇입니까? 당시 왜 그 판단을 내렸고, 지금이라면 어떻게 다르게 결정하겠습니까? 그 경험이 현재 의사결정에 어떤 영향을 미쳤습니까?',
   ],
 };
 
@@ -49,13 +82,13 @@ export const COMPANIES = [
 /** 카테고리별 필수 키워드 — LLM이 답변에서 누락된 키워드를 감지하는 데 사용 */
 export const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'distributed-tx': ['Saga', 'TCC', '2PC', '보상 트랜잭션', '이벤트 소싱', '아웃박스', 'CQRS', '멱등성'],
-  'concurrency': ['낙관적 락', '비관적 락', 'Redis 분산락', '데드락', 'CAS', '원자적 연산', '스핀락'],
+  'concurrency': ['낙관적 락', '비관적 락', 'Redis 분산락', '데드락', 'CAS', '원자적 연산', 'Redisson', 'watchdog'],
   'payment-arch': ['승인', '취소', '매입', '대사', '정산', '멱등성', '이중 결제 방지', '결제 상태 머신'],
-  'mysql-tuning': ['인덱스', '실행 계획', 'EXPLAIN', '커버링 인덱스', '파티셔닝', '쿼리 최적화', 'N+1'],
+  'mysql-tuning': ['인덱스', '실행 계획', 'EXPLAIN', '커버링 인덱스', '파티셔닝', '쿼리 최적화', 'N+1', 'Read Replica', 'Online DDL'],
   'kafka': ['파티션', '컨슈머 그룹', '오프셋', 'at-least-once', 'exactly-once', '리밸런싱', '배압'],
-  'java-spring': ['JVM', 'GC', 'WebFlux', 'Reactor', 'IoC', 'AOP', 'gRPC', 'Protobuf'],
-  'cs-basics': ['프로세스', '스레드', 'TCP', 'HTTP', 'ACID', '정규화', 'B-Tree'],
-  'system-design': ['로드 밸런서', 'Circuit Breaker', 'Auto Scaling', 'CDN', 'API Gateway', 'CAP 정리'],
+  'java-spring': ['JVM', 'GC', 'WebFlux', 'Reactor', 'IoC', 'AOP', 'gRPC', 'Protobuf', 'Virtual Thread', 'Spring Batch'],
+  'cs-basics': ['프로세스', '스레드', 'TCP', 'HTTP', 'ACID', '정규화', 'B-Tree', 'TIME_WAIT', 'Gap Lock'],
+  'system-design': ['로드 밸런서', 'Circuit Breaker', 'Auto Scaling', 'CDN', 'API Gateway', 'CAP 정리', 'CQRS', 'Bulkhead'],
   'behavioral': ['STAR', '갈등', '기술 부채', '회고', '의사결정'],
   'live-coding': ['시간복잡도', 'O(n)', '엣지 케이스', '테스트 케이스'],
 };
@@ -200,7 +233,11 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
 - 난이도가 senior이면: 점수와 무관하게 항상 압박 스타일의 꼬리질문을 생성하세요.
 ${historyBlock}
 
-JSON 외 다른 텍스트는 절대 출력하지 마세요.`;
+JSON 외 다른 텍스트는 절대 출력하지 마세요.
+
+[언어 규칙 — 절대 준수]
+모든 JSON 값(strengths·weaknesses·better_answer·next_question 등)은 반드시 순수 한국어로만 작성합니다.
+한자(漢字)·중국어·일본어를 한국어 문장 안에 절대 혼용하지 마세요. 예: "请求" → "요청", "処理" → "처리".`;
 }
 
 // 회사별 합격 기준 점수 및 메시지
@@ -305,328 +342,15 @@ ${CANDIDATE_PROFILE}
 [면접 카테고리]: ${categoryHint}
 [난이도]: ${difficultyNote}
 
-[피드백 규칙]
-지원자가 답변을 제출하면 반드시 다음 JSON 형식으로만 응답하세요:
-{
-  "score": <0-100 정수>,
-  "strengths": ["잘한 점 1", "잘한 점 2"],
-  "weaknesses": ["부족한 점 1", "부족한 점 2"],
-  "better_answer": "더 좋은 답변 예시 (구체적이고 수치/사례 포함, 3-5문장)",
-  "next_question": "다음 꼬리 질문 또는 새 질문"
-}
-
 [질문 생성 규칙]
 - 첫 번째 메시지에서는 질문만 하세요 (인사 없이 바로 질문).
 - 질문은 구체적이고 시나리오 기반이어야 합니다.
-- 지원자의 SK D&D IoT 플랫폼 경험과 연결지어 질문할 수 있습니다.${focusBlock}`;
+- 지원자의 SK D&D IoT 플랫폼 경험과 연결지어 질문할 수 있습니다.${focusBlock}
+
+[언어 규칙 — 절대 준수]
+- 모든 출력은 반드시 순수 한국어로만 작성합니다.
+- 한자(漢字)·중국어·일본어를 한국어 문장 안에 절대 혼용하지 마세요.
+- 영어 기술 용어(HTTP, gRPC, Kafka 등 고유명사 제외)도 한국어로 풀어 쓰세요.
+- 예: "请求" 금지 → "요청", "処理" 금지 → "처리"`;
 }
 
-export interface LiveCodingProblem {
-  id: string;
-  title: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  tags: string[];
-  description: string;
-  examples: Array<{ input: string; output: string; explanation?: string }>;
-  constraints: string[];
-  hint: string;
-  modelSolution: string;
-}
-
-export const LIVE_CODING_PROBLEMS: LiveCodingProblem[] = [
-  {
-    id: 'lc-001',
-    title: '거스름돈 최소 화폐',
-    difficulty: 'easy',
-    tags: ['그리디', '배열'],
-    description: `편의점 계산대에서 거스름돈을 줄 때, 최소 개수의 화폐(지폐+동전)로 거슬러 주는 프로그램을 작성하세요.
-
-화폐 종류: 50000, 10000, 5000, 1000, 500, 100, 50, 10원
-
-정수 amount가 주어질 때, 각 화폐 종류별 필요 개수를 Map으로 반환하세요. (개수가 0인 항목은 제외)`,
-    examples: [
-      { input: 'amount = 37860', output: '{10000=3, 5000=1, 1000=2, 500=1, 100=3, 50=1, 10=1}', explanation: '10000×3 + 5000×1 + 1000×2 + 500×1 + 100×3 + 50×1 + 10×1 = 37860' },
-      { input: 'amount = 1234', output: '{1000=1, 100=2, 10=3, 나머지=4}', explanation: '실제로는 10원짜리 없이 처리 필요' },
-    ],
-    constraints: ['0 ≤ amount ≤ 1,000,000', '10원 단위로만 거슬러줌'],
-    hint: '화폐를 큰 것부터 순서대로 처리하세요. amount / 화폐단위 = 개수, amount % 화폐단위 = 나머지.',
-    modelSolution: `import java.util.*;
-
-public class Solution {
-    public Map<Integer, Integer> getChange(int amount) {
-        int[] coins = {50000, 10000, 5000, 1000, 500, 100, 50, 10};
-        Map<Integer, Integer> result = new LinkedHashMap<>();
-
-        for (int coin : coins) {
-            if (amount >= coin) {
-                result.put(coin, amount / coin);
-                amount %= coin;
-            }
-        }
-        return result;
-    }
-}`,
-  },
-  {
-    id: 'lc-002',
-    title: '중복 결제 감지',
-    difficulty: 'medium',
-    tags: ['HashMap', '문자열'],
-    description: `결제 시스템에서 동일 사용자가 같은 금액을 짧은 시간 내에 중복 결제하는 경우를 탐지해야 합니다.
-
-결제 내역 리스트가 주어집니다. 각 결제는 "userId,amount,timestamp(초)" 형식의 문자열입니다.
-동일 userId + amount 조합이 60초 이내에 2회 이상 발생하면 중복으로 판단합니다.
-
-중복 결제로 판단된 userId 목록을 반환하세요. (중복 없이, 알파벳 순)`,
-    examples: [
-      {
-        input: `payments = ["user1,1000,100", "user1,1000,150", "user2,2000,200", "user1,1000,500"]`,
-        output: `["user1"]`,
-        explanation: 'user1이 100초와 150초에 같은 금액 1000원 결제 → 50초 차이로 중복. 500초는 100초 기준 400초 차이라 별도 판단.'
-      }
-    ],
-    constraints: ['1 ≤ payments.length ≤ 10,000', 'timestamp는 증가 순서로 입력됨', '같은 사용자의 동일 금액은 마지막 결제 시간 기준으로 갱신'],
-    hint: 'HashMap<String, Long> lastPayment = new HashMap<>() 에서 key를 "userId_amount"로 조합하세요.',
-    modelSolution: `import java.util.*;
-
-public class Solution {
-    public List<String> detectDuplicate(String[] payments) {
-        Map<String, Long> lastTime = new HashMap<>();
-        Set<String> duplicates = new HashSet<>();
-
-        for (String p : payments) {
-            String[] parts = p.split(",");
-            String userId = parts[0];
-            String amount = parts[1];
-            long timestamp = Long.parseLong(parts[2]);
-            String key = userId + "_" + amount;
-
-            if (lastTime.containsKey(key)) {
-                if (timestamp - lastTime.get(key) <= 60) {
-                    duplicates.add(userId);
-                }
-            }
-            lastTime.put(key, timestamp);
-        }
-
-        List<String> result = new ArrayList<>(duplicates);
-        Collections.sort(result);
-        return result;
-    }
-}`,
-  },
-  {
-    id: 'lc-003',
-    title: '괄호 유효성 검사',
-    difficulty: 'easy',
-    tags: ['스택', '문자열'],
-    description: `주어진 문자열이 올바른 괄호 조합인지 검사하세요.
-
-괄호 종류: '(', ')', '{', '}', '[', ']'
-
-규칙:
-- 열린 괄호는 반드시 같은 종류의 닫힌 괄호로 닫혀야 합니다.
-- 열린 괄호는 올바른 순서로 닫혀야 합니다.`,
-    examples: [
-      { input: 's = "()"', output: 'true' },
-      { input: 's = "()[]{}"', output: 'true' },
-      { input: 's = "(]"', output: 'false' },
-      { input: 's = "([)]"', output: 'false' },
-      { input: 's = "{[]}"', output: 'true' },
-    ],
-    constraints: ['1 ≤ s.length ≤ 10,000', 's는 괄호 문자만 포함'],
-    hint: 'Stack을 사용하세요. 열린 괄호는 push, 닫힌 괄호는 stack.peek()과 매칭 확인 후 pop.',
-    modelSolution: `import java.util.*;
-
-public class Solution {
-    public boolean isValid(String s) {
-        Deque<Character> stack = new ArrayDeque<>();
-        Map<Character, Character> map = Map.of(')', '(', '}', '{', ']', '[');
-
-        for (char c : s.toCharArray()) {
-            if (map.containsValue(c)) {
-                stack.push(c);
-            } else {
-                if (stack.isEmpty() || stack.peek() != map.get(c)) return false;
-                stack.pop();
-            }
-        }
-        return stack.isEmpty();
-    }
-}`,
-  },
-  {
-    id: 'lc-004',
-    title: '이상 거래 탐지 (슬라이딩 윈도우)',
-    difficulty: 'medium',
-    tags: ['슬라이딩 윈도우', '투포인터'],
-    description: `카카오페이 이상 거래 탐지 시스템을 구현합니다.
-
-연속된 k개의 거래 금액 합이 threshold를 초과하는 경우, 해당 구간의 시작 인덱스를 모두 반환하세요.
-
-int[] transactions, int k, int threshold 가 주어집니다.`,
-    examples: [
-      {
-        input: 'transactions = [100, 200, 300, 400, 500, 100], k = 3, threshold = 800',
-        output: '[1, 2, 3]',
-        explanation: '[200,300,400]=900>800, [300,400,500]=1200>800, [400,500,100]=1000>800'
-      },
-      {
-        input: 'transactions = [100, 100, 100], k = 2, threshold = 300',
-        output: '[]',
-        explanation: '모든 구간 합 ≤ 300'
-      }
-    ],
-    constraints: ['1 ≤ transactions.length ≤ 100,000', '1 ≤ k ≤ transactions.length', '각 거래 금액 > 0'],
-    hint: '첫 k개의 합을 구한 후, 슬라이딩 윈도우로 이전 첫 원소를 빼고 새 원소를 더하세요. O(n) 가능.',
-    modelSolution: `import java.util.*;
-
-public class Solution {
-    public List<Integer> detectAbnormal(int[] transactions, int k, int threshold) {
-        List<Integer> result = new ArrayList<>();
-        long windowSum = 0;
-
-        for (int i = 0; i < k; i++) windowSum += transactions[i];
-        if (windowSum > threshold) result.add(0);
-
-        for (int i = k; i < transactions.length; i++) {
-            windowSum += transactions[i] - transactions[i - k];
-            if (windowSum > threshold) result.add(i - k + 1);
-        }
-        return result;
-    }
-}`,
-  },
-  {
-    id: 'lc-005',
-    title: 'LRU 캐시 구현',
-    difficulty: 'hard',
-    tags: ['자료구조', 'LinkedHashMap'],
-    description: `LRU(Least Recently Used) 캐시를 구현하세요. 이 문제는 카카오 계열 면접에서 자주 출제됩니다.
-
-LRUCache 클래스를 구현합니다:
-- LRUCache(int capacity): 최대 용량으로 초기화
-- int get(int key): key가 존재하면 값 반환, 없으면 -1
-- void put(int key, int value): key-value 삽입. 용량 초과 시 가장 오래 사용되지 않은 항목 제거
-
-get과 put 모두 O(1) 평균 복잡도여야 합니다.`,
-    examples: [
-      {
-        input: `LRUCache cache = new LRUCache(2);
-cache.put(1, 1);   // cache: {1=1}
-cache.put(2, 2);   // cache: {1=1, 2=2}
-cache.get(1);      // return 1, cache: {2=2, 1=1}
-cache.put(3, 3);   // evict key 2, cache: {1=1, 3=3}
-cache.get(2);      // return -1 (not found)
-cache.get(3);      // return 3`,
-        output: '1, -1, 3',
-      }
-    ],
-    constraints: ['1 ≤ capacity ≤ 3000', '0 ≤ key, value ≤ 10,000', 'get/put 최대 100,000회 호출'],
-    hint: 'Java의 LinkedHashMap(capacity, 0.75f, true)을 활용하면 accessOrder=true로 LRU 동작을 구현할 수 있습니다. removeEldestEntry를 override하세요.',
-    modelSolution: `import java.util.*;
-
-public class LRUCache {
-    private final int capacity;
-    private final LinkedHashMap<Integer, Integer> cache;
-
-    public LRUCache(int capacity) {
-        this.capacity = capacity;
-        this.cache = new LinkedHashMap<>(capacity, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<Integer, Integer> eldest) {
-                return size() > capacity;
-            }
-        };
-    }
-
-    public int get(int key) {
-        return cache.getOrDefault(key, -1);
-    }
-
-    public void put(int key, int value) {
-        cache.put(key, value);
-    }
-}`,
-  },
-  {
-    id: 'lc-006',
-    title: '문자열 압축',
-    difficulty: 'easy',
-    tags: ['문자열', '구현'],
-    description: `문자열을 런렝스 인코딩(RLE)으로 압축하세요.
-
-연속된 같은 문자가 있을 경우 "문자+개수" 형식으로 압축합니다.
-단, 개수가 1인 경우 숫자를 생략합니다.
-
-압축 결과가 원본보다 길다면 원본을 그대로 반환합니다.`,
-    examples: [
-      { input: 's = "aabcccdddd"', output: '"a2bc3d4"' },
-      { input: 's = "abcd"', output: '"abcd"', explanation: 'a1b1c1d1 = 8글자 > 4글자이므로 원본 반환' },
-      { input: 's = "aaabbbccc"', output: '"a3b3c3"' },
-      { input: 's = ""', output: '""' },
-    ],
-    constraints: ['0 ≤ s.length ≤ 10,000', 's는 소문자 알파벳만 포함'],
-    hint: 'StringBuilder를 사용하고, 현재 문자와 이전 문자를 비교하며 count를 관리하세요. 마지막 문자 처리를 잊지 마세요.',
-    modelSolution: `public class Solution {
-    public String compress(String s) {
-        if (s.isEmpty()) return s;
-
-        StringBuilder sb = new StringBuilder();
-        int count = 1;
-
-        for (int i = 1; i <= s.length(); i++) {
-            if (i < s.length() && s.charAt(i) == s.charAt(i - 1)) {
-                count++;
-            } else {
-                sb.append(s.charAt(i - 1));
-                if (count > 1) sb.append(count);
-                count = 1;
-            }
-        }
-
-        return sb.length() < s.length() ? sb.toString() : s;
-    }
-}`,
-  },
-  {
-    id: 'lc-007',
-    title: '결제 금액 상위 K개',
-    difficulty: 'medium',
-    tags: ['우선순위 큐', 'HashMap'],
-    description: `결제 내역에서 사용자별 총 결제 금액을 구하고, 상위 K명의 userId를 반환하세요.
-
-결제 내역은 "userId amount" 형식의 문자열 배열입니다.
-동일 금액이면 userId 알파벳 역순으로 정렬합니다.`,
-    examples: [
-      {
-        input: `transactions = ["alice 100", "bob 200", "alice 150", "charlie 300", "bob 50"], k = 2`,
-        output: `["charlie", "alice"]`,
-        explanation: 'charlie=300, alice=250, bob=250. alice와 bob 동점 시 알파벳 역순이므로 bob보다 alice가 앞.'
-      }
-    ],
-    constraints: ['1 ≤ transactions.length ≤ 100,000', '1 ≤ k ≤ 고유 userId 수'],
-    hint: 'HashMap으로 총합 계산 → PriorityQueue(최대 힙)로 상위 K개 추출. Comparator 설계 시 동점 처리 주의.',
-    modelSolution: `import java.util.*;
-
-public class Solution {
-    public List<String> topKSpenders(String[] transactions, int k) {
-        Map<String, Long> totals = new HashMap<>();
-        for (String t : transactions) {
-            String[] parts = t.split(" ");
-            totals.merge(parts[0], Long.parseLong(parts[1]), Long::sum);
-        }
-
-        PriorityQueue<Map.Entry<String, Long>> pq = new PriorityQueue<>((a, b) -> {
-            int cmp = Long.compare(b.getValue(), a.getValue());
-            return cmp != 0 ? cmp : b.getKey().compareTo(a.getKey()); // 동점: 역알파벳
-        });
-        pq.addAll(totals.entrySet());
-
-        List<String> result = new ArrayList<>();
-        for (int i = 0; i < k && !pq.isEmpty(); i++) result.add(pq.poll().getKey());
-        return result;
-    }
-}`,
-  },
-];

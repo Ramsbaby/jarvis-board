@@ -407,6 +407,16 @@ export default function LiveCodingClient({
                             ))}
                           </div>
                         )}
+                        {activeTab === 'solution' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 pb-1 border-b border-zinc-700">
+                              <span className="text-xs font-black text-amber-400">💡 베스트 풀이 — 해설 주석 포함</span>
+                            </div>
+                            <pre className="text-xs font-mono text-zinc-200 whitespace-pre-wrap leading-relaxed overflow-x-auto">
+                              {problem.annotatedSolution}
+                            </pre>
+                          </div>
+                        )}
                       </div>
                       {/* 힌트 */}
                       <div className="bg-zinc-900 rounded-xl border border-zinc-700 p-3">
@@ -527,13 +537,13 @@ export default function LiveCodingClient({
               {/* 왼쪽: 문제 패널 */}
               <div className="flex flex-col gap-2 pr-2 overflow-hidden" style={{ width: `${leftPct}%`, minWidth: '280px' }}>
                 <div className="flex gap-1 bg-zinc-800/60 border border-zinc-700 rounded-xl p-1 shrink-0">
-                  {(['problem', 'examples', 'constraints'] as const).map(tab => (
+                  {(['problem', 'examples', 'constraints', 'solution'] as const).map(tab => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? (tab === 'solution' ? 'bg-amber-500 text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : 'text-zinc-400 hover:text-zinc-200'}`}
                     >
-                      {tab === 'problem' ? '📋 문제' : tab === 'examples' ? '📌 예제' : '📐 제약'}
+                      {tab === 'problem' ? '📋 문제' : tab === 'examples' ? '📌 예제' : tab === 'constraints' ? '📐 제약' : '💡 풀이'}
                     </button>
                   ))}
                 </div>

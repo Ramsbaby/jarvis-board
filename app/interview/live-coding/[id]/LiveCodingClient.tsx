@@ -116,7 +116,7 @@ export default function LiveCodingClient({
   const [hintUsed, setHintUsed] = useState(false);
   const [loadingHint, setLoadingHint] = useState(false);
   const [expired, setExpired] = useState(false);
-  const [activeTab, setActiveTab] = useState<'problem' | 'examples' | 'constraints'>('problem');
+  const [activeTab, setActiveTab] = useState<'problem' | 'examples' | 'constraints' | 'solution'>('problem');
   // 모바일: 문제/코드 메인 탭
   const [mobileView, setMobileView] = useState<'problem' | 'code'>('problem');
   const [fontSize, setFontSize] = useState(14);
@@ -369,13 +369,13 @@ export default function LiveCodingClient({
                     <>
                       {/* 문제 서브탭 */}
                       <div className="flex gap-1 bg-zinc-800/60 border border-zinc-700 rounded-xl p-1">
-                        {(['problem', 'examples', 'constraints'] as const).map(tab => (
+                        {(['problem', 'examples', 'constraints', 'solution'] as const).map(tab => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-indigo-600 text-white' : 'text-zinc-400'}`}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? (tab === 'solution' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white') : 'text-zinc-400'}`}
                           >
-                            {tab === 'problem' ? '📋 문제' : tab === 'examples' ? '📌 예제' : '📐 제약'}
+                            {tab === 'problem' ? '📋 문제' : tab === 'examples' ? '📌 예제' : tab === 'constraints' ? '📐 제약' : '💡 풀이'}
                           </button>
                         ))}
                       </div>
@@ -563,6 +563,16 @@ export default function LiveCodingClient({
                           <p className="text-xs text-zinc-300 font-mono">{c}</p>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {activeTab === 'solution' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 pb-1 border-b border-zinc-700">
+                        <span className="text-xs font-black text-amber-400">💡 베스트 풀이 — 해설 주석 포함</span>
+                      </div>
+                      <pre className="text-xs font-mono text-zinc-200 whitespace-pre-wrap leading-relaxed overflow-x-auto">
+                        {problem.annotatedSolution}
+                      </pre>
                     </div>
                   )}
                 </div>

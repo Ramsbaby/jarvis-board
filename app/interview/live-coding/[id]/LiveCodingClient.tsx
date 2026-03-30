@@ -585,7 +585,7 @@ export default function LiveCodingClient({
               />
 
               {/* 오른쪽: 에디터 + 피드백 */}
-              <div className="flex flex-col gap-2 pl-1 flex-1 overflow-hidden min-h-0">
+              <div className="flex flex-col gap-2 pl-1 flex-1 overflow-y-auto"  style={{ maxHeight: 'calc(100vh - 60px)' }}>
                 {expired && !feedback && (
                   <div className="bg-red-950/80 border border-red-800 rounded-xl p-2.5 flex items-center gap-2 shrink-0">
                     <span className="text-red-400 animate-pulse">⏰</span>
@@ -594,9 +594,9 @@ export default function LiveCodingClient({
                 )}
 
                 {!feedback && (
-                  <div className="flex flex-col flex-1 gap-2 min-h-0">
+                  <div className="flex flex-col gap-2">
                     {/* 에디터 툴바 */}
-                    <div className="flex items-center justify-between px-1 shrink-0">
+                    <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-zinc-400">☕ Java</span>
                         <span className="text-zinc-600">·</span>
@@ -615,8 +615,8 @@ export default function LiveCodingClient({
                         <button onClick={() => setCode(problem.starterCode || BOILERPLATE)} className="text-[10px] px-2 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors">↺ 초기화</button>
                       </div>
                     </div>
-                    {/* Monaco 에디터 */}
-                    <div className="flex-1 rounded-xl overflow-hidden border border-zinc-700 shadow-lg min-h-0">
+                    {/* Monaco 에디터 — 고정 높이: 전체화면 없이도 제출 버튼이 항상 보임 */}
+                    <div className="rounded-xl overflow-hidden border border-zinc-700 shadow-lg" style={{ height: 'calc(100vh - 240px)' }}>
                       <MonacoEditor
                         height="100%"
                         language="java"
@@ -643,7 +643,7 @@ export default function LiveCodingClient({
                     <button
                       onClick={handleSubmit}
                       disabled={submitting || !code.trim()}
-                      className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-black text-sm hover:bg-indigo-500 active:scale-[0.99] disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50 shrink-0"
+                      className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-black text-sm hover:bg-indigo-500 active:scale-[0.99] disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50"
                     >
                       {submitting ? (
                         <><span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Jarvis 평가 중...</>

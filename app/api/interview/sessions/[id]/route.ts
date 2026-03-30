@@ -29,3 +29,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   db.prepare(`UPDATE interview_sessions SET status = ?, total_score = ?, completed_at = datetime('now') WHERE id = ?`).run(status ?? 'completed', total_score ?? null, id);
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+  const db = getDb();
+  const session = db.prepare(`SELECT id FROM interview_sessions WHERE id = ?`).get(id);
+  if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // 연관 메시지 먼저 삭제 후 세션 삭제
+  db.prepare(`DELETE FROM interview_messages WHERE session_id = ?`).run(id);
+  db.prepare(`DELETE FROM interview_sessions WHERE id = ?`).run(id);
+  return NextResponse.json({ ok: true });
+}

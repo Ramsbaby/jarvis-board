@@ -426,8 +426,31 @@ function ScoreHistoryChart({ sessions, onNavigate }: { sessions: InterviewSessio
   );
 }
 
-function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
+function SessionHistory({ sessions, onDelete }: { sessions: InterviewSession[]; onDelete: (id: string) => void }) {
   const now = new Date().getTime();
+  // 삭제 확인 중인 세션 ID
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirmId !== id) {
+      setConfirmId(id);
+      return;
+    }
+    // 두 번째 클릭 → 실제 삭제
+    setDeletingId(id);
+    try {
+      const res = await apiFetch(`/api/interview/sessions/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        onDelete(id);
+      }
+    } finally {
+      setDeletingId(null);
+      setConfirmId(null);
+    }
+  }
 
   if (sessions.length === 0) {
     return (
@@ -451,37 +474,63 @@ function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
           const category = CATEGORIES.find(c => c.id === s.category);
           const difficulty = DIFFICULTIES.find(d => d.id === s.difficulty);
           const isCompleted = s.status === 'completed';
+          const isConfirming = confirmId === s.id;
+          const isDeleting = deletingId === s.id;
           return (
-            <Link
-              key={s.id}
-              href={`/interview/${s.id}`}
-              className="flex items-center gap-3 p-3 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm transition-all group"
-            >
-              <div className="text-xl shrink-0">{company?.emoji ?? '🎯'}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-zinc-800">{company?.name}</span>
-                  <span className="text-[11px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded-full">{category?.name}</span>
-                  <span className="text-[11px] text-zinc-400">{difficulty?.emoji} {difficulty?.name}</span>
-                </div>
-                <div className="text-[11px] text-zinc-400 mt-0.5">{relativeTime(s.created_at, now)}</div>
-              </div>
-              <div className="shrink-0 text-right">
-                {isCompleted ? (
-                  <div>
-                    <span className={`text-lg font-black tabular-nums ${scoreColor(s.total_score)}`}>
-                      {s.total_score ?? '-'}
-                    </span>
-                    <span className="text-[11px] text-zinc-400 ml-0.5">점</span>
+            <div key={s.id} className="relative group">
+              <Link
+                href={`/interview/${s.id}`}
+                className="flex items-center gap-3 p-3 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm transition-all"
+              >
+                <div className="text-xl shrink-0">{company?.emoji ?? '🎯'}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-zinc-800">{company?.name}</span>
+                    <span className="text-[11px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded-full">{category?.name}</span>
+                    <span className="text-[11px] text-zinc-400">{difficulty?.emoji} {difficulty?.name}</span>
                   </div>
-                ) : s.status === 'abandoned' ? (
-                  <span className="text-[11px] bg-zinc-100 text-zinc-400 px-2 py-0.5 rounded-full font-semibold">시간초과</span>
-                ) : (
-                  <span className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">진행중</span>
-                )}
-              </div>
-              <span className="text-zinc-300 group-hover:text-zinc-500 transition-colors text-sm shrink-0">→</span>
-            </Link>
+                  <div className="text-[11px] text-zinc-400 mt-0.5">{relativeTime(s.created_at, now)}</div>
+                </div>
+                <div className="shrink-0 text-right">
+                  {isCompleted ? (
+                    <div>
+                      <span className={`text-lg font-black tabular-nums ${scoreColor(s.total_score)}`}>
+                        {s.total_score ?? '-'}
+                      </span>
+                      <span className="text-[11px] text-zinc-400 ml-0.5">점</span>
+                    </div>
+                  ) : s.status === 'abandoned' ? (
+                    <span className="text-[11px] bg-zinc-100 text-zinc-400 px-2 py-0.5 rounded-full font-semibold">시간초과</span>
+                  ) : (
+                    <span className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">진행중</span>
+                  )}
+                </div>
+                {/* 삭제 버튼 — hover 시 표시 */}
+                <button
+                  onClick={(e) => handleDelete(s.id, e)}
+                  disabled={isDeleting}
+                  className={`shrink-0 ml-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all
+                    ${isConfirming
+                      ? 'bg-red-500 text-white opacity-100'
+                      : 'bg-zinc-100 text-zinc-400 opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500'
+                    }
+                    ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  title={isConfirming ? '한 번 더 클릭하면 삭제됩니다' : '세션 삭제'}
+                >
+                  {isDeleting ? '…' : isConfirming ? '삭제?' : '🗑'}
+                </button>
+              </Link>
+              {/* 확인 취소 — 다른 곳 클릭 시 */}
+              {isConfirming && (
+                <button
+                  onClick={(e) => { e.preventDefault(); setConfirmId(null); }}
+                  className="absolute right-0 -bottom-5 text-[10px] text-zinc-400 hover:text-zinc-600 px-2"
+                >
+                  취소
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -489,7 +538,7 @@ function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
   );
 }
 
-export default function InterviewHomeClient({ sessions }: { sessions: InterviewSession[] }) {
+export default function InterviewHomeClient({ sessions: initialSessions }: { sessions: InterviewSession[] }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [company, setCompany] = useState('');
@@ -497,6 +546,12 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
   const [difficulty, setDifficulty] = useState('mid');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // 삭제 후 즉시 UI 반영을 위한 로컬 세션 상태
+  const [sessions, setSessions] = useState<InterviewSession[]>(initialSessions);
+
+  function handleDeleteSession(id: string) {
+    setSessions(prev => prev.filter(s => s.id !== id));
+  }
 
   async function handleStart(overrides?: { company: string; category: string; difficulty: string; mode?: string }) {
     const co = overrides?.company ?? company;
@@ -709,7 +764,7 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
         <TendencyWidget company="kakaopay" />
 
         {/* 면접 이력 */}
-        <SessionHistory sessions={sessions} />
+        <SessionHistory sessions={sessions} onDelete={handleDeleteSession} />
       </main>
     </div>
   );

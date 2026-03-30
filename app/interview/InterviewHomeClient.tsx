@@ -542,6 +542,30 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
         {/* 오늘의 추천 카드 — 반복 약점 기반 자동 추천 */}
         <TodayRecommendCard onStart={handleStart} loading={loading} />
 
+        {/* 라이브코딩 30분 드릴 */}
+        <button
+          onClick={async () => {
+            const res = await fetch('/api/interview/live-coding', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            });
+            const data = await res.json();
+            router.push(`/interview/live-coding/${data.sessionId}`);
+          }}
+          disabled={loading}
+          className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl border-2 border-indigo-400 bg-white hover:bg-indigo-50 disabled:opacity-50 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">💻</span>
+            <div className="text-left">
+              <p className="text-sm font-black text-zinc-800">30분 라이브코딩 드릴</p>
+              <p className="text-[11px] text-zinc-400">카카오페이 1차 · Java · AI 검색 허용 · 랜덤 문제</p>
+            </div>
+          </div>
+          <span className="text-indigo-500 font-bold text-sm group-hover:translate-x-0.5 transition-transform">→</span>
+        </button>
+
         {/* 마이크로 세션 — 8분 집중 드릴 */}
         <button
           onClick={() => handleStart({ company: 'kakaopay', category: 'distributed-tx', difficulty: 'senior', mode: 'micro' })}

@@ -181,6 +181,9 @@ export function getDb(): Database.Database {
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN parent_id TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN task_type TEXT'); } catch { /* already exists */ }
     try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_parent ON dev_tasks(parent_id)'); } catch { /* already exists */ }
+    // quality review (jarvis-coder 자동 품질 리뷰 JSON)
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN review TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_completed ON dev_tasks(completed_at DESC)'); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (
@@ -316,6 +319,18 @@ export function getDb(): Database.Database {
     // 마이그레이션: share_token 컬럼 추가
     try { _db!.exec('ALTER TABLE interview_sessions ADD COLUMN share_token TEXT;'); } catch { /* already exists */ }
     try { _db!.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_sessions_share_token ON interview_sessions(share_token);'); } catch { /* already exists */ }
+    try { _db!.exec(`CREATE TABLE IF NOT EXISTS live_coding_sessions (
+  id TEXT PRIMARY KEY,
+  problem_id TEXT NOT NULL,
+  problem_title TEXT NOT NULL,
+  submitted_code TEXT,
+  feedback_json TEXT,
+  hint_used INTEGER NOT NULL DEFAULT 0,
+  time_used INTEGER,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT
+)`); } catch { /* already exists */ }
   }
   return _db;
 }

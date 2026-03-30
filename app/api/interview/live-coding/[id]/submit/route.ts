@@ -24,8 +24,8 @@ export async function POST(
   const problem = LIVE_CODING_PROBLEMS.find(p => p.id === session.problem_id);
   if (!problem) return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
 
-  const systemPrompt = `당신은 카카오페이 기술 면접관입니다. 지원자가 제출한 Java 코드를 리뷰합니다.
-반드시 아래 JSON 형식으로만 응답하세요:
+  const systemPrompt = `당신은 카카오페이 시니어 개발자 면접관입니다. 지원자가 제출한 Java 코드를 리뷰합니다.
+반드시 아래 JSON 형식으로만 응답하세요. 모든 필드 필수:
 {
   "score": <0-100 정수. 완전 정답=90+, 로직 맞지만 엣지케이스 누락=70~89, 방향은 맞지만 버그=50~69, 틀림=~49>,
   "correctness": "<정답여부 한 줄 평가>",
@@ -34,7 +34,10 @@ export async function POST(
   "goodPoints": ["잘한 점 1", "잘한 점 2"],
   "improvements": ["개선점 1", "개선점 2"],
   "edgeCases": ["놓친 엣지케이스 (없으면 빈 배열)"],
-  "interviewerComment": "<면접관 코멘트 — 실제 면접처럼 냉정하게 2~3문장>"
+  "interviewerComment": "<면접관 코멘트 — 실제 면접처럼 냉정하게 2~3문장>",
+  "approachAnalysis": "<이 문제의 핵심 사고 과정: 왜 이 알고리즘/자료구조를 선택해야 하는가. 브루트포스→최적화 사고 흐름. 3~5문장>",
+  "interviewerFocus": ["면접관 체크포인트 1 (예: 변수명 의미있게 썼는가)", "체크포인트 2 (예: 예외 처리 먼저 했는가)", "체크포인트 3"],
+  "commonMistakes": ["이 문제에서 흔히 틀리는 함정 1", "함정 2"]
 }`;
 
   const userMessage = `[문제] ${problem.title}
@@ -51,7 +54,7 @@ ${code || '(코드 없음)'}
     feedbackRaw = await callLLM(userMessage, {
       model: MODEL_QUALITY,
       systemPrompt,
-      maxTokens: 800,
+      maxTokens: 1400,
       temperature: 0.3,
     });
   } catch {

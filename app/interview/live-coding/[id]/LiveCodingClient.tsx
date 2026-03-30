@@ -24,6 +24,10 @@ interface Feedback {
   improvements: string[];
   edgeCases: string[];
   interviewerComment: string;
+  // 접근법 분석 (신규)
+  approachAnalysis?: string;
+  interviewerFocus?: string[];
+  commonMistakes?: string[];
 }
 
 function Timer({ running, onExpire, compact = false }: { running: boolean; onExpire: () => void; compact?: boolean }) {
@@ -741,6 +745,37 @@ function FeedbackContent({
           <p className="text-xs text-zinc-300 leading-relaxed">{feedback.interviewerComment}</p>
         </div>
       )}
+
+      {/* ── 접근법 분석 (신규) ── */}
+      {feedback.approachAnalysis && (
+        <div className="bg-indigo-950/50 rounded-xl border border-indigo-800/60 p-4 space-y-2">
+          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">🧠 최적 접근법 — 이렇게 생각해야 한다</p>
+          <p className="text-xs text-indigo-200 leading-relaxed">{feedback.approachAnalysis}</p>
+        </div>
+      )}
+
+      {/* ── 면접관 체크포인트 ── */}
+      {feedback.interviewerFocus && feedback.interviewerFocus.length > 0 && (
+        <div className="bg-violet-950/50 rounded-xl border border-violet-800/60 p-4 space-y-2">
+          <p className="text-[10px] font-black text-violet-400 uppercase tracking-wider">🎯 면접관이 실제로 보는 것</p>
+          {feedback.interviewerFocus.map((f, i) => (
+            <p key={i} className="text-xs text-violet-200 flex gap-2">
+              <span className="text-violet-500 shrink-0 font-bold">{i + 1}.</span>{f}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* ── 흔한 실수 ── */}
+      {feedback.commonMistakes && feedback.commonMistakes.length > 0 && (
+        <div className="bg-orange-950/50 rounded-xl border border-orange-800/60 p-4 space-y-2">
+          <p className="text-[10px] font-black text-orange-400 uppercase tracking-wider">⚡ 이 문제에서 흔히 빠지는 함정</p>
+          {feedback.commonMistakes.map((m, i) => (
+            <p key={i} className="text-xs text-orange-200 flex gap-2"><span className="text-orange-600 shrink-0">•</span>{m}</p>
+          ))}
+        </div>
+      )}
+
       <div className="bg-zinc-900 rounded-xl border border-zinc-700 overflow-hidden">
         <button
           onClick={() => setShowSolution(!showSolution)}

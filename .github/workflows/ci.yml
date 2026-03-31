@@ -82,7 +82,7 @@ jobs:
       - name: Health check
         run: |
           for i in $(seq 1 12); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/api/dev-tasks)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/api/dev-tasks) || STATUS="000"
             if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ]; then
               echo "OK (HTTP $STATUS)"
               exit 0

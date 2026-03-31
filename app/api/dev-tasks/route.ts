@@ -19,6 +19,16 @@ export async function GET(req: NextRequest) {
     CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
     created_at DESC`;
 
+  // 자식 태스크 집계를 SQL로 한 번에 조회 (N+1 쿼리 방지)
+  const childAggRows = db.prepare(`
+    SELECT parent_id,
+      COUNT(*) AS total_children,
+      SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS completed_children
+    FROM dev_tasks WHERE parent_id IS NOT NULL
+    GROUP BY parent_id
+  `).all() as Array<{ parent_id: string; total_children: number; completed_children: number }>;
+  const childAggMap = new Map(childAggRows.map(r => [r.parent_id, r]));
+
   let tasks: DevTask[];
   if (groupFilter) {
     tasks = db.prepare(`SELECT * FROM dev_tasks WHERE group_id = ? ${orderBy}`).all(groupFilter) as DevTask[];
@@ -27,7 +37,7 @@ export async function GET(req: NextRequest) {
   } else {
     tasks = db.prepare(`SELECT * FROM dev_tasks ${orderBy}`).all() as DevTask[];
   }
-  // Attach children to group_parent tasks (in-memory, no extra DB queries)
+  // Attach children and aggregation counts to group_parent tasks (in-memory)
   const parentMap = new Map<string, DevTask[]>();
   for (const task of tasks) {
     if (task.parent_id) {
@@ -36,11 +46,18 @@ export async function GET(req: NextRequest) {
       parentMap.set(task.parent_id, siblings);
     }
   }
-  const result = tasks.map(task =>
-    task.task_type === 'group_parent'
-      ? { ...task, children: parentMap.get(task.id) || [] }
-      : task
-  );
+  const result = tasks.map(task => {
+    if (task.task_type === 'group_parent') {
+      const agg = childAggMap.get(task.id);
+      return {
+        ...task,
+        children: parentMap.get(task.id) || [],
+        total_children: agg?.total_children ?? 0,
+        completed_children: agg?.completed_children ?? 0,
+      };
+    }
+    return task;
+  });
   return NextResponse.json(result);
 }
 
@@ -80,11 +97,12 @@ export async function POST(req: NextRequest) {
   // approved 상태로 삽입될 때는 항상 approved_at 기록 (자동승인이든 에이전트 직접 설정이든)
   const approvedAtValue = insertStatus === 'approved' ? now : null;
 
-  // 중복 검사: 같은 source(board:postId)로 이미 태스크가 5개 이상이면 차단
+  // 중복 검사: 같은 source(board:postId)로 활성(non-terminal) 태스크가 5개 이상이면 차단
+  // done/rejected는 카운트 제외 — 이전 결의 태스크가 완료돼도 재결의 시 새 태스크 등록 가능
   if (source && source.startsWith('board:')) {
     const existingCount = (db.prepare(
-      'SELECT COUNT(*) as cnt FROM dev_tasks WHERE source = ? AND status != ?'
-    ).get(source, 'rejected') as { cnt: number })?.cnt ?? 0;
+      "SELECT COUNT(*) as cnt FROM dev_tasks WHERE source = ? AND status NOT IN ('rejected', 'done')"
+    ).get(source) as { cnt: number })?.cnt ?? 0;
     if (existingCount >= 5) {
       return NextResponse.json(
         { error: 'duplicate_limit', message: `같은 토론에서 이미 ${existingCount}개 태스크 존재`, existing: existingCount },

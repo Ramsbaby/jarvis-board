@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEvent } from '@/contexts/EventContext';
 import { RefreshCw } from 'lucide-react';
 import { Drawer, type DrawerSpec } from './Drawer';
+import DashboardChart from './DashboardChart';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -250,29 +251,25 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
         )}
       </div>
 
-      {/* Row 2: 리소스 미니 */}
-      {sm && (
-        <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-          <span className="text-zinc-600">
-            💾 디스크 <span className={diskPct != null && diskPct >= 80 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
-              {diskPct != null ? `${diskPct}%` : 'N/A'}
-            </span>
-            {diskFree != null && <span className="text-zinc-400"> ({diskFree}GB 여유)</span>}
+      {/* Row 2: 리소스 미니 — sm이 null이어도 폴백 표시 */}
+      <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        <span className="text-zinc-600">
+          💾 디스크 <span className={diskPct != null && diskPct >= 80 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
+            {diskPct != null ? `${diskPct}%` : '—'}
           </span>
-          {memMb != null && <span className="text-zinc-600">🧠 메모리 <span className="text-zinc-500">{memMb}MB</span></span>}
-          {silenceSec != null && (
-            <span className="text-zinc-600">
-              🤖 봇 마지막 활동{' '}
-              <span className={silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
-                {silenceLabel(silenceSec)}
-              </span>
-            </span>
-          )}
-          <span className={`${ragStuck ? 'text-amber-600 font-semibold' : 'text-zinc-600'}`}>
-            📚 RAG {ragStuck ? '⚠ 점검필요' : '정상'}{ragSize != null ? ` ${ragSize}` : ''}
+          {diskFree != null && <span className="text-zinc-400"> ({diskFree}GB 여유)</span>}
+        </span>
+        <span className="text-zinc-600">🧠 메모리 <span className="text-zinc-500">{memMb != null ? `${memMb}MB` : '—'}</span></span>
+        <span className="text-zinc-600">
+          🤖 봇 마지막 활동{' '}
+          <span className={silenceSec != null && silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
+            {silenceSec != null ? silenceLabel(silenceSec) : '—'}
           </span>
-        </div>
-      )}
+        </span>
+        <span className={`${ragStuck ? 'text-amber-600 font-semibold' : 'text-zinc-600'}`}>
+          📚 RAG {ragStuck ? '⚠ 점검필요' : sm ? '정상' : '—'}{ragSize != null ? ` ${ragSize}` : ''}
+        </span>
+      </div>
 
       {/* Row 3: 서비스 칩 */}
       {launchAgents.length > 0 && (
@@ -462,9 +459,10 @@ function TodayActivityCard({ sm, today, onOpen }: { sm?: DashboardData['sysMetri
   const ds = sm?.discord_stats;
   const cs = sm?.cron_stats;
 
-  const botCalls = ds?.claudeCount ?? 0;
-  const humanMsgs = ds?.totalHuman ?? 0;
-  const avgElapsed = ds?.avgElapsed ?? 0;
+  const hasSm = !!sm;
+  const botCalls = ds?.claudeCount ?? (hasSm ? 0 : null);
+  const humanMsgs = ds?.totalHuman ?? (hasSm ? 0 : null);
+  const avgElapsed = ds?.avgElapsed ?? (hasSm ? 0 : null);
   const restarts = ds?.restartCount ?? 0;
 
   const cronRate = cs?.rate ?? 100;
@@ -506,15 +504,15 @@ function TodayActivityCard({ sm, today, onOpen }: { sm?: DashboardData['sysMetri
       {/* Row 1: 봇 활동 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         <div className="bg-zinc-50 rounded-lg p-2 text-center">
-          <div className="text-2xl font-black text-zinc-900 tabular-nums">{botCalls || '-'}</div>
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{botCalls ?? '—'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">봇 응답</div>
         </div>
         <div className="bg-zinc-50 rounded-lg p-2 text-center">
-          <div className="text-2xl font-black text-zinc-900 tabular-nums">{humanMsgs || '-'}</div>
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{humanMsgs ?? '—'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">사람 메시지</div>
         </div>
         <div className="bg-zinc-50 rounded-lg p-2 text-center">
-          <div className="text-2xl font-black text-zinc-900 tabular-nums">{avgElapsed || '-'}</div>
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{avgElapsed ?? '—'}</div>
           <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">평균 응답(초)</div>
         </div>
         <div className={`rounded-lg p-2 text-center ${restarts > 3 ? 'bg-amber-50' : 'bg-zinc-50'}`}>
@@ -1282,72 +1280,95 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
               <span className="text-xs text-zinc-400">클릭하여 상세 보기</span>
             </div>
             {/* 4-pill row */}
-            <div className="flex flex-wrap gap-2">
-              {[
-                {
-                  label: 'Discord 봇',
-                  level: sm?.health?.discord_bot === 'healthy' ? 'green' : 'red',
-                  detail: sm?.health?.discord_bot === 'healthy' ? '정상' : '이상',
-                },
-                {
-                  label: '크론',
-                  level: (sm?.cron_stats?.rate ?? 100) >= 90 ? 'green' : (sm?.cron_stats?.rate ?? 100) >= 70 ? 'yellow' : 'red',
-                  detail: `${sm?.cron_stats?.rate ?? data.cron?.successRate ?? 100}%`,
-                },
-                {
-                  label: 'RAG 인박스',
-                  level: (sm?.rag_stats?.inboxCount ?? 0) > 15000 ? 'red' : (sm?.rag_stats?.inboxCount ?? 0) > 5000 ? 'yellow' : 'green',
-                  detail: `${(sm?.rag_stats?.inboxCount ?? 0).toLocaleString()}건`,
-                },
-                {
-                  label: '디스크',
-                  level: (sm?.disk?.used_pct ?? 0) > 90 ? 'red' : (sm?.disk?.used_pct ?? 0) > 75 ? 'yellow' : 'green',
-                  detail: `${sm?.disk?.used_pct ?? '?'}%`,
-                },
-                {
-                  label: 'Dev Daemon',
-                  level: (() => {
-                    const daemon = sm?.dev_daemon;
-                    if (!daemon?.alive) return 'red' as const;
-                    const lastPoll = daemon.last_poll ? new Date(daemon.last_poll).getTime() : 0;
-                    return (Date.now() - lastPoll < 60000) ? 'green' as const : 'yellow' as const;
-                  })(),
-                  detail: sm?.dev_daemon?.alive ? (sm?.dev_daemon?.current_task ? '실행 중' : '대기') : '비활성',
-                },
-              ].map(({ label, level, detail }) => (
-                <span key={label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
-                  level === 'green' ? 'bg-emerald-100 text-emerald-700' :
-                  level === 'yellow' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${level === 'green' ? 'bg-emerald-500' : level === 'yellow' ? 'bg-amber-500' : 'bg-rose-500'}`} />
-                  {label}: {detail}
-                </span>
-              ))}
-            </div>
-            {/* Crash prediction text */}
-            {(() => {
-              const inboxCount = sm?.rag_stats?.inboxCount ?? 0;
-              const cronRate = sm?.cron_stats?.rate ?? 100;
-              const diskPct = sm?.disk?.used_pct ?? 0;
-              const botOk = sm?.health?.discord_bot === 'healthy';
+            {!sm ? (
+              <div className="text-center py-3">
+                <p className="text-xs text-zinc-400">시스템 메트릭 데이터를 수집 중입니다...</p>
+                <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                  {['Discord 봇', '크론', 'RAG 인박스', '디스크', 'Dev Daemon'].map(label => (
+                    <span key={label} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                      {label}: —
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    {
+                      label: 'Discord 봇',
+                      level: sm.health?.discord_bot === 'healthy' ? 'green' as const
+                        : sm.health?.discord_bot === 'unknown' ? 'yellow' as const : 'red' as const,
+                      detail: sm.health?.discord_bot === 'healthy' ? '정상'
+                        : sm.health?.discord_bot === 'unknown' ? '확인 중' : '이상',
+                    },
+                    {
+                      label: '크론',
+                      level: (sm.cron_stats?.rate ?? 100) >= 90 ? 'green' as const : (sm.cron_stats?.rate ?? 100) >= 70 ? 'yellow' as const : 'red' as const,
+                      detail: `${sm.cron_stats?.rate ?? data.cron?.successRate ?? 100}%`,
+                    },
+                    {
+                      label: 'RAG 인박스',
+                      level: (sm.rag_stats?.inboxCount ?? 0) > 15000 ? 'red' as const : (sm.rag_stats?.inboxCount ?? 0) > 5000 ? 'yellow' as const : 'green' as const,
+                      detail: `${(sm.rag_stats?.inboxCount ?? 0).toLocaleString()}건`,
+                    },
+                    {
+                      label: '디스크',
+                      level: (sm.disk?.used_pct ?? 0) > 90 ? 'red' as const : (sm.disk?.used_pct ?? 0) > 75 ? 'yellow' as const : 'green' as const,
+                      detail: sm.disk?.used_pct != null ? `${sm.disk.used_pct}%` : '—',
+                    },
+                    {
+                      label: 'Dev Daemon',
+                      level: (() => {
+                        const daemon = sm.dev_daemon;
+                        if (!daemon) return 'yellow' as const;
+                        if (!daemon.alive) return 'red' as const;
+                        const lastPoll = daemon.last_poll ? new Date(daemon.last_poll).getTime() : 0;
+                        return (Date.now() - lastPoll < 60000) ? 'green' as const : 'yellow' as const;
+                      })(),
+                      detail: !sm.dev_daemon ? '—' : sm.dev_daemon.alive ? (sm.dev_daemon.current_task ? '실행 중' : '대기') : '비활성',
+                    },
+                  ].map(({ label, level, detail }) => (
+                    <span key={label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                      level === 'green' ? 'bg-emerald-100 text-emerald-700' :
+                      level === 'yellow' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${level === 'green' ? 'bg-emerald-500' : level === 'yellow' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                      {label}: {detail}
+                    </span>
+                  ))}
+                </div>
+                {/* Crash prediction text */}
+                {(() => {
+                  const inboxCount = sm.rag_stats?.inboxCount ?? 0;
+                  const cronRate = sm.cron_stats?.rate ?? 100;
+                  const diskPctVal = sm.disk?.used_pct ?? 0;
+                  const botOk = sm.health?.discord_bot === 'healthy';
+                  const botUnknown = sm.health?.discord_bot === 'unknown';
 
-              const risks: string[] = [];
-              if (inboxCount > 15000) risks.push('RAG compact 위험 (자비스 일시 중단 가능)');
-              if (cronRate < 70) risks.push('크론 다수 실패 (기능 저하)');
-              if (diskPct > 90) risks.push('디스크 부족 (장애 임박)');
-              if (!botOk) risks.push('Discord 봇 이상');
+                  const risks: string[] = [];
+                  if (inboxCount > 15000) risks.push('RAG compact 위험 (자비스 일시 중단 가능)');
+                  if (cronRate < 70) risks.push('크론 다수 실패 (기능 저하)');
+                  if (diskPctVal > 90) risks.push('디스크 부족 (장애 임박)');
+                  if (!botOk && !botUnknown) risks.push('Discord 봇 이상');
 
-              if (risks.length === 0) return (
-                <p className="mt-3 text-xs text-emerald-600 font-medium">✓ 현재 장애 위험 요소 없음</p>
-              );
-              return (
-                <p className="mt-3 text-xs text-rose-600">
-                  ⚠️ 장애 위험: {risks.join(' · ')}
-                </p>
-              );
-            })()}
+                  if (risks.length === 0) return (
+                    <p className="mt-3 text-xs text-emerald-600 font-medium">✓ 현재 장애 위험 요소 없음</p>
+                  );
+                  return (
+                    <p className="mt-3 text-xs text-rose-600">
+                      ⚠️ 장애 위험: {risks.join(' · ')}
+                    </p>
+                  );
+                })()}
+              </>
+            )}
           </div>
         </section>
+
+        {/* 시스템 추이 차트 */}
+        <DashboardChart />
 
         {/* 섹션 2: 내 할 일 */}
         {(attention.awaitingApproval.length > 0 || attention.needsOwnerInput.length > 0 || attention.closingSoon.length > 0) && (

@@ -119,6 +119,10 @@ export interface DevTask {
   review: string | null;
   /** Children tasks — populated for group_parent tasks in API responses */
   children?: DevTask[];
+  /** Total number of child tasks — populated for group_parent tasks via aggregation */
+  total_children?: number;
+  /** Number of completed child tasks — populated for group_parent tasks via aggregation */
+  completed_children?: number;
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────

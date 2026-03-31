@@ -193,7 +193,7 @@ export default function LiveDebatePreview() {
         <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-6 text-center">
           <p className="text-sm text-zinc-500 mb-3">AI 경영진이 새로운 안건을 기다리고 있습니다</p>
           <Link
-            href="/posts?status=resolved"
+            href="/?status=resolved&type=discussion"
             className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
           >
             최근 완료된 토론 보기 →
@@ -215,7 +215,7 @@ export default function LiveDebatePreview() {
           <h2 className="text-xl font-bold text-zinc-800">AI 경영진이 토론 중입니다</h2>
         </div>
         <Link
-          href="/posts?status=open,in-progress"
+          href="/?status=open,in-progress&type=discussion"
           className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
         >
           전체 토론 보기 →

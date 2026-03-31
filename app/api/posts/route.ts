@@ -21,6 +21,25 @@ export async function GET(req: NextRequest) {
   const cursor = url.searchParams.get('cursor');
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
 
+  // ── 서버 사이드 필터링 (status, type) ──────────────────────────────────────
+  const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved', 'closed']);
+  const VALID_TYPES = new Set(['discussion', 'report', 'proposal', 'decision', 'announcement']);
+
+  const statusParam = url.searchParams.get('status');
+  const typeParam = url.searchParams.get('type');
+
+  const statusValues = statusParam
+    ? statusParam.split(',').map(s => s.trim()).filter(s => VALID_STATUSES.has(s))
+    : [];
+  const typeValue = typeParam && VALID_TYPES.has(typeParam) ? typeParam : null;
+
+  const conditions: string[] = [];
+  if (statusValues.length === 1) conditions.push(`p.status = '${statusValues[0]}'`);
+  else if (statusValues.length > 1) conditions.push(`p.status IN (${statusValues.map(s => `'${s}'`).join(',')})`);
+  if (typeValue) conditions.push(`p.type = '${typeValue}'`);
+  const filterWhere = conditions.length > 0 ? conditions.join(' AND ') : null;
+  // ────────────────────────────────────────────────────────────────────────────
+
   const db = getDb();
 
   // Guest masking
@@ -30,12 +49,15 @@ export async function GET(req: NextRequest) {
   let posts: PostWithCommentCount[];
 
   if (search) {
-    // FTS5 검색 — CTE + FTS JOIN
+    // FTS5 검색 — CTE + FTS JOIN (검색 시 status/type 필터 병합)
     const safeSearch = search.replace(/"/g, '""') + '*';
+    const searchWhere = filterWhere
+      ? `posts_fts MATCH ? AND ${filterWhere}`
+      : 'posts_fts MATCH ?';
     posts = db.prepare(
       buildPostsCTE({
         join: 'JOIN posts_fts f ON p.rowid = f.rowid',
-        where: 'posts_fts MATCH ?',
+        where: searchWhere,
         orderBy: 'rank',
       })
     ).all(safeSearch, limit) as PostWithCommentCount[];
@@ -43,15 +65,20 @@ export async function GET(req: NextRequest) {
     // 커서 기반 페이지네이션 — CTE + created_at 필터
     const cursorPost = db.prepare('SELECT created_at FROM posts WHERE id = ?').get(cursor) as PostCursorRow | undefined;
     if (cursorPost) {
+      const cursorWhere = filterWhere
+        ? `p.created_at < ? AND ${filterWhere}`
+        : 'p.created_at < ?';
       posts = db.prepare(
-        buildPostsCTE({ where: 'p.created_at < ?' })
+        buildPostsCTE({ where: cursorWhere })
       ).all(cursorPost.created_at, limit) as PostWithCommentCount[];
     } else {
       posts = [];
     }
   } else {
-    // 기본 목록 — CTE 집계 쿼리
-    posts = db.prepare(buildPostsCTE()).all(limit) as PostWithCommentCount[];
+    // 기본 목록 — CTE 집계 쿼리 (status/type 필터 적용)
+    posts = db.prepare(
+      buildPostsCTE(filterWhere ? { where: filterWhere } : {})
+    ).all(limit) as PostWithCommentCount[];
   }
 
   const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;

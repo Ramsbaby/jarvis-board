@@ -2,7 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
-import { getFeedbackSystemPrompt } from '@/lib/interview-data';
+import { getFeedbackSystemPrompt, getEvaluatorSystemPrompt } from '@/lib/interview-data';
 import Anthropic from '@anthropic-ai/sdk';
 
 function nanoid() {
@@ -57,6 +57,104 @@ function saveFeedbackDual(
   return feedbackId;
 }
 
+interface EvaluatorResult {
+  verdict: 'fair' | 'too_generous' | 'too_harsh';
+  adjustedScore: number;
+  additionalWeaknesses: string[];
+}
+
+/**
+ * Generator-Evaluator 패턴 — 완전히 새로운 컨텍스트로 1차 평가를 교차 검증
+ * 우선순위: Claude Relay(독립 세션) → Groq fallback
+ * LLM의 구조적 관대함(5~15점 부풀리기)을 보정한다.
+ * 실패 시 defaultResult 반환 (safe fallback)
+ */
+async function runEvaluator(
+  question: string,
+  answer: string,
+  generatorScore: number,
+  generatorWeaknesses: string[],
+  companyId: string,
+): Promise<EvaluatorResult> {
+  const defaultResult: EvaluatorResult = {
+    verdict: 'fair',
+    adjustedScore: generatorScore,
+    additionalWeaknesses: [],
+  };
+
+  if (generatorScore === null) return defaultResult;
+
+  const systemPrompt = getEvaluatorSystemPrompt(companyId);
+  const userPrompt = `[면접 질문]\n${question.slice(0, 400)}\n\n[지원자 답변]\n${answer.slice(0, 600)}\n\n[1차 평가 결과]\n점수: ${generatorScore}점\n약점: ${generatorWeaknesses.slice(0, 3).join(' / ') || '없음'}\n\n위 평가를 검토하고 JSON으로만 응답하세요.`;
+
+  const parseResult = (text: string): EvaluatorResult | null => {
+    const parsed = extractJson(text);
+    if (!parsed.verdict) return null;
+    const rawScore = parsed.adjusted_score;
+    return {
+      verdict: (parsed.verdict as EvaluatorResult['verdict']) ?? 'fair',
+      adjustedScore: typeof rawScore === 'number'
+        ? Math.max(0, Math.min(100, rawScore))
+        : generatorScore,
+      additionalWeaknesses: Array.isArray(parsed.additional_weaknesses)
+        ? (parsed.additional_weaknesses as string[]).slice(0, 2)
+        : [],
+    };
+  };
+
+  // ── 1순위: Claude Relay (독립 컨텍스트, 기존 면접 대화와 완전히 분리) ──
+  const claudeRelayUrl = process.env.CLAUDE_RELAY_URL;
+  const claudeRelayToken = process.env.CLAUDE_RELAY_TOKEN || 'jarvis-claude-relay-2026';
+  if (claudeRelayUrl) {
+    try {
+      const res = await fetch(`${claudeRelayUrl}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${claudeRelayToken}`,
+        },
+        body: JSON.stringify({ systemPrompt, userPrompt }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.ok) {
+        const data = await res.json() as { ok: boolean; content: string };
+        const result = parseResult(data.content ?? '');
+        if (result) return result;
+      }
+    } catch (err) {
+      console.warn('[evaluator] Claude Relay 실패, Groq fallback:', err);
+    }
+  }
+
+  // ── 2순위: Groq fallback ──
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) return defaultResult;
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 300,
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return defaultResult;
+    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
+    const result = parseResult(data.choices?.[0]?.message?.content ?? '');
+    return result ?? defaultResult;
+  } catch (err) {
+    console.warn('[evaluator] Groq fallback도 실패, 원본 점수 유지:', err);
+    return defaultResult;
+  }
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { isOwner } = getRequestAuth(req);
   if (!isOwner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
@@ -83,7 +181,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   let conversationHistory: string | undefined;
   if (prevMessages.length >= 2) {
-    // Q&A 쌍으로 묶기 (최근 3쌍까지)
     const pairs: string[] = [];
     let i = 0;
     while (i < prevMessages.length - 1 && pairs.length < 3) {
@@ -107,7 +204,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const claudeRelayToken = process.env.CLAUDE_RELAY_TOKEN || 'jarvis-claude-relay-2026';
 
   if (claudeRelayUrl) {
-    // 릴레이 호출 (non-streaming, 응답 후 SSE done 이벤트 발송)
     const stream = new ReadableStream({
       async start(controller) {
         const enc = new TextEncoder();
@@ -131,26 +227,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             controller.enqueue(enc.encode(`data: ${JSON.stringify({ token: fullText.slice(i, i + 50) })}\n\n`));
           }
 
-          // JSON 파싱
           const parsed = extractJson(fullText);
-
-          const score = typeof parsed.score === 'number' ? parsed.score : null;
+          const genScore = typeof parsed.score === 'number' ? parsed.score : null;
           const strengths = Array.isArray(parsed.strengths) ? parsed.strengths as string[] : [];
           const weaknesses = Array.isArray(parsed.weaknesses) ? parsed.weaknesses as string[] : [];
           const betterAnswer = typeof parsed.better_answer === 'string' ? parsed.better_answer : '';
           const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords as string[] : [];
           const nextQuestion = typeof parsed.next_question === 'string' ? parsed.next_question : null;
 
-          // DB 저장 (듀얼 라이트)
+          // ── Evaluator: 교차 검증 ──
+          const evalResult = genScore !== null
+            ? await runEvaluator(questionContent ?? '', answer, genScore, weaknesses, session.company)
+            : { adjustedScore: null, additionalWeaknesses: [], verdict: 'fair' as const };
+          const finalScore = genScore !== null ? evalResult.adjustedScore : null;
+          const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
+
           const parseError = Object.keys(parsed).length === 0;
-          saveFeedbackDual(db, id, fullText, score, strengths, weaknesses, betterAnswer, missingKeywords, parseError);
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
               .run(nanoid(), id, nextQuestion);
           }
 
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
           controller.close();
         } catch (err) {
           console.error('[claude-relay] error, falling back to Groq:', err);
@@ -176,18 +276,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 const groqData = await groqRes.json() as { choices: Array<{ message: { content: string } }> };
                 const groqText = groqData.choices?.[0]?.message?.content ?? '';
                 const groqParsed = extractJson(groqText);
-                const score = typeof groqParsed.score === 'number' ? groqParsed.score : null;
+                const genScore = typeof groqParsed.score === 'number' ? groqParsed.score : null;
                 const strengths = Array.isArray(groqParsed.strengths) ? groqParsed.strengths as string[] : [];
                 const weaknesses = Array.isArray(groqParsed.weaknesses) ? groqParsed.weaknesses as string[] : [];
                 const betterAnswer = typeof groqParsed.better_answer === 'string' ? groqParsed.better_answer : '';
                 const missingKeywords = Array.isArray(groqParsed.missing_keywords) ? groqParsed.missing_keywords as string[] : [];
                 const nextQuestion = typeof groqParsed.next_question === 'string' ? groqParsed.next_question : null;
+
+                const evalResult = genScore !== null
+                  ? await runEvaluator(questionContent ?? '', answer, genScore, weaknesses, session.company)
+                  : { adjustedScore: null, additionalWeaknesses: [], verdict: 'fair' as const };
+                const finalScore = genScore !== null ? evalResult.adjustedScore : null;
+                const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
+
                 const groqParseError = Object.keys(groqParsed).length === 0;
-                saveFeedbackDual(db, id, groqText, score, strengths, weaknesses, betterAnswer, missingKeywords, groqParseError);
+                saveFeedbackDual(db, id, groqText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, groqParseError);
                 if (nextQuestion) {
                   db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
                 }
-                controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+                controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
                 controller.close();
                 return;
               }
@@ -210,12 +317,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     });
   }
-  // else: 기존 ANTHROPIC_API_KEY 분기 또는 Groq fallback으로 계속...
 
   const useClaudeApi = !!process.env.ANTHROPIC_API_KEY;
 
   if (useClaudeApi) {
-    // Claude claude-sonnet-4-5 스트리밍
+    // Claude Sonnet 스트리밍
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const stream = new ReadableStream({
@@ -239,27 +345,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             }
           }
 
-          // JSON 파싱 및 DB 저장
           const parsed = extractJson(fullText);
-
-          const score = typeof parsed.score === 'number' ? parsed.score : null;
-          const strengths = Array.isArray(parsed.strengths) ? parsed.strengths : [];
-          const weaknesses = Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [];
+          const genScore = typeof parsed.score === 'number' ? parsed.score : null;
+          const strengths = Array.isArray(parsed.strengths) ? parsed.strengths as string[] : [];
+          const weaknesses = Array.isArray(parsed.weaknesses) ? parsed.weaknesses as string[] : [];
           const betterAnswer = parsed.better_answer ?? '';
-          const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords : [];
+          const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords as string[] : [];
           const nextQuestion = parsed.next_question ?? null;
 
-          // DB에 피드백 저장 (듀얼 라이트)
-          const parseError = Object.keys(parsed).length === 0;
-          saveFeedbackDual(db, id, fullText, score, strengths as string[], weaknesses as string[], betterAnswer as string | null, missingKeywords as string[], parseError);
+          // ── Evaluator: 교차 검증 ──
+          const evalResult = genScore !== null
+            ? await runEvaluator(questionContent ?? '', answer, genScore, weaknesses, session.company)
+            : { adjustedScore: null, additionalWeaknesses: [], verdict: 'fair' as const };
+          const finalScore = genScore !== null ? evalResult.adjustedScore : null;
+          const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
-          // 다음 질문 저장
+          const parseError = Object.keys(parsed).length === 0;
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer as string | null, missingKeywords, parseError);
+
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
-              .run(nanoid(), id, nextQuestion);
+              .run(nanoid(), id, nextQuestion as string);
           }
 
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
           controller.close();
         } catch {
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null, error: 'LLM 호출 실패' })}\n\n`));
@@ -277,7 +386,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     });
   } else {
-    // 기존 Groq 로직 (fallback)
+    // Groq fallback
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) return new Response('GROQ_API_KEY missing', { status: 500 });
 
@@ -313,7 +422,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop() ?? ''; // 마지막 불완전한 줄은 다음 청크와 합침
+            buffer = lines.pop() ?? '';
             for (const line of lines) {
               if (!line.startsWith('data: ')) continue;
               const data = line.slice(6).trim();
@@ -329,7 +438,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             }
           }
 
-          let score: number | null = null;
+          let genScore: number | null = null;
           let strengths: string[] = [];
           let weaknesses: string[] = [];
           let betterAnswer: string | null = null;
@@ -340,7 +449,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             const jsonMatch = fullText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
-              score = parsed.score ?? null;
+              genScore = parsed.score ?? null;
               strengths = parsed.strengths ?? [];
               weaknesses = parsed.weaknesses ?? [];
               betterAnswer = parsed.better_answer ?? null;
@@ -349,14 +458,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             }
           } catch { /* keep nulls */ }
 
-          const parseError = score === null && strengths.length === 0 && weaknesses.length === 0;
-          saveFeedbackDual(db, id, fullText, score, strengths, weaknesses, betterAnswer, missingKeywords, parseError);
+          // ── Evaluator: 교차 검증 ──
+          const evalResult = genScore !== null
+            ? await runEvaluator(questionContent ?? '', answer, genScore, weaknesses, session.company)
+            : { adjustedScore: null, additionalWeaknesses: [], verdict: 'fair' as const };
+          const finalScore = genScore !== null ? evalResult.adjustedScore : null;
+          const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
+
+          const parseError = genScore === null && strengths.length === 0 && weaknesses.length === 0;
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
           controller.close();
         } catch (err) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null, error: String(err) })}\n\n`));
@@ -370,7 +486,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Railway/Nginx 버퍼링 방지
+        'X-Accel-Buffering': 'no',
       },
     });
   }

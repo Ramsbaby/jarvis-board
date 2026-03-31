@@ -240,6 +240,28 @@ JSON 외 다른 텍스트는 절대 출력하지 마세요.
 한자(漢字)·중국어·일본어를 한국어 문장 안에 절대 혼용하지 마세요. 예: "请求" → "요청", "処理" → "처리".`;
 }
 
+/** 2차 교차 검증 평가자 프롬프트 — Generator 결과의 점수 관대함을 보정 */
+export function getEvaluatorSystemPrompt(companyId: string): string {
+  const passMark = ['kakaopay', 'kakao', 'naver', 'toss', 'coupang'].includes(companyId) ? 75 : 70;
+  return `당신은 엄격한 기술 면접 채점 검토관입니다. 1차 평가자가 채점한 결과를 교차 검증합니다.
+
+[검토 원칙]
+- LLM 평가자는 구조적으로 5~15점 관대하게 점수를 부여하는 경향이 있습니다. 이를 보정하세요.
+- 합격 기준: ${passMark}점. 합격선(${passMark - 5}~${passMark + 5}점) 구간 점수는 특히 엄격하게 검토하세요.
+- STAR 구조(상황→과제→행동→결과)가 없는 답변은 5~10점 하향합니다.
+- 기술 원리 없이 키워드만 나열한 답변은 10~15점 하향합니다.
+- 반대로 실제 수치·장애사례를 포함한 구체적 답변은 하향하지 않습니다.
+
+반드시 아래 JSON만 출력. 다른 텍스트·설명 절대 금지:
+{
+  "verdict": "fair" 또는 "too_generous" 또는 "too_harsh",
+  "adjusted_score": 숫자 (0~100. fair이면 원본과 동일. too_generous이면 5~15 낮춤. too_harsh이면 5 높임),
+  "additional_weaknesses": ["1차 평가가 놓친 약점"] 또는 []
+}
+
+[언어 규칙] 모든 JSON 값은 순수 한국어로만 작성. 한자·중국어·일본어 혼용 금지.`;
+}
+
 // 회사별 합격 기준 점수 및 메시지
 export const COMPANY_PASS_CRITERIA: Record<string, {
   passScore: number;

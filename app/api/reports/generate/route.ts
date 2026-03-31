@@ -29,12 +29,12 @@ export async function POST(req: NextRequest) {
 
   // 1. Collect completed dev tasks in period
   const completedTasks = db.prepare(`
-    SELECT id, title, detail, team, updated_at
+    SELECT id, title, detail, priority, completed_at
     FROM dev_tasks
-    WHERE status = 'completed'
-      AND updated_at >= ? AND updated_at <= ?
-    ORDER BY updated_at DESC
-  `).all(periodStart, periodEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'updated_at'> & { team?: string }>;
+    WHERE status = 'done'
+      AND completed_at >= ? AND completed_at <= ?
+    ORDER BY completed_at DESC
+  `).all(periodStart, periodEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'> & { completed_at: string }>;
 
   // 2. Collect issue posts created in period (bug signals)
   const issuesPosts = db.prepare(`
@@ -60,9 +60,10 @@ export async function POST(req: NextRequest) {
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
   const periodLabel = formatPeriodLabel(reportType, periodStart, periodEnd);
 
+  const PRIORITY_KO: Record<string, string> = { urgent: '긴급', high: '높음', medium: '중간', low: '낮음' };
   const tasksList = completedTasks.length > 0
     ? completedTasks.map(t =>
-        `- [${t.team ?? '전체'}] ${t.title}${t.detail ? `: ${t.detail}` : ''}`
+        `- [${PRIORITY_KO[t.priority] ?? t.priority}] ${t.title}${t.detail ? `: ${t.detail}` : ''}`
       ).join('\n')
     : '없음';
 
@@ -114,13 +115,15 @@ ${issuesList}
     const aiData = await aiRes.json() as { content: Array<{ text: string }> };
     reportContent = aiData?.content?.[0]?.text?.trim() ?? '';
   }
+  const aiGenerated = !!reportContent;
   if (!reportContent) {
-    // Fallback: simple template
-    reportContent = `## ✅ 완료된 작업 (${completedTasks.length}건)\n${tasksList}\n\n## ⚠️ 품질 점검\n- 이슈: ${issuesPosts.length}건\n\n## 💬 종합 평가\nAI 생성 실패 - 원본 데이터를 확인하세요.`;
+    // Fallback: simple template (AI 호출 실패 시)
+    reportContent = `## ✅ 완료된 작업 (${completedTasks.length}건)\n${tasksList}\n\n## ⚠️ 품질 점검\n- 이슈: ${issuesPosts.length}건\n\n## 💬 종합 평가\nAI 생성에 실패하여 원본 데이터만 표시합니다.`;
   }
 
   // Full report with header
-  const fullContent = `${reportContent}\n\n---\n📅 기간: ${periodLabel}  |  🤖 자동 생성`;
+  const generatedBy = aiGenerated ? '🤖 AI 자동 생성' : '⚠️ AI 실패 · 원본 데이터';
+  const fullContent = `${reportContent}\n\n---\n📅 기간: ${periodLabel}  |  ${generatedBy}`;
 
   // 5. Store as post with type='report'
   const postId = randomUUID();

@@ -193,7 +193,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
             <span className="text-xs text-amber-700 font-medium">
               👤 게스트 모드 — 일부 정보가 마스킹됩니다.{' '}
-              <a href="/login" className="underline font-medium hover:text-amber-900">로그인하기 →</a>
+              <a href={`/login?next=/posts/${id}`} className="underline font-medium hover:text-amber-900">로그인하기 →</a>
             </span>
           </div>
         )}

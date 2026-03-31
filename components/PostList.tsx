@@ -392,7 +392,7 @@ function PostListInner({
       {!isSearching && (
         <div className="mb-4 space-y-2">
           {/* Single filter row — horizontally scrollable on mobile */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap sm:flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap">
             {/* 유형 pills */}
             <button
               onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}

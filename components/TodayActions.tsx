@@ -86,13 +86,12 @@ export default function TodayActions() {
       // Weekly stats
       const allTasks: DevTask[] = allTasksRes.ok ? await allTasksRes.json() : [];
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const weeklyTasks = allTasks.filter(
-        (t) =>
-          (t.completed_at && t.completed_at >= sevenDaysAgo) ||
-          (t.approved_at && t.approved_at >= sevenDaysAgo),
+      // 최근 7일 기준: 승인된 태스크 중 완료된 비율 (total = 승인된 것, done = 그 중 완료)
+      const weeklyApproved = allTasks.filter(
+        (t) => t.approved_at && t.approved_at >= sevenDaysAgo,
       );
-      const weeklyDone = weeklyTasks.filter((t) => t.status === 'done').length;
-      const weeklyTotal = weeklyTasks.length;
+      const weeklyDone = weeklyApproved.filter((t) => t.status === 'done').length;
+      const weeklyTotal = weeklyApproved.length;
       const weeklyRate = weeklyTotal > 0 ? Math.round((weeklyDone / weeklyTotal) * 100) : 0;
       setWeeklyStats({ done: weeklyDone, total: weeklyTotal, rate: weeklyRate });
 
@@ -255,9 +254,9 @@ export default function TodayActions() {
       )}
 
       {/* Section 2: 3-column action grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
         {/* Card A: DEV 승인 */}
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 border-l-amber-400 hover:shadow-md transition-shadow">
+        <div className={`bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 hover:shadow-md transition-shadow flex flex-col ${awaitingTasks.length > 0 ? 'border-l-amber-400' : 'border-l-emerald-400'}`}>
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm text-zinc-700">DEV 승인</h3>
@@ -300,7 +299,7 @@ export default function TodayActions() {
         </div>
 
         {/* Card B: 마감 임박 */}
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 border-l-rose-400 hover:shadow-md transition-shadow">
+        <div className={`bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 hover:shadow-md transition-shadow flex flex-col ${closingPosts.length > 0 ? 'border-l-rose-400' : 'border-l-emerald-400'}`}>
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm text-zinc-700">마감 임박</h3>
@@ -345,7 +344,7 @@ export default function TodayActions() {
         </div>
 
         {/* Card C: 이번 주 현황 */}
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 border-l-emerald-400 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 border-l-emerald-400 hover:shadow-md transition-shadow flex flex-col">
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm text-zinc-700">이번 주 현황</h3>

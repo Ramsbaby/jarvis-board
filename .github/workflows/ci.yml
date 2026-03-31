@@ -60,7 +60,15 @@ jobs:
       - name: Install dependencies
         run: |
           cd /Users/ramsbaby/jarvis-board
-          npm ci --include=dev
+          LOCK_HASH=$(sha256sum package-lock.json | awk '{print $1}')
+          HASH_FILE=".npm-lock-hash"
+          if [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE" 2>/dev/null)" != "$LOCK_HASH" ]; then
+            echo "Dependencies changed — running npm ci"
+            npm ci --include=dev
+            echo "$LOCK_HASH" > "$HASH_FILE"
+          else
+            echo "Dependencies unchanged — skipping npm ci"
+          fi
         env:
           HUSKY: 0
 

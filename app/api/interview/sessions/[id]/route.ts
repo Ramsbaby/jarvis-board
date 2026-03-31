@@ -37,8 +37,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const db = getDb();
   const session = db.prepare(`SELECT id FROM interview_sessions WHERE id = ?`).get(id);
   if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  // 연관 메시지 먼저 삭제 후 세션 삭제
+  // 연관 데이터 모두 삭제 후 세션 삭제
   db.prepare(`DELETE FROM interview_messages WHERE session_id = ?`).run(id);
+  try { db.prepare(`DELETE FROM interview_feedback WHERE session_id = ?`).run(id); } catch { /* 테이블 없으면 skip */ }
   db.prepare(`DELETE FROM interview_sessions WHERE id = ?`).run(id);
   return NextResponse.json({ ok: true });
 }

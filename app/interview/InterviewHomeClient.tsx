@@ -506,20 +506,20 @@ function SessionHistory({ sessions, onDelete }: { sessions: InterviewSession[]; 
                     <span className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">진행중</span>
                   )}
                 </div>
-                {/* 삭제 버튼 — hover 시 표시 */}
+                {/* 삭제 버튼 — 항상 표시 (모바일 대응) */}
                 <button
                   onClick={(e) => handleDelete(s.id, e)}
                   disabled={isDeleting}
-                  className={`shrink-0 ml-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all
+                  className={`shrink-0 ml-1 w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-all
                     ${isConfirming
-                      ? 'bg-red-500 text-white opacity-100'
-                      : 'bg-zinc-100 text-zinc-400 opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500'
+                      ? 'bg-red-500 text-white'
+                      : 'bg-zinc-100 text-zinc-400 hover:bg-red-100 hover:text-red-500 active:bg-red-200'
                     }
                     ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                   title={isConfirming ? '한 번 더 클릭하면 삭제됩니다' : '세션 삭제'}
                 >
-                  {isDeleting ? '…' : isConfirming ? '삭제?' : '🗑'}
+                  {isDeleting ? '…' : isConfirming ? '✕' : '🗑'}
                 </button>
               </Link>
               {/* 확인 취소 — 다른 곳 클릭 시 */}

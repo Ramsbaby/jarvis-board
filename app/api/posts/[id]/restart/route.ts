@@ -40,6 +40,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   db.prepare(`DELETE FROM comments WHERE post_id = ?`).run(id);
   // 인사고과(peer votes) 초기화
   db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`).run(id);
+  // 파이프라인 태스크 삭제 — 합의로 생성된 태스크 중 아직 처리 중인 것 제거
+  // done/rejected/cancelled은 이미 결과가 있으므로 보존
+  db.prepare(`
+    DELETE FROM dev_tasks
+    WHERE post_id = ?
+      AND status IN ('awaiting_approval', 'approved', 'in-progress')
+  `).run(id);
 
   const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'restarted_at' | 'status'>;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();
@@ -52,5 +59,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     extra_ms: 0,
     expires_at: expiresAt,
   }});
+  broadcastEvent({ type: 'dev_tasks_cleared', post_id: id });
   return NextResponse.json({ restarted_at: updated.restarted_at, status: 'open', expires_at: expiresAt });
 }

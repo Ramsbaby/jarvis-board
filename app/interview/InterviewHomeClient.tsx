@@ -219,16 +219,24 @@ function WeaknessWidget({ company }: { company: string }) {
 
       {report.category_breakdown.length > 0 && (
         <div className="bg-white border border-zinc-200 rounded-xl p-4">
-          <p className="text-[11px] text-zinc-400 mb-3">카테고리별 평균 점수 (낮은 순)</p>
-          <div className="space-y-2">
-            {report.category_breakdown.slice(0, 5).map(cat => {
+          <p className="text-[11px] text-zinc-400 mb-3">카테고리별 점수 히트맵 <span className="text-zinc-300">— 붉을수록 집중 보완 필요</span></p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {report.category_breakdown.map(cat => {
               const catInfo = CATEGORIES.find(c => c.id === cat.category);
+              const cellColor = cat.avg_score >= 75
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : cat.avg_score >= 60
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-red-50 border-red-200 text-red-800';
+              const scoreColor = cat.avg_score >= 75 ? 'text-emerald-600' : cat.avg_score >= 60 ? 'text-amber-600' : 'text-red-600';
               return (
-                <div key={cat.category} className="flex items-center gap-2">
-                  <span className="text-sm">{catInfo?.emoji ?? '📂'}</span>
-                  <span className="text-xs text-zinc-600 flex-1 truncate">{catInfo?.name ?? cat.category}</span>
-                  <span className="text-[10px] text-zinc-400">{cat.session_count}회</span>
-                  <span className={`text-sm font-bold tabular-nums ${catColor(cat.avg_score)}`}>{cat.avg_score}</span>
+                <div key={cat.category} className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border ${cellColor}`}>
+                  <span className="text-base shrink-0">{catInfo?.emoji ?? '📂'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-medium truncate">{catInfo?.name ?? cat.category}</p>
+                    <p className="text-[10px] text-zinc-400">{cat.session_count}회</p>
+                  </div>
+                  <span className={`text-base font-black tabular-nums shrink-0 ${scoreColor}`}>{cat.avg_score}</span>
                 </div>
               );
             })}

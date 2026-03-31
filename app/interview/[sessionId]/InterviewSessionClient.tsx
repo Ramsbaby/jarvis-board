@@ -75,13 +75,37 @@ function PrincipleCheckCard({ sessionId, feedbackIdx }: { sessionId: string; fee
   );
 }
 
-function FeedbackCard({ msg }: { msg: Message }) {
+function FeedbackCard({ msg, sessionId, onRegenSuccess }: {
+  msg: Message;
+  sessionId: string;
+  onRegenSuccess: (updated: Message) => void;
+}) {
   let strengths: string[] = [];
   let weaknesses: string[] = [];
   let missingKeywords: string[] = [];
   try { strengths = JSON.parse(msg.strengths ?? '[]'); } catch { /* empty */ }
   try { weaknesses = JSON.parse(msg.weaknesses ?? '[]'); } catch { /* empty */ }
   try { missingKeywords = JSON.parse(msg.missing_keywords ?? '[]'); } catch { /* empty */ }
+
+  const [regenLoading, setRegenLoading] = useState(false);
+
+  async function handleRegen() {
+    setRegenLoading(true);
+    try {
+      const res = await fetch(`/api/interview/sessions/${sessionId}/regen-feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ messageId: msg.id }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { ok: boolean; message: Message };
+        if (data.ok) onRegenSuccess(data.message);
+      }
+    } finally {
+      setRegenLoading(false);
+    }
+  }
 
   // contradiction은 msg.content (raw LLM JSON)에서 추출
   let contradiction: string | null = null;
@@ -111,11 +135,21 @@ function FeedbackCard({ msg }: { msg: Message }) {
             {scoreLabel}
           </span>
         </div>
-        {hasDetail && (
-          <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline shrink-0">
-            {open ? '접기 ▲' : '상세 보기 ▼'}
+        <div className="flex items-center gap-2">
+          {hasDetail && (
+            <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline shrink-0">
+              {open ? '접기 ▲' : '상세 보기 ▼'}
+            </button>
+          )}
+          <button
+            onClick={handleRegen}
+            disabled={regenLoading}
+            className="text-[11px] text-zinc-400 hover:text-zinc-600 disabled:opacity-40 transition-colors px-1.5 py-0.5 rounded hover:bg-zinc-100"
+            title="피드백 재생성 (LLM 재호출)"
+          >
+            {regenLoading ? '재생성 중…' : '🔄'}
           </button>
-        )}
+        </div>
       </div>
       {open && (
         <div className="space-y-3 pt-1 border-t border-zinc-200">
@@ -428,7 +462,11 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                 <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
                 <div className="max-w-[90%] space-y-2">
                   <p className="text-[11px] font-semibold text-zinc-400 mb-1 ml-1">AI 피드백</p>
-                  <FeedbackCard msg={msg} />
+                  <FeedbackCard
+                    msg={msg}
+                    sessionId={sessionId}
+                    onRegenSuccess={(updated) => setMessages(prev => prev.map(m => m.id === updated.id ? updated : m))}
+                  />
                   <PrincipleCheckCard sessionId={sessionId} feedbackIdx={feedbackIdx} />
                 </div>
               </div>

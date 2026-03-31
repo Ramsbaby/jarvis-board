@@ -37,6 +37,7 @@ function saveFeedbackDual(
   betterAnswer: string | null,
   missingKeywords: string[],
   parseError = false,
+  evaluatorVerdict: 'fair' | 'too_generous' | 'too_harsh' = 'fair',
 ): string {
   const feedbackId = nanoid();
   db.prepare(
@@ -44,13 +45,13 @@ function saveFeedbackDual(
      VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
   ).run(feedbackId, sessionId, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
 
-  // interview_feedback 정규화 테이블에도 저장 (통계용)
+  // interview_feedback 정규화 테이블에도 저장 (통계 + evaluator verdict용)
   if (score !== null) {
     try {
       db.prepare(
-        `INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, parse_error)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(nanoid(), sessionId, feedbackId, score, JSON.stringify(strengths), JSON.stringify(weaknesses), JSON.stringify(missingKeywords), betterAnswer, parseError ? 1 : 0);
+        `INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, parse_error, evaluator_verdict)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(nanoid(), sessionId, feedbackId, score, JSON.stringify(strengths), JSON.stringify(weaknesses), JSON.stringify(missingKeywords), betterAnswer, parseError ? 1 : 0, evaluatorVerdict);
     } catch { /* 마이그레이션 전 구버전 무시 */ }
   }
 
@@ -243,7 +244,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
           const parseError = Object.keys(parsed).length === 0;
-          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError);
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError, evalResult.verdict);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
@@ -290,7 +291,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
                 const groqParseError = Object.keys(groqParsed).length === 0;
-                saveFeedbackDual(db, id, groqText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, groqParseError);
+                saveFeedbackDual(db, id, groqText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, groqParseError, evalResult.verdict);
                 if (nextQuestion) {
                   db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
                 }
@@ -361,7 +362,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
           const parseError = Object.keys(parsed).length === 0;
-          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer as string | null, missingKeywords, parseError);
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer as string | null, missingKeywords, parseError, evalResult.verdict);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
@@ -466,7 +467,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
           const parseError = genScore === null && strengths.length === 0 && weaknesses.length === 0;
-          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError);
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError, evalResult.verdict);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);

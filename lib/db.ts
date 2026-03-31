@@ -368,6 +368,9 @@ export function getDb(): Database.Database {
       FROM interview_messages
       WHERE role = 'feedback' AND score IS NOT NULL
     `);
+
+    // 마이그레이션: evaluator_verdict 컬럼 추가 (Generator-Evaluator 패턴 verdict 저장용)
+    try { _db!.exec("ALTER TABLE interview_feedback ADD COLUMN evaluator_verdict TEXT DEFAULT 'fair';"); } catch { /* already exists */ }
   }
   return _db;
 }

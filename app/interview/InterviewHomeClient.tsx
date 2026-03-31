@@ -547,6 +547,17 @@ function SessionHistory({ sessions, onDelete }: { sessions: InterviewSession[]; 
   );
 }
 
+// ── 섹션 구분선 ──────────────────────────────────────────────────────────────
+function SectionDivider({ label, action }: { label: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-[10px] font-bold tracking-[0.12em] text-zinc-400 uppercase shrink-0">{label}</span>
+      <div className="flex-1 h-px bg-zinc-200" />
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
 export default function InterviewHomeClient({ sessions: initialSessions }: { sessions: InterviewSession[] }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -555,6 +566,7 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
   const [difficulty, setDifficulty] = useState('mid');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
   // 삭제 후 즉시 UI 반영을 위한 로컬 세션 상태
   const [sessions, setSessions] = useState<InterviewSession[]>(initialSessions);
 
@@ -601,179 +613,216 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
           <DdayBanner />
         </div>
       </header>
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
 
-        {/* 오늘의 추천 카드 — 반복 약점 기반 자동 추천 */}
-        <TodayRecommendCard onStart={handleStart} loading={loading} />
+      <main className="max-w-3xl mx-auto px-4 py-6 space-y-8">
 
-        {/* 라이브코딩 30분 드릴 */}
-        <button
-          onClick={async () => {
-            const res = await fetch('/api/interview/live-coding', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({}),
-            });
-            const data = await res.json();
-            router.push(`/interview/live-coding/${data.sessionId}`);
-          }}
-          disabled={loading}
-          className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl border-2 border-indigo-400 bg-white hover:bg-indigo-50 disabled:opacity-50 transition-all group"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl">💻</span>
-            <div className="text-left">
-              <p className="text-sm font-black text-zinc-800">30분 라이브코딩 드릴</p>
-              <p className="text-[11px] text-zinc-400">카카오페이 1차 · Java · AI 검색 허용 · 랜덤 문제</p>
-            </div>
+        {/* ═══════════════ 빠른 시작 ═══════════════ */}
+        <section className="space-y-3">
+          <SectionDivider label="빠른 시작" />
+
+          {/* 오늘의 추천 — 약점 기반 자동 추천 */}
+          <TodayRecommendCard onStart={handleStart} loading={loading} />
+
+          {/* 2열 드릴 그리드 */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => handleStart({ company: 'kakaopay', category: 'distributed-tx', difficulty: 'senior', mode: 'micro' })}
+              disabled={loading}
+              className="flex flex-col gap-3 px-4 py-4 rounded-2xl border-2 border-amber-200 bg-white hover:bg-amber-50 hover:border-amber-300 disabled:opacity-50 transition-all text-left"
+            >
+              <span className="text-xl">⚡</span>
+              <div>
+                <p className="text-sm font-black text-zinc-800">8분 집중 드릴</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">3문제 · 시니어 압박</p>
+              </div>
+            </button>
+
+            <button
+              onClick={async () => {
+                const res = await fetch('/api/interview/live-coding', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({}),
+                });
+                const data = await res.json() as { sessionId: string };
+                router.push(`/interview/live-coding/${data.sessionId}`);
+              }}
+              disabled={loading}
+              className="flex flex-col gap-3 px-4 py-4 rounded-2xl border-2 border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 disabled:opacity-50 transition-all text-left"
+            >
+              <span className="text-xl">💻</span>
+              <div>
+                <p className="text-sm font-black text-zinc-800">라이브코딩 드릴</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">30분 · Java · 랜덤 문제</p>
+              </div>
+            </button>
           </div>
-          <span className="text-indigo-500 font-bold text-sm group-hover:translate-x-0.5 transition-transform">→</span>
-        </button>
 
-        {/* 마이크로 세션 — 8분 집중 드릴 */}
-        <button
-          onClick={() => handleStart({ company: 'kakaopay', category: 'distributed-tx', difficulty: 'senior', mode: 'micro' })}
-          disabled={loading}
-          className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl border-2 border-amber-300 bg-white hover:bg-amber-50 disabled:opacity-50 transition-all group"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl">⚡</span>
-            <div className="text-left">
-              <p className="text-sm font-black text-zinc-800">8분 집중 드릴</p>
-              <p className="text-[11px] text-zinc-400">3문제 · 시니어 압박 · 오늘의 약점 공략</p>
-            </div>
-          </div>
-          <span className="text-amber-500 font-bold text-sm group-hover:translate-x-0.5 transition-transform">→</span>
-        </button>
-
-        {/* Quick Start Banner — 카카오페이 고정 추천 */}
-        <div className="rounded-2xl p-5 space-y-3" style={{ background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)' }}>
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🎯</span>
-            <div>
-              <p className="font-black text-yellow-900 text-base leading-tight">카카오페이 합격 추천 조합</p>
-              <p className="text-[11px] text-yellow-800 mt-0.5">분산 트랜잭션 · 시니어 난이도 — 핵심 출제 영역</p>
-            </div>
-          </div>
+          {/* 카카오페이 추천 조합 — 다크 CTA */}
           <button
             onClick={() => handleStart({ company: 'kakaopay', category: 'distributed-tx', difficulty: 'senior' })}
             disabled={loading}
-            className="w-full py-2.5 rounded-xl bg-yellow-900 text-yellow-50 font-bold text-sm hover:bg-yellow-950 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
           >
-            {loading ? '준비 중...' : '바로 시작 →'}
-          </button>
-        </div>
-
-        {/* Step indicator */}
-        <div className="flex items-center gap-2">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step > s ? 'bg-emerald-500 text-white' : step === s ? 'bg-indigo-600 text-white' : 'bg-zinc-200 text-zinc-400'}`}>
-                {step > s ? '✓' : s}
+            <div className="flex items-center gap-3">
+              <span className="text-base">🎯</span>
+              <div className="text-left">
+                <p className="text-sm font-black">카카오페이 추천 조합</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">분산 트랜잭션 · 시니어 난이도 — 핵심 출제 영역</p>
               </div>
-              <span className={`text-xs ${step === s ? 'text-zinc-800 font-semibold' : 'text-zinc-400'}`}>{['회사 선택', '카테고리', '난이도'][s - 1]}</span>
-              {s < 3 && <div className="w-8 h-0.5 bg-zinc-200" />}
             </div>
-          ))}
-        </div>
+            <span className="text-zinc-400 font-bold">{loading ? '...' : '→'}</span>
+          </button>
+        </section>
 
-        {step === 1 && (
-          <div className="space-y-4">
-            <h2 className="text-base font-bold text-zinc-800">어떤 회사 면접관과 연습하시겠습니까?</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {COMPANIES.map(c => (
-                <button key={c.id} onClick={() => setCompany(c.id)}
-                  className={`relative p-4 rounded-xl border-2 text-left transition-all ${company === c.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
-                  {c.highlight && <span className="absolute top-2 right-2 text-[10px] bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-bold">서류합격</span>}
-                  <div className="text-2xl mb-2">{c.emoji}</div>
-                  <div className="text-sm font-bold text-zinc-800">{c.name}</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5 leading-tight">{c.desc}</div>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end pt-2">
-              <button onClick={() => setStep(2)} disabled={!company} className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-indigo-700 transition-colors">다음 →</button>
-            </div>
-          </div>
-        )}
+        {/* ═══════════════ 직접 설정 ═══════════════ */}
+        <section>
+          <button
+            onClick={() => { setShowCustom(v => !v); if (showCustom) setStep(1); }}
+            className="w-full flex items-center gap-3 text-left group"
+          >
+            <span className="text-[10px] font-bold tracking-[0.12em] text-zinc-400 uppercase shrink-0 group-hover:text-zinc-600 transition-colors">직접 설정</span>
+            <div className="flex-1 h-px bg-zinc-200" />
+            <span className="text-[11px] text-zinc-400 shrink-0 group-hover:text-zinc-600 transition-colors">
+              {showCustom ? '접기 ▲' : '직접 선택 ▼'}
+            </span>
+          </button>
 
-        {step === 2 && (
-          <div className="space-y-4">
-            <h2 className="text-base font-bold text-zinc-800">어떤 카테고리로 시작하시겠습니까?</h2>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {sortedCategories.map(cat => {
-                const isPriority = (cat as { priority?: number }).priority === 1;
-                return (
-                  <button key={cat.id} onClick={() => setCategory(cat.id)}
-                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${category === cat.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : isPriority ? 'border-red-200 bg-red-50 hover:border-red-300' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
-                    <span className="text-xl shrink-0">{cat.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-zinc-800 flex items-center gap-1.5 flex-wrap">
-                        {cat.name}
-                        {isPriority && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
-                            🔥 필수
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-zinc-400">{cat.desc}</div>
+          {showCustom && (
+            <div className="mt-5 space-y-5 p-5 bg-white border border-zinc-200 rounded-2xl">
+              {/* Step indicator */}
+              <div className="flex items-center gap-2">
+                {[1, 2, 3].map((s) => (
+                  <div key={s} className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step > s ? 'bg-emerald-500 text-white' : step === s ? 'bg-indigo-600 text-white' : 'bg-zinc-200 text-zinc-400'}`}>
+                      {step > s ? '✓' : s}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-between pt-2">
-              <button onClick={() => setStep(1)} className="text-sm text-zinc-500 hover:text-zinc-700">← 뒤로</button>
-              <button onClick={() => setStep(3)} disabled={!category} className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-indigo-700 transition-colors">다음 →</button>
-            </div>
-          </div>
-        )}
+                    <span className={`text-xs transition-colors ${step === s ? 'text-zinc-800 font-semibold' : 'text-zinc-400'}`}>
+                      {['회사 선택', '카테고리', '난이도'][s - 1]}
+                    </span>
+                    {s < 3 && <div className="w-8 h-0.5 bg-zinc-200" />}
+                  </div>
+                ))}
+              </div>
 
-        {step === 3 && (
-          <div className="space-y-6">
-            <h2 className="text-base font-bold text-zinc-800">난이도를 선택하세요</h2>
-            <div className="grid grid-cols-3 gap-3">
-              {DIFFICULTIES.map(d => (
-                <button key={d.id} onClick={() => setDifficulty(d.id)}
-                  className={`p-4 rounded-xl border-2 text-center transition-all ${difficulty === d.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
-                  <div className="text-2xl mb-1">{d.emoji}</div>
-                  <div className="text-sm font-bold text-zinc-800">{d.name}</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">{d.desc}</div>
-                </button>
-              ))}
-            </div>
-            <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-sm text-zinc-600 space-y-1">
-              <div>🏢 회사: <span className="font-semibold text-zinc-800">{COMPANIES.find(c => c.id === company)?.name}</span></div>
-              <div>📂 카테고리: <span className="font-semibold text-zinc-800">{CATEGORIES.find(c => c.id === category)?.name}</span></div>
-              <div>📊 난이도: <span className="font-semibold text-zinc-800">{DIFFICULTIES.find(d => d.id === difficulty)?.name}</span></div>
-              {difficulty === 'senior' && (
-                <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                  <span className="shrink-0">⚠️</span>
-                  <p className="text-xs text-amber-800 font-semibold">시니어 압박 면접 — 정답도 더 파고듭니다</p>
+              {step === 1 && (
+                <div className="space-y-4">
+                  <p className="text-sm font-semibold text-zinc-700">어떤 회사 면접관과 연습하시겠습니까?</p>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    {COMPANIES.map(c => (
+                      <button key={c.id} onClick={() => setCompany(c.id)}
+                        className={`relative p-3.5 rounded-xl border-2 text-left transition-all ${company === c.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white'}`}>
+                        {c.highlight && <span className="absolute top-2 right-2 text-[10px] bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-bold">서류합격</span>}
+                        <div className="text-2xl mb-1.5">{c.emoji}</div>
+                        <div className="text-sm font-bold text-zinc-800">{c.name}</div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5 leading-tight">{c.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex justify-end">
+                    <button onClick={() => setStep(2)} disabled={!company}
+                      className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-indigo-700 transition-colors">
+                      다음 →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 2 && (
+                <div className="space-y-4">
+                  <p className="text-sm font-semibold text-zinc-700">카테고리를 선택하세요</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {sortedCategories.map(cat => {
+                      const isPriority = (cat as { priority?: number }).priority === 1;
+                      return (
+                        <button key={cat.id} onClick={() => setCategory(cat.id)}
+                          className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${category === cat.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : isPriority ? 'border-red-200 bg-red-50 hover:border-red-300' : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white'}`}>
+                          <span className="text-xl shrink-0">{cat.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-zinc-800 flex items-center gap-1.5 flex-wrap">
+                              {cat.name}
+                              {isPriority && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
+                                  🔥 필수
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-zinc-400">{cat.desc}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between">
+                    <button onClick={() => setStep(1)} className="text-sm text-zinc-500 hover:text-zinc-700">← 뒤로</button>
+                    <button onClick={() => setStep(3)} disabled={!category}
+                      className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-indigo-700 transition-colors">
+                      다음 →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-5">
+                  <p className="text-sm font-semibold text-zinc-700">난이도를 선택하세요</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {DIFFICULTIES.map(d => (
+                      <button key={d.id} onClick={() => setDifficulty(d.id)}
+                        className={`p-4 rounded-xl border-2 text-center transition-all ${difficulty === d.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white'}`}>
+                        <div className="text-2xl mb-1">{d.emoji}</div>
+                        <div className="text-sm font-bold text-zinc-800">{d.name}</div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">{d.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                  {/* 선택 요약 */}
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-zinc-500 bg-zinc-50 rounded-xl px-4 py-3 border border-zinc-200">
+                    <span>{COMPANIES.find(c => c.id === company)?.emoji} {COMPANIES.find(c => c.id === company)?.name}</span>
+                    <span className="text-zinc-300">·</span>
+                    <span>{CATEGORIES.find(c => c.id === category)?.name}</span>
+                    <span className="text-zinc-300">·</span>
+                    <span>{DIFFICULTIES.find(d => d.id === difficulty)?.name}</span>
+                  </div>
+                  {difficulty === 'senior' && (
+                    <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <span className="shrink-0 text-sm">⚠️</span>
+                      <p className="text-xs text-amber-800 font-semibold">시니어 압박 면접 — 정답도 더 파고듭니다</p>
+                    </div>
+                  )}
+                  {error && <p className="text-sm text-red-600">⚠️ {error}</p>}
+                  <div className="flex justify-between">
+                    <button onClick={() => setStep(2)} className="text-sm text-zinc-500 hover:text-zinc-700">← 뒤로</button>
+                    <button onClick={() => handleStart()} disabled={loading}
+                      className="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                      {loading ? '면접 준비 중...' : '🎯 면접 시작'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-            {error && <p className="text-sm text-red-600">⚠️ {error}</p>}
-            <div className="flex justify-between pt-2">
-              <button onClick={() => setStep(2)} className="text-sm text-zinc-500 hover:text-zinc-700">← 뒤로</button>
-              <button onClick={() => handleStart()} disabled={loading} className="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                {loading ? '면접 준비 중...' : '🎯 면접 시작'}
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </section>
 
-        {/* 점수 히스토리 차트 */}
-        <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
+        {/* ═══════════════ 내 성과 ═══════════════ */}
+        <section className="space-y-4">
+          <SectionDivider label="내 성과" />
+          <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
+          <WeaknessWidget company="kakaopay" />
+        </section>
 
-        {/* 반복 약점 분석 위젯 — 카카오페이 세션 데이터 기반 */}
-        <WeaknessWidget company="kakaopay" />
+        {/* ═══════════════ 심층 분석 ═══════════════ */}
+        <section className="space-y-4">
+          <SectionDivider label="심층 분석" />
+          <TendencyWidget company="kakaopay" />
+        </section>
 
-        {/* 성향 분석 + 오답노트 바로가기 */}
-        <TendencyWidget company="kakaopay" />
+        {/* ═══════════════ 면접 이력 ═══════════════ */}
+        <section className="space-y-3">
+          <SectionDivider label="면접 이력" />
+          <SessionHistory sessions={sessions} onDelete={handleDeleteSession} />
+        </section>
 
-        {/* 면접 이력 */}
-        <SessionHistory sessions={sessions} onDelete={handleDeleteSession} />
       </main>
     </div>
   );

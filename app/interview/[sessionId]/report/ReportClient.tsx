@@ -248,7 +248,7 @@ export default function ReportClient({
               {!readOnly && (
                 <button
                   onClick={handleShare}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm font-medium transition-colors print-hidden"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium transition-colors print-hidden"
                 >
                   {copying ? '✅ 복사됨!' : '🔗 공유'}
                 </button>
@@ -301,6 +301,12 @@ export default function ReportClient({
             </div>
           </div>
 
+          {/* 권고사항 — 합격 판정 위에 먼저 표시 */}
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+            <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1">🎯 다음 액션</p>
+            <p className="text-sm text-indigo-800 leading-relaxed">{getRecommendation()}</p>
+          </div>
+
           {/* 합격 판정 카드 — more prominent */}
           {criteria && avgScore != null && (
             <div className={`rounded-2xl border-2 p-6 ${passed
@@ -330,12 +336,6 @@ export default function ReportClient({
               </div>
             </div>
           )}
-
-          {/* 권고사항 */}
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-            <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1">🎯 다음 액션</p>
-            <p className="text-sm text-indigo-800 leading-relaxed">{getRecommendation()}</p>
-          </div>
 
           {/* 반복 약점 */}
           {topWeaknesses.length > 0 && (

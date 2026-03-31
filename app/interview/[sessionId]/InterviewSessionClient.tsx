@@ -137,8 +137,10 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess }: {
         </div>
         <div className="flex items-center gap-2">
           {hasDetail && (
-            <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline shrink-0">
-              {open ? '접기 ▲' : '상세 보기 ▼'}
+            <button onClick={() => setOpen(v => !v)} className="text-zinc-400 hover:text-zinc-600 shrink-0 p-1 rounded hover:bg-zinc-100 transition-colors" title={open ? '접기' : '상세 보기'}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
             </button>
           )}
           <button
@@ -363,6 +365,18 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
   const [loadingBest, setLoadingBest] = useState(false);
   const [showBest, setShowBest] = useState(false);
 
+  // Shortcut hint — one-time tooltip (6s, localStorage-gated)
+  const [showShortcutHint, setShowShortcutHint] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || localStorage.getItem('interview_shortcut_hint')) return;
+    setShowShortcutHint(true);
+    const t = setTimeout(() => {
+      setShowShortcutHint(false);
+      localStorage.setItem('interview_shortcut_hint', '1');
+    }, 6000);
+    return () => clearTimeout(t);
+  }, []);
+
   async function handleBestAnswer() {
     if (!lastQuestion) return;
     if (bestAnswer) { setShowBest(v => !v); return; }
@@ -410,8 +424,12 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
   const category = CATEGORIES.find(c => c.id === session?.category);
 
   const charCount = answer.length;
-  const charWarning = charCount > 0 && charCount < 50;
   const charTooShort = charCount > 0 && charCount < 20;
+  const charFeedback = charCount === 0 ? null
+    : charCount < 20 ? { text: '너무 짧아요', cls: 'text-red-500 font-semibold' }
+    : charCount < 50 ? { text: '더 구체적으로', cls: 'text-orange-500 font-semibold' }
+    : charCount >= 200 ? { text: '✓ 충분한 답변', cls: 'text-emerald-600 font-semibold' }
+    : null;
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-zinc-400 text-sm">로딩 중...</div>;
 
@@ -432,13 +450,19 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
             )}
             {/* Question counter */}
             <span className="text-sm font-black text-indigo-600 tabular-nums">Q{questionNumber}</span>
-            {/* Elapsed timer */}
-            <span className="text-xs text-zinc-400 tabular-nums font-mono">{formatElapsed(elapsedSecs)}</span>
+            {/* Elapsed timer — color shifts green→amber→red+pulse */}
+            <span className={`text-xs tabular-nums font-mono ${elapsedSecs < 120 ? 'text-emerald-600' : elapsedSecs < 240 ? 'text-amber-600' : 'text-red-600 animate-pulse'}`}>{formatElapsed(elapsedSecs)}</span>
             <span className="text-xs text-zinc-400">{feedbackCount}문제 완료</span>
             {/* Bug 3 fix: streaming 중 종료 버튼 비활성화 */}
             <button onClick={handleEnd} disabled={streaming} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-40 transition-colors">종료</button>
           </div>
         </div>
+        {/* Micro mode progress bar */}
+        {isMicroMode && (
+          <div className="h-0.5 bg-zinc-100">
+            <div className="h-full bg-amber-400 transition-all duration-500" style={{ width: `${Math.min((feedbackCount / 3) * 100, 100)}%` }} />
+          </div>
+        )}
       </header>
 
       {/* 에러 토스트 */}
@@ -589,12 +613,19 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
               </div>
             </div>
             <div className="flex items-center justify-between mt-1">
-              <p className="text-[11px] text-zinc-400">Cmd+Enter 제출 · 🏆 베스트로 모범 답안 확인</p>
+              {showShortcutHint ? (
+                <span className="flex items-center gap-1.5 text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded-lg font-semibold">
+                  💡 ⌘+Enter로 빠르게 제출하세요!
+                  <button onClick={() => { setShowShortcutHint(false); localStorage.setItem('interview_shortcut_hint', '1'); }} className="ml-1 text-indigo-400 hover:text-indigo-600 leading-none">✕</button>
+                </span>
+              ) : (
+                <p className="text-[11px] text-zinc-400">Cmd+Enter 제출 · 🏆 베스트로 모범 답안 확인</p>
+              )}
               <div className="flex items-center gap-2">
-                {charWarning ? (
-                  <span className="text-[11px] text-orange-500 font-semibold">너무 짧습니다 — 구체적으로 답변하세요</span>
-                ) : null}
-                <span className={`text-[11px] tabular-nums ${charWarning ? 'text-orange-500' : 'text-zinc-400'}`}>
+                {charFeedback && (
+                  <span className={`text-[11px] ${charFeedback.cls}`}>{charFeedback.text}</span>
+                )}
+                <span className={`text-[11px] tabular-nums ${charFeedback ? charFeedback.cls : 'text-zinc-400'}`}>
                   {charCount > 0 ? `${charCount}자` : ''}
                 </span>
               </div>

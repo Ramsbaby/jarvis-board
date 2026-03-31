@@ -190,7 +190,24 @@ function WeaknessWidget({ company }: { company: string }) {
       .finally(() => setLoading(false));
   }, [company]);
 
-  if (loading) return <div className="text-xs text-zinc-400 text-center py-2">약점 분석 중...</div>;
+  if (loading) return (
+    <div className="space-y-3 animate-pulse">
+      <div className="flex items-center gap-2">
+        <div className="h-4 bg-zinc-100 rounded w-32" />
+        <div className="h-4 bg-zinc-100 rounded-full w-16" />
+      </div>
+      <div className="bg-white border border-zinc-200 rounded-xl p-4">
+        <div className="flex flex-wrap gap-1.5">
+          {[1,2,3,4,5].map(i => <div key={i} className="h-6 bg-zinc-100 rounded-lg w-16" />)}
+        </div>
+      </div>
+      <div className="bg-white border border-zinc-200 rounded-xl p-4">
+        <div className="grid grid-cols-2 gap-1.5">
+          {[1,2,3,4].map(i => <div key={i} className="h-10 bg-zinc-100 rounded-lg" />)}
+        </div>
+      </div>
+    </div>
+  );
   if (!report || report.session_count === 0) return null;
 
   const sevColor = (s: string) =>
@@ -300,13 +317,25 @@ interface TendencyData {
 function TendencyWidget({ company }: { company: string }) {
   const [data, setData] = useState<TendencyData | null>(null);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     apiFetch<TendencyData>(`/api/interview/tendency?company=${company}`)
       .then(res => { if (res.ok && res.data.total_answers > 0) setData(res.data); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [company]);
 
+  if (loading) return (
+    <div className="space-y-3 animate-pulse">
+      <div className="h-4 bg-zinc-100 rounded w-28" />
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3">
+        <div className="h-3 bg-zinc-100 rounded w-full" />
+        <div className="h-3 bg-zinc-100 rounded w-3/4" />
+        <div className="h-3 bg-zinc-100 rounded w-1/2" />
+      </div>
+    </div>
+  );
   if (!data) return null;
 
   return (
@@ -595,6 +624,27 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'kakaopay';
   }, [sessions]);
 
+  // 🔥 연속 면접 스트릭 계산
+  const streak = useMemo(() => {
+    const dates = sessions
+      .filter(s => s.status === 'completed')
+      .map(s => new Date(s.last_activity_at ?? s.created_at).toDateString());
+    const unique = [...new Set(dates)].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    if (unique.length === 0) return 0;
+    const todayStr = new Date().toDateString();
+    const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
+    if (unique[0] !== todayStr && unique[0] !== yesterdayStr) return 0;
+    let count = 1;
+    for (let i = 1; i < unique.length; i++) {
+      const prev = new Date(unique[i - 1]);
+      const curr = new Date(unique[i]);
+      const diff = Math.round((prev.getTime() - curr.getTime()) / 86400000);
+      if (diff === 1) count++;
+      else break;
+    }
+    return count;
+  }, [sessions]);
+
   function handleDeleteSession(id: string) {
     setSessions(prev => prev.filter(s => s.id !== id));
   }
@@ -635,6 +685,9 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
           <Link href="/" className="text-zinc-400 hover:text-zinc-600 text-sm">← 보드</Link>
           <span className="text-zinc-300">|</span>
           <h1 className="text-sm font-bold text-zinc-800">🎯 면접 시뮬레이터</h1>
+          {streak >= 2 && (
+            <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-bold shrink-0">🔥 {streak}일 연속</span>
+          )}
           <DdayBanner />
         </div>
       </header>
@@ -838,14 +891,32 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
         {/* ═══════════════ 내 성과 ═══════════════ */}
         <section className="space-y-4">
           <SectionDivider label="내 성과" />
-          <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
-          <WeaknessWidget company={primaryCompany} />
+          {sessions.filter(s => s.status === 'completed').length === 0 ? (
+            <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center space-y-2">
+              <p className="text-2xl">📈</p>
+              <p className="text-sm font-semibold text-zinc-600">아직 완료된 세션이 없습니다</p>
+              <p className="text-xs text-zinc-400">첫 면접을 완료하면 점수 추이가 여기에 표시됩니다</p>
+            </div>
+          ) : (
+            <>
+              <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
+              <WeaknessWidget company={primaryCompany} />
+            </>
+          )}
         </section>
 
         {/* ═══════════════ 심층 분석 ═══════════════ */}
         <section className="space-y-4">
           <SectionDivider label="심층 분석" />
-          <TendencyWidget company={primaryCompany} />
+          {sessions.length === 0 ? (
+            <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center space-y-2">
+              <p className="text-2xl">🧬</p>
+              <p className="text-sm font-semibold text-zinc-600">답변 성향 분석 대기 중</p>
+              <p className="text-xs text-zinc-400">3개 이상의 답변 후 성향이 분석됩니다</p>
+            </div>
+          ) : (
+            <TendencyWidget company={primaryCompany} />
+          )}
         </section>
 
         {/* ═══════════════ 면접 이력 ═══════════════ */}

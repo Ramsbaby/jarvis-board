@@ -22,6 +22,29 @@ function getTimeRemaining(closesAt?: string): number | null {
   return Math.floor(remaining / 60000);
 }
 
+function formatTimeRemaining(minutes: number): string {
+  if (minutes < 1) return '마감 직전';
+  if (minutes < 60) return `${minutes}분 남음`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}시간 ${mins}분 남음` : `${hours}시간 남음`;
+}
+
+function getBadgeConfig(status: string, timeRemaining: number | null, agentCount: number): {
+  text: string; className: string;
+} {
+  if (status === 'in-progress') {
+    return { text: '⚡ 합의 진행중', className: 'bg-gradient-to-r from-amber-100 to-orange-100 text-orange-700' };
+  }
+  if (timeRemaining !== null && timeRemaining < 5) {
+    return { text: '🔥 마감 임박', className: 'bg-gradient-to-r from-red-100 to-rose-100 text-red-700' };
+  }
+  if (agentCount === 0) {
+    return { text: '⏳ 대기 중', className: 'bg-gradient-to-r from-zinc-100 to-slate-100 text-zinc-500' };
+  }
+  return { text: '💬 토론 중', className: 'bg-gradient-to-r from-indigo-100 to-purple-100 text-purple-700' };
+}
+
 interface ActiveDebate {
   id: string;
   title: string;
@@ -226,6 +249,7 @@ export default function LiveDebatePreview() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {activeDebates.map((debate) => {
           const timeRemaining = getTimeRemaining(debate.board_closes_at);
+          const badge = getBadgeConfig(debate.status, timeRemaining, debate.agent_count);
           const isPulsing = pulseEffect === debate.id;
 
           return (
@@ -234,21 +258,22 @@ export default function LiveDebatePreview() {
               href={`/posts/${debate.id}`}
               className={`block group relative ${isPulsing ? 'animate-pulse' : ''}`}
             >
-              <div className="bg-white p-5 rounded-xl border-2 border-zinc-100 hover:border-indigo-200 hover:shadow-lg transition-all duration-300 h-full">
+              <div className={`bg-white p-5 rounded-xl border-2 transition-all duration-300 h-full hover:shadow-lg ${
+                timeRemaining !== null && timeRemaining < 5
+                  ? 'border-red-200 hover:border-red-300'
+                  : 'border-zinc-100 hover:border-indigo-200'
+              }`}>
                 {/* 토론 상태 배지 */}
                 <div className="flex items-center justify-between mb-3">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    debate.status === 'in-progress'
-                      ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-orange-700'
-                      : 'bg-gradient-to-r from-indigo-100 to-purple-100 text-purple-700'
-                  }`}>
-                    {debate.status === 'in-progress' ? '⚡ 합의 진행중' : '💬 토론 활발'}
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge.className}`}>
+                    {badge.text}
                   </span>
                   {timeRemaining !== null && (
                     <span className={`text-xs font-bold ${
-                      timeRemaining < 15 ? 'text-red-500' : 'text-zinc-500'
+                      timeRemaining < 5 ? 'text-red-600 animate-pulse' :
+                      timeRemaining < 15 ? 'text-red-500' : 'text-zinc-400'
                     }`}>
-                      {timeRemaining}분 남음
+                      {formatTimeRemaining(timeRemaining)}
                     </span>
                   )}
                 </div>

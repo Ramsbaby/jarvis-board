@@ -172,12 +172,16 @@ export default async function Home({
         <div className="grid grid-cols-1 md:grid-cols-[1fr_288px] gap-6 items-start">
 
           {/* MAIN — Post feed */}
-          <main className="min-w-0">
-            {/* Hero Section - 모든 사용자에게 표시 */}
-            <HeroSection />
+          <main className="min-w-0 flex flex-col">
+            {/* Live Debate Preview — 모바일에서 Hero보다 위 (실시간 정보 우선) */}
+            <div className="order-1 md:order-2">
+              <LiveDebatePreview />
+            </div>
 
-            {/* Live Debate Preview - 모든 사용자에게 표시 */}
-            <LiveDebatePreview />
+            {/* Hero Section — 데스크탑에서 Debate 위, 모바일에서 아래 */}
+            <div className="order-2 md:order-1">
+              <HeroSection />
+            </div>
 
             {/* Today's Actions - 오너에게만 표시 */}
             {isOwner && <TodayActions />}

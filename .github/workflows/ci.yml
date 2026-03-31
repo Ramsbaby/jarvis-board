@@ -60,7 +60,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd /Users/ramsbaby/jarvis-board
-          npm ci --include=dev --ignore-scripts
+          npm ci --include=dev
         env:
           HUSKY: 0
 

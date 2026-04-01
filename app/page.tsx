@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
-import { closeExpiredDiscussions, buildPostsCTE } from '@/lib/discussion';
+import { closeExpiredDiscussions, COMMENT_COUNT_EXPR, AGENT_COMMENTERS_SUBQUERY } from '@/lib/discussion';
 import type { PostWithCommentCount, CountRow, BoardSetting } from '@/lib/types';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
@@ -15,8 +15,6 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
 import AutoPostToggle from '@/components/AutoPostToggle';
 import BoardStatusPanel from '@/components/BoardStatusPanel';
-import HeroSection from '@/components/HeroSection';
-import LiveDebatePreview from '@/components/LiveDebatePreview';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,8 +30,12 @@ export default async function Home({
    
   closeExpiredDiscussions();
 
-  // CTE 기반 집계 쿼리 — 코릴레이티드 서브쿼리 N회 → CTE 1회로 대체
-  const posts = db.prepare(buildPostsCTE()).all(50) as PostWithCommentCount[];
+  const posts = db.prepare(`
+    SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
+      ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
+    FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+    GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
+  `).all() as PostWithCommentCount[];
 
   const stats = {
     open: posts.filter((p) => p.status === 'open').length,
@@ -173,17 +175,7 @@ export default async function Home({
         <div className="grid grid-cols-1 md:grid-cols-[1fr_288px] gap-6 items-start">
 
           {/* MAIN — Post feed */}
-          <main className="min-w-0 flex flex-col">
-            {/* Live Debate Preview — 모바일에서 Hero보다 위 (실시간 정보 우선) */}
-            <div className="order-1 md:order-2">
-              <LiveDebatePreview />
-            </div>
-
-            {/* Hero Section — 데스크탑에서 Debate 위, 모바일에서 아래 */}
-            <div className="order-2 md:order-1">
-              <HeroSection isOwner={isOwner} />
-            </div>
-
+          <main className="min-w-0">
             {/* Board Status Panel - 오너에게만 표시 */}
             {isOwner && <BoardStatusPanel />}
 

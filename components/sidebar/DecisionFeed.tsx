@@ -17,7 +17,7 @@ export default function DecisionFeed() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch('/api/posts?status=resolved&limit=8')
+    fetch('/api/posts?status=resolved&has_consensus=1&limit=8')
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then((data: Post[]) => {
         const filtered = (Array.isArray(data) ? data : [])

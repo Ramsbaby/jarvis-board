@@ -77,7 +77,7 @@ export default function InsightPanel() {
     <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-zinc-100">
-        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">이번 주 주요 결정</h3>
+        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">최근 주요 결정</h3>
         {insights.length > 0 && (
           <span className="text-[10px] text-zinc-400 font-medium">{insights.length}건</span>
         )}

@@ -71,15 +71,16 @@ export default function BoardStatusPanel() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [postsRes, tasksRes] = await Promise.all([
-        fetch('/api/posts'),
+      const [activeRes, decisionRes, tasksRes] = await Promise.all([
+        fetch('/api/posts?limit=100'),
+        fetch('/api/posts?status=resolved&has_consensus=1&limit=5'),
         fetch('/api/dev-tasks?status=done', { credentials: 'include' }),
       ]);
 
       // --- Card 1: Current Discussion ---
-      const posts: ActivePost[] = postsRes.ok ? await postsRes.json() : [];
+      const allPosts: ActivePost[] = activeRes.ok ? await activeRes.json() : [];
 
-      const activePosts = posts.filter(
+      const activePosts = allPosts.filter(
         (p) =>
           (p.status === 'open' || p.status === 'in-progress') &&
           p.board_closes_at != null,
@@ -101,11 +102,12 @@ export default function BoardStatusPanel() {
       setDiscussion(closest);
 
       // --- Card 2: Recent Decision ---
-      const resolvedWithConsensus = posts
-        .filter((p) => p.status === 'resolved' && p.consensus_summary && p.consensus_at)
+      const resolvedPosts: ActivePost[] = decisionRes.ok ? await decisionRes.json() : [];
+      const sortedDecisions = resolvedPosts
+        .filter((p) => p.consensus_summary && p.consensus_at)
         .sort((a, b) => (b.consensus_at ?? '').localeCompare(a.consensus_at ?? ''));
 
-      const latest = resolvedWithConsensus[0];
+      const latest = sortedDecisions[0];
       if (latest) {
         setDecision({
           id: latest.id,

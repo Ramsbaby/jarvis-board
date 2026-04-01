@@ -6,7 +6,7 @@ import type { DevTask, Post } from '@/lib/types';
 
 // POST /api/reports/generate
 // Protected by REPORT_SECRET query param
-// Called by Mac Mini cron at 23:50 daily/weekly/monthly
+// Called by Mac Mini cron at 23:50 daily / weekly / monthly
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
   if (!secret || secret !== process.env.REPORT_SECRET) {
@@ -18,21 +18,34 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const reportType: 'daily' | 'weekly' | 'monthly' = body.type ?? 'daily';
-  const periodStart: string = body.period_start; // 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DD'
+  const periodStart: string = body.period_start; // 'YYYY-MM-DD HH:MM:SS'
   const periodEnd: string = body.period_end;
 
   if (!periodStart || !periodEnd) {
     return NextResponse.json({ error: 'period_start and period_end required' }, { status: 400 });
   }
 
-  const db = getDb();
-
-  // Normalize to YYYY-MM-DD for DATE() comparisons
-  // (DB stores ISO 8601 like 2026-03-31T08:37Z; space-delimited strings fail string compare)
-  const dateStart = periodStart.slice(0, 10);
+  const dateStart = periodStart.slice(0, 10); // YYYY-MM-DD
   const dateEnd = periodEnd.slice(0, 10);
 
-  // 1. Collect completed dev tasks in period
+  const db = getDb();
+
+  // 중복 방지: 같은 날짜·타입의 보고서가 이미 존재하면 스킵
+  const existing = db.prepare(`
+    SELECT id FROM posts
+    WHERE type = 'report'
+      AND JSON_EXTRACT(tags, '$[0]') = ?
+      AND DATE(created_at) = ?
+    LIMIT 1
+  `).get(reportType, dateStart) as { id: string } | undefined;
+
+  if (existing) {
+    return NextResponse.json({ skipped: true, reason: 'already exists', existingId: existing.id });
+  }
+
+  // ── 데이터 수집 ──────────────────────────────────────────────
+
+  // 1. 완료된 태스크
   const completedTasks = db.prepare(`
     SELECT id, title, detail, priority, completed_at
     FROM dev_tasks
@@ -41,16 +54,45 @@ export async function POST(req: NextRequest) {
     ORDER BY completed_at DESC
   `).all(dateStart, dateEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'> & { completed_at: string }>;
 
-  // 2. Collect issue posts created in period (bug signals)
+  // 2. 실패한 태스크 (기간 내 생성 또는 실패)
+  const failedTasks = db.prepare(`
+    SELECT id, title, detail, priority
+    FROM dev_tasks
+    WHERE status = 'failed'
+      AND DATE(created_at) >= ? AND DATE(created_at) <= ?
+    ORDER BY created_at DESC
+    LIMIT 10
+  `).all(dateStart, dateEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'>>;
+
+  // 3. 진행 중인 태스크 (현재 in-progress)
+  const inProgressTasks = db.prepare(`
+    SELECT id, title, priority
+    FROM dev_tasks
+    WHERE status = 'in-progress'
+    ORDER BY created_at DESC
+    LIMIT 10
+  `).all() as Array<Pick<DevTask, 'id' | 'title' | 'priority'>>;
+
+  // 4. 기간 내 신규 태스크 (pipeline dispatch)
+  const newTasks = db.prepare(`
+    SELECT id, title, priority, status
+    FROM dev_tasks
+    WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+      AND status NOT IN ('done', 'failed')
+    ORDER BY created_at DESC
+    LIMIT 10
+  `).all(dateStart, dateEnd) as Array<Pick<DevTask, 'id' | 'title' | 'priority'> & { status: string }>;
+
+  // 5. 이슈 포스트
   const issuesPosts = db.prepare(`
-    SELECT id, title, content, status, created_at
+    SELECT id, title, status, created_at
     FROM posts
     WHERE type = 'issue'
       AND DATE(created_at) >= ? AND DATE(created_at) <= ?
     ORDER BY created_at DESC
-  `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'content' | 'status' | 'created_at'>[];
+  `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'status' | 'created_at'>[];
 
-  // 3. Collect resolved posts in period (decisions made)
+  // 6. 해결된 토론·결정사항
   const resolvedPosts = db.prepare(`
     SELECT id, title, type, resolved_at
     FROM posts
@@ -61,61 +103,85 @@ export async function POST(req: NextRequest) {
     LIMIT 10
   `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'type' | 'resolved_at'>[];
 
-  // 4. Generate report with Claude Haiku
+  // ── 프롬프트 구성 ────────────────────────────────────────────
+
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
   const periodLabel = formatPeriodLabel(reportType, periodStart, periodEnd);
 
-  const PRIORITY_KO: Record<string, string> = { urgent: '긴급', high: '높음', medium: '중간', low: '낮음' };
-  const tasksList = completedTasks.length > 0
-    ? completedTasks.map(t =>
-        `- [${PRIORITY_KO[t.priority] ?? t.priority}] ${t.title}${t.detail ? `: ${t.detail}` : ''}`
-      ).join('\n')
-    : '없음';
+  const PRIORITY_KO: Record<string, string> = { urgent: '🔴 긴급', high: '🟠 높음', medium: '🟡 중간', low: '⚪ 낮음' };
+  const STATUS_KO: Record<string, string> = {
+    pending: '대기', awaiting_approval: '승인대기', approved: '승인됨',
+    'in-progress': '진행중', done: '완료', failed: '실패',
+  };
 
-  const issuesList = issuesPosts.length > 0
-    ? issuesPosts.map(i => `- ${i.title} (${i.status === 'resolved' ? '해결됨' : '처리 중'})`).join('\n')
-    : '없음';
+  const fmt = (t: { title: string; detail?: string | null; priority: string }) =>
+    `- [${PRIORITY_KO[t.priority] ?? t.priority}] ${t.title}${t.detail ? ` — ${t.detail}` : ''}`;
 
-  const resolvedList = resolvedPosts.length > 0
+  const completedList  = completedTasks.length  > 0 ? completedTasks.map(fmt).join('\n')  : '없음';
+  const failedList     = failedTasks.length     > 0 ? failedTasks.map(fmt).join('\n')     : '없음';
+  const inProgressList = inProgressTasks.length > 0
+    ? inProgressTasks.map(t => `- [${PRIORITY_KO[t.priority] ?? t.priority}] ${t.title}`).join('\n')
+    : '없음';
+  const newTasksList   = newTasks.length > 0
+    ? newTasks.map(t => `- [${STATUS_KO[t.status] ?? t.status}] ${t.title}`).join('\n')
+    : '없음';
+  const issuesList     = issuesPosts.length  > 0
+    ? issuesPosts.map(i => `- ${i.title} (${i.status === 'resolved' ? '해결됨' : '처리중'})`).join('\n')
+    : '없음';
+  const resolvedList   = resolvedPosts.length > 0
     ? resolvedPosts.map(p => `- ${p.title}`).join('\n')
     : '없음';
 
-  const prompt = `당신은 Jarvis — 이정우 대표의 AI 집사입니다. 아래 ${typeLabel} 데이터를 바탕으로 대표님께 드릴 업무 보고서를 작성하세요.
+  const prompt = `당신은 Jarvis — 이정우 대표의 AI 집사입니다.
+아래 ${typeLabel} 운영 데이터를 바탕으로 대표님께 드릴 ${typeLabel}보고서를 작성하세요.
 
-⚠️ 언어 규칙 (절대 준수): 오직 한국어(한글+숫자+영문 필요시)만 사용. 한자(漢字)·중국어·일본어 문자 사용 즉시 실격. 예: 不存在→없음, 自動→자동, 完了→완료. 모든 개념을 순한국어로 표현.
-⚠️ 데이터 없음 규칙: 완료 작업 0건이면 "## 📋 오늘의 요약"은 딱 1문장("오늘 자비스는 완료된 작업이 없었습니다.")으로만 쓰세요. 추측·예측·미래계획 절대 금지.
+【절대 준수 언어 규칙】
+- 오직 한국어만 사용. 한자(漢字)·중국어·일본어 한 글자도 금지.
+- 금지 예시: 不存在, 自動, 完了, 完成, 作業 → 전부 한국어로만.
 
-기간: ${periodLabel}
+【작성 원칙】
+- 말투: "~했습니다", "~되었습니다" (집사가 대표님께 드리는 보고 어조)
+- 각 완료 작업은 비개발자도 이해할 수 있게 1~2문장으로 설명. "무엇이 어떻게 개선됐는지" 위주.
+  나쁜 예: "SSE 브로드캐스트 추가" → 좋은 예: "작업이 완료되면 화면이 즉시 새로고침되도록 실시간 알림 기능을 추가했습니다."
+- 서론·맺음말·상투적 칭찬 완전 금지 ("수고하셨습니다", "훌륭한 하루" 등)
+- 데이터가 0건이면 솔직하게 "없습니다"로 표기. 추측·예측 금지.
+- 이슈·실패가 있으면 심각도와 현재 상태를 명확히 표기.
 
-[완료된 개발 작업 — ${completedTasks.length}건]
-${tasksList}
+=== ${typeLabel} 운영 데이터 (${periodLabel}) ===
+
+[완료된 작업 — ${completedTasks.length}건]
+${completedList}
+
+[실패한 작업 — ${failedTasks.length}건]
+${failedList}
+
+[현재 진행 중 — ${inProgressTasks.length}건]
+${inProgressList}
+
+[기간 내 신규 태스크 — ${newTasks.length}건]
+${newTasksList}
 
 [이슈·버그 — ${issuesPosts.length}건]
 ${issuesList}
 
-[해결된 토론·결정사항 — ${resolvedPosts.length}건]
+[해결된 결정사항 — ${resolvedPosts.length}건]
 ${resolvedList}
 
----
-작성 지침:
-- 말투: 집사가 대표님께 드리는 보고 어조 (~했습니다, ~되었습니다). 공손하되 딱딱하지 않게.
-- 각 완료 작업은 비개발자도 이해할 수 있게 1~2문장으로 풀어서 설명. "무엇이 어떻게 개선됐는지" 위주.
-  나쁜 예: "SSE 브로드캐스트 추가" → 좋은 예: "작업이 완료될 때 화면이 즉시 새로고침되도록 실시간 알림 기능을 추가했습니다."
-- 완료 작업이 없으면 "오늘은 완료된 작업이 없었습니다"라고 솔직하게 쓰세요.
-- 서론·맺음말·상투적 칭찬 ("훌륭한 하루", "열심히 일했습니다" 등) 금지.
-- 이슈가 있으면 심각도와 현재 상태를 명확히.
-- 해결된 토론·결정사항이 있으면 간략하게 언급.
-
-보고서 구조 (이 형식을 정확히 따르세요):
+=== 보고서 형식 (정확히 따를 것) ===
 
 ## ✅ 완료 작업 (${completedTasks.length}건)
-[각 작업을 쉬운 말로 설명. 작업이 없으면 "오늘은 완료된 작업이 없었습니다."]
+[각 작업을 쉬운 말로 1~2문장 설명. 없으면 "완료된 작업이 없었습니다."]
 
-## 🔍 품질 현황
-[이슈 건수 및 상태, 해결된 결정사항 요약. 모두 없으면 "이슈 없음 · 특이사항 없음"]
+## ⚠️ 이슈 및 실패 (이슈 ${issuesPosts.length}건 · 실패 ${failedTasks.length}건)
+[이슈와 실패 작업 설명. 없으면 "이슈 없음 · 실패 없음"]
 
-## 📋 오늘의 요약
-[전체를 2~3문장으로. 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
+## 🔄 진행 중 (${inProgressTasks.length}건)
+[현재 진행 중인 작업 목록. 없으면 "진행 중인 작업 없음"]
+
+## 📋 ${typeLabel} 요약
+[전체를 3~4문장으로. 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
+
+  // ── AI 호출 ──────────────────────────────────────────────────
 
   const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -124,34 +190,69 @@ ${resolvedList}
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
+      model: 'gemma2-9b-it',
+      max_tokens: 2000,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: '당신은 Jarvis, 이정우 대표의 AI 집사입니다. 오직 한국어(한글+숫자+영문)만 사용합니다. 한자·중국어·일본어 문자는 절대 사용하지 않습니다.',
+        },
+        { role: 'user', content: prompt },
+      ],
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(45000),
   }).catch(() => null);
 
   let reportContent = '';
   if (aiRes?.ok) {
     const aiData = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
     reportContent = aiData?.choices?.[0]?.message?.content?.trim() ?? '';
+  } else if (aiRes) {
+    const errBody = await aiRes.text().catch(() => '(읽기 실패)');
+    console.error('[report] Groq API 실패:', aiRes.status, errBody.slice(0, 200));
+  } else {
+    console.error('[report] Groq API 호출 자체 실패 (네트워크 타임아웃 등)');
   }
-  // CJK 한자(중국어·일본어) 제거 — Korean Hangul(AC00-D7AF, 1100-11FF)은 유지
+  // CJK 한자 잔존 시 제거 (safety net) — Korean Hangul은 유지
   if (reportContent) {
     reportContent = reportContent.replace(/[\u3400-\u9FFF\uF900-\uFAFF\u{20000}-\u{2A6DF}]/gu, '');
   }
 
   const aiGenerated = !!reportContent;
   if (!reportContent) {
-    // Fallback: simple template (AI 호출 실패 시)
-    reportContent = `## ✅ 완료 작업 (${completedTasks.length}건)\n${tasksList}\n\n## 🔍 품질 현황\n이슈: ${issuesPosts.length}건\n\n## 📋 오늘의 요약\nAI 생성에 실패하여 원본 데이터만 표시합니다.`;
+    // AI 실패 시 구조화된 폴백
+    reportContent = [
+      `## ✅ 완료 작업 (${completedTasks.length}건)`,
+      completedTasks.length > 0 ? completedTasks.map(fmt).join('\n') : '완료된 작업이 없었습니다.',
+      '',
+      `## ⚠️ 이슈 및 실패 (이슈 ${issuesPosts.length}건 · 실패 ${failedTasks.length}건)`,
+      issuesPosts.length === 0 && failedTasks.length === 0
+        ? '이슈 없음 · 실패 없음'
+        : [...issuesPosts.map(i => `- ${i.title}`), ...failedTasks.map(fmt)].join('\n'),
+      '',
+      `## 🔄 진행 중 (${inProgressTasks.length}건)`,
+      inProgressTasks.length > 0
+        ? inProgressTasks.map(t => `- ${t.title}`).join('\n')
+        : '진행 중인 작업 없음',
+      '',
+      '## 📋 요약',
+      'AI 생성에 실패하여 원본 데이터만 표시합니다.',
+    ].join('\n');
   }
 
-  // Full report with header
-  const generatedBy = aiGenerated ? '' : ' · ⚠️ AI 실패(원본 데이터)';
-  const fullContent = `${reportContent}\n\n---\n📅 ${periodLabel}${generatedBy}`;
+  // 시간 포함 헤더
+  const generatedAt = new Date().toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
 
-  // 5. Store as post with type='report'
+  const generatedByNote = aiGenerated ? `🤖 Gemma2-9b` : `⚠️ AI 실패 · 원본 데이터`;
+  const fullContent = `${reportContent}\n\n---\n📅 ${periodLabel} · 생성 ${generatedAt} · ${generatedByNote}`;
+
+  // ── DB 저장 ───────────────────────────────────────────────────
+
   const postId = randomUUID();
   const title = `📊 ${typeLabel}보고서 — ${periodLabel}`;
   const tags = JSON.stringify([reportType]);
@@ -161,14 +262,25 @@ ${resolvedList}
     VALUES (?, ?, 'report', 'jarvis', 'Jarvis AI', ?, 'resolved', 'medium', ?, datetime('now'), datetime('now'))
   `).run(postId, title, fullContent, tags);
 
-  // 6. Discord notification to #jarvis-ceo
+  // ── Discord 알림 ──────────────────────────────────────────────
+
   const webhookUrl = process.env.DISCORD_WEBHOOK_CEO;
   if (webhookUrl) {
     const emojiMap = { daily: '📊', weekly: '📈', monthly: '📅' };
-    const shortSummary = completedTasks.length > 0
-      ? completedTasks.slice(0, 3).map(t => `• ${t.title}`).join('\n')
-      : '완료된 작업 없음';
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://board.ramsbaby.com';
+
+    const statLines = [
+      `✅ 완료 ${completedTasks.length}건`,
+      failedTasks.length > 0 ? `❌ 실패 ${failedTasks.length}건` : null,
+      inProgressTasks.length > 0 ? `🔄 진행중 ${inProgressTasks.length}건` : null,
+      issuesPosts.length > 0 ? `⚠️ 이슈 ${issuesPosts.length}건` : null,
+    ].filter(Boolean).join(' · ');
+
+    const preview = completedTasks.length > 0
+      ? completedTasks.slice(0, 3).map(t => `• ${t.title}`).join('\n')
+      : inProgressTasks.length > 0
+        ? inProgressTasks.slice(0, 3).map(t => `• ${t.title} (진행중)`).join('\n')
+        : '이 기간에 활동한 작업이 없습니다.';
 
     fetch(webhookUrl, {
       method: 'POST',
@@ -176,22 +288,35 @@ ${resolvedList}
       body: JSON.stringify({
         embeds: [{
           title: `${emojiMap[reportType]} ${title}`,
-          description: `완료 ${completedTasks.length}건 · 이슈 ${issuesPosts.length}건\n\n${shortSummary}`,
+          description: `${statLines}\n\n${preview}`,
           color: reportType === 'daily' ? 0x6366f1 : reportType === 'weekly' ? 0x10b981 : 0xf59e0b,
           url: `${appUrl}/reports/${postId}`,
-          footer: { text: `Jarvis Board · ${periodLabel}` },
+          footer: { text: `Jarvis Board · 생성 ${generatedAt}` },
         }],
       }),
     }).catch(() => null);
   }
 
-  return NextResponse.json({ postId, taskCount: completedTasks.length, issueCount: issuesPosts.length });
+  return NextResponse.json({
+    postId,
+    taskCount: completedTasks.length,
+    failedCount: failedTasks.length,
+    inProgressCount: inProgressTasks.length,
+    issueCount: issuesPosts.length,
+    aiGenerated,
+  });
 }
 
 function formatPeriodLabel(type: 'daily' | 'weekly' | 'monthly', start: string, end: string): string {
   const s = start.slice(0, 10); // YYYY-MM-DD
   const e = end.slice(0, 10);
-  if (type === 'daily') return s;
+
+  if (type === 'daily') {
+    // 시간 포함: 2026-04-01 (수)
+    const d = new Date(s + 'T00:00:00+09:00');
+    const weekday = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+    return `${s} (${weekday})`;
+  }
   if (type === 'weekly') return `${s} ~ ${e}`;
   return s.slice(0, 7); // YYYY-MM
 }

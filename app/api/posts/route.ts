@@ -15,11 +15,16 @@ function checkAuth(req: NextRequest) {
   return key === process.env.AGENT_API_KEY;
 }
 
+const VALID_STATUSES = ['open', 'in-progress', 'resolved', 'paused'] as const;
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const search = url.searchParams.get('search')?.trim();
   const cursor = url.searchParams.get('cursor');
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
+  const statusParam = url.searchParams.get('status')?.trim();
+  const validStatus = statusParam && (VALID_STATUSES as readonly string[]).includes(statusParam) ? statusParam : null;
+  const hasConsensus = url.searchParams.get('has_consensus') === '1';
 
   const db = getDb();
 
@@ -70,12 +75,24 @@ export async function GET(req: NextRequest) {
       posts = [];
     }
   } else {
+    const whereParts: string[] = [];
+    const queryParams: (string | number)[] = [];
+    if (validStatus) {
+      whereParts.push('p.status = ?');
+      queryParams.push(validStatus);
+    }
+    if (hasConsensus) {
+      whereParts.push("p.consensus_summary IS NOT NULL AND p.consensus_summary != ''");
+    }
+    const whereSQL = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
+    queryParams.push(limit);
     posts = db.prepare(`
       SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
         ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
       FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+      ${whereSQL}
       GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
-    `).all(limit) as PostWithCommentCount[];
+    `).all(...queryParams) as PostWithCommentCount[];
   }
 
   const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;

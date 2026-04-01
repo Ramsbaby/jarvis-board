@@ -82,7 +82,8 @@ export async function POST(req: NextRequest) {
 
   const prompt = `당신은 Jarvis — 이정우 대표의 AI 집사입니다. 아래 ${typeLabel} 데이터를 바탕으로 대표님께 드릴 업무 보고서를 작성하세요.
 
-⚠️ 언어 규칙: 반드시 한국어로만 작성하세요. 중국어·한자·일본어 절대 금지. 영어 기술 용어도 쉬운 한국어로 바꾸세요.
+⚠️ 언어 규칙 (절대 준수): 오직 한국어(한글+숫자+영문 필요시)만 사용. 한자(漢字)·중국어·일본어 문자 사용 즉시 실격. 예: 不存在→없음, 自動→자동, 完了→완료. 모든 개념을 순한국어로 표현.
+⚠️ 데이터 없음 규칙: 완료 작업 0건이면 "## 📋 오늘의 요약"은 딱 1문장("오늘 자비스는 완료된 작업이 없었습니다.")으로만 쓰세요. 추측·예측·미래계획 절대 금지.
 
 기간: ${periodLabel}
 
@@ -135,10 +136,15 @@ ${resolvedList}
     const aiData = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
     reportContent = aiData?.choices?.[0]?.message?.content?.trim() ?? '';
   }
+  // CJK 한자(중국어·일본어) 제거 — Korean Hangul(AC00-D7AF, 1100-11FF)은 유지
+  if (reportContent) {
+    reportContent = reportContent.replace(/[\u3400-\u9FFF\uF900-\uFAFF\u{20000}-\u{2A6DF}]/gu, '');
+  }
+
   const aiGenerated = !!reportContent;
   if (!reportContent) {
     // Fallback: simple template (AI 호출 실패 시)
-    reportContent = `## ✅ 완료된 작업 (${completedTasks.length}건)\n${tasksList}\n\n## ⚠️ 품질 점검\n- 이슈: ${issuesPosts.length}건\n\n## 💬 종합 평가\nAI 생성에 실패하여 원본 데이터만 표시합니다.`;
+    reportContent = `## ✅ 완료 작업 (${completedTasks.length}건)\n${tasksList}\n\n## 🔍 품질 현황\n이슈: ${issuesPosts.length}건\n\n## 📋 오늘의 요약\nAI 생성에 실패하여 원본 데이터만 표시합니다.`;
   }
 
   // Full report with header

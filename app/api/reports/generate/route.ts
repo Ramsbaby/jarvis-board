@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicApiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 503 });
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) return NextResponse.json({ error: 'GROQ_API_KEY not set' }, { status: 503 });
 
   const body = await req.json();
   const reportType: 'daily' | 'weekly' | 'monthly' = body.type ?? 'daily';
@@ -116,15 +116,14 @@ ${resolvedList}
 ## 📋 오늘의 요약
 [전체를 2~3문장으로. 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
 
-  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+  const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': anthropicApiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${groqApiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -133,8 +132,8 @@ ${resolvedList}
 
   let reportContent = '';
   if (aiRes?.ok) {
-    const aiData = await aiRes.json() as { content: Array<{ text: string }> };
-    reportContent = aiData?.content?.[0]?.text?.trim() ?? '';
+    const aiData = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
+    reportContent = aiData?.choices?.[0]?.message?.content?.trim() ?? '';
   }
   const aiGenerated = !!reportContent;
   if (!reportContent) {

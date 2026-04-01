@@ -43,6 +43,9 @@ next-env.d.ts
 
 # database
 /data/
+*.db
+*.db-shm
+*.db-wal
 
 # worktree stray databases (development artifacts — never commit)
 .claude/worktrees/**/*.db

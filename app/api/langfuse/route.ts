@@ -32,7 +32,7 @@ async function fetchLangfuse() {
   async function getGens(fromIso: string) {
     try {
       const r = await fetch(
-        `${LANGFUSE_BASE_URL}/api/public/generations?limit=500&fromStartTime=${fromIso}`,
+        `${LANGFUSE_BASE_URL}/api/public/observations?type=GENERATION&limit=500&fromStartTime=${fromIso}`,
         { headers: { Authorization: authHeader() }, signal: AbortSignal.timeout(6000) }
       );
       if (!r.ok) return [];
@@ -48,7 +48,7 @@ async function fetchLangfuse() {
     const outputTokens = gens.reduce((s, g) => s + ((g.usage as Record<string, number> | null)?.output ?? 0), 0);
     const cost = gens.reduce((s, g) => s + parseFloat(String((g.metadata as Record<string, unknown> | null)?.cost_usd ?? 0)), 0);
     const durs = gens
-      .map(g => parseFloat(String((g.metadata as Record<string, unknown> | null)?.duration_ms ?? 0)))
+      .map(g => Number(g.latency ?? 0) * 1000)  // latency is in seconds, convert to ms
       .filter(d => d > 0).sort((a, b) => a - b);
     const daily: Record<string, { calls: number; errors: number }> = {};
     for (const g of gens) {

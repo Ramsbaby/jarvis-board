@@ -9,7 +9,9 @@ import type { DevTask, Post } from '@/lib/types';
 // Called by Mac Mini cron at 23:50 daily / weekly / monthly
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
-  if (!secret || secret !== process.env.REPORT_SECRET) {
+  const envSecret = process.env.REPORT_SECRET ?? '';
+  if (!secret || secret !== envSecret) {
+    console.error('[report] auth fail — provided:', secret?.slice(0, 8), 'env:', envSecret.slice(0, 8), 'env_len:', envSecret.length);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -18,16 +20,15 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const reportType: 'daily' | 'weekly' | 'monthly' = body.type ?? 'daily';
-  const periodStart: string = body.period_start; // 'YYYY-MM-DD HH:MM:SS'
+  const periodStart: string = body.period_start;
   const periodEnd: string = body.period_end;
 
   if (!periodStart || !periodEnd) {
     return NextResponse.json({ error: 'period_start and period_end required' }, { status: 400 });
   }
 
-  const dateStart = periodStart.slice(0, 10); // YYYY-MM-DD
+  const dateStart = periodStart.slice(0, 10);
   const dateEnd = periodEnd.slice(0, 10);
-
   const db = getDb();
 
   // 중복 방지: 같은 날짜·타입의 보고서가 이미 존재하면 스킵
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ skipped: true, reason: 'already exists', existingId: existing.id });
   }
 
-  // ── 데이터 수집 ──────────────────────────────────────────────
+  // ── 데이터 수집 ────────────────────────────────────────────────
 
   // 1. 완료된 태스크
   const completedTasks = db.prepare(`
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     ORDER BY completed_at DESC
   `).all(dateStart, dateEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'> & { completed_at: string }>;
 
-  // 2. 실패한 태스크 (기간 내 생성 또는 실패)
+  // 2. 실패한 태스크
   const failedTasks = db.prepare(`
     SELECT id, title, detail, priority
     FROM dev_tasks
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     LIMIT 10
   `).all(dateStart, dateEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'>>;
 
-  // 3. 진행 중인 태스크 (현재 in-progress)
+  // 3. 진행 중인 태스크 (현재 시점)
   const inProgressTasks = db.prepare(`
     SELECT id, title, priority
     FROM dev_tasks
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     LIMIT 10
   `).all() as Array<Pick<DevTask, 'id' | 'title' | 'priority'>>;
 
-  // 4. 기간 내 신규 태스크 (pipeline dispatch)
+  // 4. 기간 내 신규 태스크
   const newTasks = db.prepare(`
     SELECT id, title, priority, status
     FROM dev_tasks
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
     LIMIT 10
   `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'type' | 'resolved_at'>[];
 
-  // ── 프롬프트 구성 ────────────────────────────────────────────
+  // ── 프롬프트 구성 ──────────────────────────────────────────────
 
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
   const periodLabel = formatPeriodLabel(reportType, periodStart, periodEnd);
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
   const newTasksList   = newTasks.length > 0
     ? newTasks.map(t => `- [${STATUS_KO[t.status] ?? t.status}] ${t.title}`).join('\n')
     : '없음';
-  const issuesList     = issuesPosts.length  > 0
+  const issuesList     = issuesPosts.length > 0
     ? issuesPosts.map(i => `- ${i.title} (${i.status === 'resolved' ? '해결됨' : '처리중'})`).join('\n')
     : '없음';
   const resolvedList   = resolvedPosts.length > 0
@@ -181,7 +182,7 @@ ${resolvedList}
 ## 📋 ${typeLabel} 요약
 [전체를 3~4문장으로. 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
 
-  // ── AI 호출 ──────────────────────────────────────────────────
+  // ── AI 호출 (Groq LLaMA-3.3-70b) ─────────────────────────────
 
   const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -190,7 +191,7 @@ ${resolvedList}
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gemma2-9b-it',
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 2000,
       temperature: 0,
       messages: [
@@ -210,10 +211,11 @@ ${resolvedList}
     reportContent = aiData?.choices?.[0]?.message?.content?.trim() ?? '';
   } else if (aiRes) {
     const errBody = await aiRes.text().catch(() => '(읽기 실패)');
-    console.error('[report] Groq API 실패:', aiRes.status, errBody.slice(0, 200));
+    console.error('[report] Groq API 실패:', aiRes.status, errBody.slice(0, 300));
   } else {
-    console.error('[report] Groq API 호출 자체 실패 (네트워크 타임아웃 등)');
+    console.error('[report] Groq API 호출 자체 실패 (네트워크/타임아웃)');
   }
+
   // CJK 한자 잔존 시 제거 (safety net) — Korean Hangul은 유지
   if (reportContent) {
     reportContent = reportContent.replace(/[\u3400-\u9FFF\uF900-\uFAFF\u{20000}-\u{2A6DF}]/gu, '');
@@ -221,7 +223,6 @@ ${resolvedList}
 
   const aiGenerated = !!reportContent;
   if (!reportContent) {
-    // AI 실패 시 구조화된 폴백
     reportContent = [
       `## ✅ 완료 작업 (${completedTasks.length}건)`,
       completedTasks.length > 0 ? completedTasks.map(fmt).join('\n') : '완료된 작업이 없었습니다.',
@@ -241,17 +242,17 @@ ${resolvedList}
     ].join('\n');
   }
 
-  // 시간 포함 헤더
+  // 시간 포함 푸터
   const generatedAt = new Date().toLocaleString('ko-KR', {
     timeZone: 'Asia/Seoul',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
   });
 
-  const generatedByNote = aiGenerated ? `🤖 Gemma2-9b` : `⚠️ AI 실패 · 원본 데이터`;
+  const generatedByNote = aiGenerated ? `🤖 LLaMA-3.3-70b` : `⚠️ AI 실패 · 원본 데이터`;
   const fullContent = `${reportContent}\n\n---\n📅 ${periodLabel} · 생성 ${generatedAt} · ${generatedByNote}`;
 
-  // ── DB 저장 ───────────────────────────────────────────────────
+  // ── DB 저장 ─────────────────────────────────────────────────────
 
   const postId = randomUUID();
   const title = `📊 ${typeLabel}보고서 — ${periodLabel}`;
@@ -262,7 +263,7 @@ ${resolvedList}
     VALUES (?, ?, 'report', 'jarvis', 'Jarvis AI', ?, 'resolved', 'medium', ?, datetime('now'), datetime('now'))
   `).run(postId, title, fullContent, tags);
 
-  // ── Discord 알림 ──────────────────────────────────────────────
+  // ── Discord 알림 ───────────────────────────────────────────────
 
   const webhookUrl = process.env.DISCORD_WEBHOOK_CEO;
   if (webhookUrl) {
@@ -280,7 +281,7 @@ ${resolvedList}
       ? completedTasks.slice(0, 3).map(t => `• ${t.title}`).join('\n')
       : inProgressTasks.length > 0
         ? inProgressTasks.slice(0, 3).map(t => `• ${t.title} (진행중)`).join('\n')
-        : '이 기간에 활동한 작업이 없습니다.';
+        : '이 기간에 완료된 작업이 없습니다.';
 
     fetch(webhookUrl, {
       method: 'POST',
@@ -308,15 +309,14 @@ ${resolvedList}
 }
 
 function formatPeriodLabel(type: 'daily' | 'weekly' | 'monthly', start: string, end: string): string {
-  const s = start.slice(0, 10); // YYYY-MM-DD
+  const s = start.slice(0, 10);
   const e = end.slice(0, 10);
 
   if (type === 'daily') {
-    // 시간 포함: 2026-04-01 (수)
     const d = new Date(s + 'T00:00:00+09:00');
     const weekday = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
     return `${s} (${weekday})`;
   }
   if (type === 'weekly') return `${s} ~ ${e}`;
-  return s.slice(0, 7); // YYYY-MM
+  return s.slice(0, 7);
 }

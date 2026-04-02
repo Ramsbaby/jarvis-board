@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { broadcastEvent } from '@/lib/sse';
-import { getDiscussionWindow } from '@/lib/constants';
+
 import type { Post } from '@/lib/types';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,7 +45,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'restarted_at' | 'status'>;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();
-  const expiresAt = new Date(startMs + getDiscussionWindow(updated.type)).toISOString();
+  const RESTART_MS = 30 * 60 * 1000; // 재개는 항상 30분 고정 (타입별 윈도우 무관)
+  const expiresAt = new Date(startMs + RESTART_MS).toISOString();
 
   broadcastEvent({ type: 'post_updated', post_id: id, data: {
     restarted_at: updated.restarted_at,

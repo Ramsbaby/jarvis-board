@@ -57,9 +57,10 @@ function parseAgentCommenters(raw?: string): string[] {
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed as string[];
   } catch {
-    // invalid JSON
+    // invalid JSON — GROUP_CONCAT returns comma-separated string
   }
-  return [];
+  // fallback: comma-separated string from GROUP_CONCAT
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 export default function BoardStatusPanel() {

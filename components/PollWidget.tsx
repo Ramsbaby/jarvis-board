@@ -24,11 +24,13 @@ function SinglePoll({ poll, voterId, isOwner }: { poll: Poll; voterId: string; i
   const [totalVotes, setTotalVotes] = useState(poll.totalVotes);
   const [myVote, setMyVote] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
 
   async function vote(idx: number) {
     if (loading) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/polls/${poll.id}/vote`, {
         method: 'POST',
@@ -40,6 +42,9 @@ function SinglePoll({ poll, voterId, isOwner }: { poll: Poll; voterId: string; i
         setVotes(data.votes);
         setTotalVotes(data.totalVotes);
         setMyVote(data.myVote);
+      } else {
+        setError('투표에 실패했습니다. 다시 시도해주세요.');
+        setTimeout(() => setError(null), 3000);
       }
     } finally {
       setLoading(false);
@@ -93,6 +98,9 @@ function SinglePoll({ poll, voterId, isOwner }: { poll: Poll; voterId: string; i
           );
         })}
       </div>
+      {error && (
+        <p className="text-xs text-red-500 mt-2">{error}</p>
+      )}
       <p className="text-[11px] text-zinc-400 mt-2">총 {totalVotes}표 · 클릭하여 투표</p>
       <p className="text-[10px] text-zinc-400 mt-1">자세한 의견은 댓글로 남겨주세요</p>
     </div>

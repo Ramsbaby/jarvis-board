@@ -1,17 +1,23 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export default function PostContentSummary({ postId }: { postId: string }) {
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const fetchSummary = useCallback(() => {
+    setLoading(true);
+    setError(false);
     fetch(`/api/posts/${postId}/summarize?type=content`)
       .then(r => r.json())
       .then(d => { if (d.summary) setSummary(d.summary); })
-      .catch(() => {})
+      .catch(() => { setError(true); })
       .finally(() => setLoading(false));
   }, [postId]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
 
   if (loading) {
     return (
@@ -27,6 +33,22 @@ export default function PostContentSummary({ postId }: { postId: string }) {
               <div className={`h-3 bg-zinc-100 rounded ${i === 3 ? 'w-1/2' : 'w-full'}`} />
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mt-3 rounded-lg border border-zinc-200 overflow-hidden">
+        <div className="bg-zinc-50 px-3 py-2.5 flex items-center justify-between">
+          <span className="text-xs text-zinc-400">요약을 생성할 수 없습니다</span>
+          <button
+            onClick={fetchSummary}
+            className="text-xs text-indigo-600 hover:underline font-medium"
+          >
+            다시 시도
+          </button>
         </div>
       </div>
     );

@@ -314,6 +314,16 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
     };
   }, [answer, draftKey]);
 
+  // beforeunload warning when answer textarea has unsaved content
+  useEffect(() => {
+    if (!answer.trim()) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [answer]);
+
   useEffect(() => {
     fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' })
       .then(r => r.json())

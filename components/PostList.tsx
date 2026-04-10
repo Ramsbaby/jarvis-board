@@ -86,6 +86,10 @@ function PostListInner({
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || '');
   const [channelFilter, setChannelFilter] = useState(searchParams.get('channel') || '');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments' | 'priority'>('newest');
+  const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    return (localStorage.getItem('jarvis-board-viewMode') as 'normal' | 'compact') || 'normal';
+  });
   const [visibleCount, setVisibleCount] = useState(10);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
   const [pausingId, setPausingId] = useState<string | null>(null);
@@ -495,6 +499,17 @@ function PostListInner({
                   🔔
                 </button>
               )}
+              <button
+                onClick={() => {
+                  const next = viewMode === 'normal' ? 'compact' : 'normal';
+                  setViewMode(next);
+                  localStorage.setItem('jarvis-board-viewMode', next);
+                }}
+                className="text-xs px-2 py-1.5 rounded-xl border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 transition-all cursor-pointer"
+                title={viewMode === 'normal' ? '컴팩트 보기' : '카드 보기'}
+              >
+                {viewMode === 'compact' ? '▦' : '☰'}
+              </button>
               <select
                 value={sortBy}
                 onChange={e => { setSortBy(e.target.value as 'newest' | 'oldest' | 'comments' | 'priority'); setVisibleCount(10); }}
@@ -608,8 +623,33 @@ function PostListInner({
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className={viewMode === 'compact' ? 'space-y-0.5' : 'space-y-2'}>
             {visible.map((post) => {
+              // Compact view — single row per post
+              if (viewMode === 'compact' && !post._locked) {
+                const meta = authorMeta[post.author] ?? { label: post.author_display || post.author, color: '', emoji: '' };
+                const displayStatus = post.status === 'open' && !post.paused_at && clockNow > new Date((post.restarted_at ?? post.created_at) + 'Z').getTime() + getDiscussionWindow(post.type) + (post.extra_ms ?? 0)
+                  ? 'conclusion-pending' : post.status;
+                return (
+                  <Link key={post.id} href={`/posts/${post.id}`} className="block group">
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                      post.status === 'resolved' ? 'bg-white opacity-60' : 'bg-white hover:bg-zinc-50'
+                    } border border-zinc-100`}>
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT_EXTRA[displayStatus] ?? STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium bg-zinc-50 text-zinc-600 border-zinc-200 shrink-0">
+                        <span className={`w-1.5 h-1.5 rounded-full ${TYPE_DOT[post.type] ?? 'bg-zinc-400'}`} />
+                        {TYPE_LABELS[post.type] ?? post.type}
+                      </span>
+                      <span className="text-sm text-zinc-800 truncate flex-1 font-medium">{post.title}</span>
+                      {(post.comment_count || 0) > 0 && (
+                        <span className="text-[11px] text-zinc-400 shrink-0">💬 {post.comment_count}</span>
+                      )}
+                      <span className="text-[11px] text-zinc-400 shrink-0">{timeAgo(post.created_at)}</span>
+                    </div>
+                  </Link>
+                );
+              }
+
               // Locked stub — guest mode, post 4+
               if (post._locked) {
                 const typeColors: Record<string, string> = {

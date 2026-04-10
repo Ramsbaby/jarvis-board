@@ -33,24 +33,32 @@ export type Listener = (ev: BoardEvent) => void;
 
 interface EventContextValue {
   connected: boolean;
+  disconnected: boolean;
   subscribe: (fn: Listener) => () => void;
+  reconnect: () => void;
   notifPermission: NotifPermission;
   requestNotifPermission: () => Promise<void>;
 }
 
 const EventContext = createContext<EventContextValue>({
   connected: false,
+  disconnected: false,
   subscribe: () => () => {},
+  reconnect: () => {},
   notifPermission: 'unsupported',
   requestNotifPermission: async () => {},
 });
 
 export function EventProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
+  const [disconnected, setDisconnected] = useState(false);
   const [notifPermission, setNotifPermission] = useState<NotifPermission>('unsupported');
   const listenersRef = useRef<Set<Listener>>(new Set());
   const retryRef = useRef(1000);
+  const retryCountRef = useRef(0);
   const esRef = useRef<EventSource | null>(null);
+  const destroyedRef = useRef(false);
+  const connectFnRef = useRef<(() => void) | null>(null);
   const pathname = usePathname();
 
   const shouldSkipSSE = pathname === '/login' || pathname.startsWith('/agents');
@@ -74,20 +82,32 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
       esRef.current = null;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setConnected(false);
+       
+      setDisconnected(false);
       return;
     }
 
-    let destroyed = false;
+    destroyedRef.current = false;
     function connect() {
-      if (destroyed) return;
+      if (destroyedRef.current) return;
       const es = new EventSource('/api/events');
       esRef.current = es;
-      es.onopen = () => { setConnected(true); retryRef.current = 1000; };
+      es.onopen = () => {
+        setConnected(true);
+        setDisconnected(false);
+        retryRef.current = 1000;
+        retryCountRef.current = 0;
+      };
       es.onerror = () => {
         setConnected(false);
         es.close();
+        retryCountRef.current += 1;
+        if (retryCountRef.current >= 5) {
+          setDisconnected(true);
+          return; // stop auto-retry after 5 failures
+        }
         retryRef.current = Math.min(retryRef.current * 2, 30000);
-        if (!destroyed) setTimeout(connect, retryRef.current + Math.random() * 1000);
+        if (!destroyedRef.current) setTimeout(connect, retryRef.current + Math.random() * 1000);
       };
       es.onmessage = (e) => {
         try {
@@ -113,9 +133,19 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       };
     }
+    connectFnRef.current = connect;
     connect();
-    return () => { destroyed = true; esRef.current?.close(); };
+    return () => { destroyedRef.current = true; esRef.current?.close(); };
   }, [shouldSkipSSE]);
+
+  const reconnect = useCallback(() => {
+    esRef.current?.close();
+    retryRef.current = 1000;
+    retryCountRef.current = 0;
+    setDisconnected(false);
+    destroyedRef.current = false;
+    connectFnRef.current?.();
+  }, []);
 
   const subscribe = useCallback((fn: Listener) => {
     listenersRef.current.add(fn);
@@ -123,7 +153,7 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <EventContext.Provider value={{ connected, subscribe, notifPermission, requestNotifPermission }}>
+    <EventContext.Provider value={{ connected, disconnected, subscribe, reconnect, notifPermission, requestNotifPermission }}>
       {children}
     </EventContext.Provider>
   );

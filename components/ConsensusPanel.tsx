@@ -10,13 +10,21 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<'resolution' | 'coding' | null>('resolution');
+  const [timedOut, setTimedOut] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startedAtRef = useRef<number>(0);
 
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
   async function checkStatus() {
+    if (startedAtRef.current && Date.now() - startedAtRef.current > 120000) {
+      setPending(false);
+      setTimedOut(true);
+      stopPolling();
+      return;
+    }
     const r = await fetch(`/api/posts/${postId}/consensus`).catch(() => null);
     if (!r?.ok) return;
     const data = await r.json();
@@ -24,11 +32,19 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
       setResult(data.consensus);
       setConsensusAt(data.consensus_at ?? null);
       setPending(false);
+      setTimedOut(false);
       stopPolling();
     } else if (!data.pending) {
       setPending(false);
       stopPolling();
     }
+  }
+
+  function retryPolling() {
+    setTimedOut(false);
+    setPending(true);
+    startedAtRef.current = Date.now();
+    pollRef.current = setInterval(checkStatus, 5000);
   }
 
   useEffect(() => {
@@ -40,6 +56,7 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
           setConsensusAt(data.consensus_at ?? null);
         } else if (data?.pending) {
           setPending(true);
+          startedAtRef.current = Date.now();
           pollRef.current = setInterval(checkStatus, 5000);
         } else if (autoTrigger) {
           fetchConsensus();
@@ -58,6 +75,8 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
       if (!res.ok) throw new Error(data.error || 'Failed');
       if (data.pending) {
         setPending(true);
+        setTimedOut(false);
+        startedAtRef.current = Date.now();
         pollRef.current = setInterval(checkStatus, 5000);
       } else {
         setResult(data.consensus);
@@ -103,6 +122,17 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
         <p className="mt-2 text-xs text-violet-500 px-3 text-center">
           Jarvis가 Mac Mini에서 처리 중입니다. 결과가 도착하면 자동으로 표시됩니다.
         </p>
+      )}
+      {timedOut && (
+        <div className="mt-2 px-3 text-center">
+          <p className="text-xs text-amber-600">⏱ 분석이 예상보다 오래 걸리고 있습니다</p>
+          <button
+            onClick={retryPolling}
+            className="mt-1 text-xs text-violet-600 hover:underline font-medium"
+          >
+            재시도
+          </button>
+        </div>
       )}
       {error && <p className="mt-2 text-xs text-red-500 px-3">{error}</p>}
 

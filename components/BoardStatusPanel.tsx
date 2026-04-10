@@ -67,15 +67,17 @@ export default function BoardStatusPanel() {
   const [discussion, setDiscussion] = useState<CurrentDiscussion | null>(null);
   const [decision, setDecision] = useState<RecentDecision | null>(null);
   const [execution, setExecution] = useState<JarvisExecution>({ doneCount: 0, latestSummary: null });
+  const [devAwaitingCount, setDevAwaitingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const { subscribe } = useEvent();
 
   const fetchData = useCallback(async () => {
     try {
-      const [activeRes, decisionRes, tasksRes] = await Promise.all([
+      const [activeRes, decisionRes, tasksRes, awaitingRes] = await Promise.all([
         fetch('/api/posts?limit=100'),
         fetch('/api/posts?status=resolved&has_consensus=1&limit=5'),
         fetch('/api/dev-tasks?status=done', { credentials: 'include' }),
+        fetch('/api/dev-tasks?status=awaiting', { credentials: 'include' }),
       ]);
 
       // --- Card 1: Current Discussion ---
@@ -135,6 +137,9 @@ export default function BoardStatusPanel() {
         doneCount: recentDone.length,
         latestSummary: mostRecent?.result_summary ?? null,
       });
+
+      const awaitingTasks: DevTask[] = awaitingRes.ok ? await awaitingRes.json() : [];
+      setDevAwaitingCount(awaitingTasks.length);
 
       setLoading(false);
     } catch (error) {
@@ -230,18 +235,15 @@ export default function BoardStatusPanel() {
           </div>
         </div>
 
-        {/* Card 3: Jarvis Execution */}
+        {/* Card 3: DEV Tasks */}
         <div className="bg-white rounded-xl shadow-sm border border-zinc-100 border-l-4 border-l-indigo-400 hover:shadow-md transition-shadow flex flex-col">
           <div className="p-4 flex flex-col flex-1">
-            <h3 className="font-semibold text-sm text-zinc-700 mb-3">자비스 실행</h3>
-            {execution.doneCount > 0 ? (
+            <h3 className="font-semibold text-sm text-zinc-700 mb-3">DEV 태스크</h3>
+            {execution.doneCount > 0 || devAwaitingCount > 0 ? (
               <div className="flex flex-col gap-2 flex-1">
-                <div className="flex items-end gap-2">
-                  <span className="text-2xl font-bold text-indigo-600 leading-none">
-                    {execution.doneCount}
-                  </span>
-                  <span className="text-xs text-zinc-500 pb-0.5">건 완료 (7일)</span>
-                </div>
+                <p className="text-sm text-zinc-700 font-medium">
+                  완료 {execution.doneCount}건 · 대기 {devAwaitingCount}건
+                </p>
                 {execution.latestSummary && (
                   <p className="text-xs text-zinc-600 line-clamp-2 mt-auto">
                     {truncate(execution.latestSummary, 100)}
@@ -249,7 +251,7 @@ export default function BoardStatusPanel() {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-zinc-400">이번 주 실행 내역 없음</p>
+              <p className="text-sm text-zinc-400">등록된 태스크 없음</p>
             )}
           </div>
         </div>

@@ -46,6 +46,7 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
   const { subscribe } = useEvent();
   const router = useRouter();
   const refreshedRef = useRef(false);
+  const [stickyCollapsed, setStickyCollapsed] = useState(true);
 
   // Sync expiresAt when SSR recalculates (e.g. after router.refresh())
   useEffect(() => {
@@ -216,8 +217,24 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
     const warning = !expired && diffMs < 10 * 60 * 1000;
 
     if (paused) {
+      if (stickyCollapsed) {
+        return (
+          <div
+            className={`z-30 border-t border-amber-200 bg-amber-50 cursor-pointer ${className}`}
+            onClick={() => setStickyCollapsed(false)}
+          >
+            <div className="max-w-5xl mx-auto px-4 py-1 flex items-center gap-2 text-xs text-amber-600 font-medium">
+              <span>⏸</span>
+              <span>일시정지 — 클릭하여 펼치기</span>
+            </div>
+          </div>
+        );
+      }
       return (
-        <div className={`z-30 border-t border-amber-200 bg-amber-50 ${className}`}>
+        <div
+          className={`z-30 border-t border-amber-200 bg-amber-50 cursor-pointer ${className}`}
+          onClick={() => setStickyCollapsed(true)}
+        >
           <div className="max-w-5xl mx-auto px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 font-medium">
             <span>⏸</span>
             <span>토론 일시정지 — {expired ? '마감' : `${min}분 ${String(sec).padStart(2, '0')}초 남음`} (정지됨)</span>

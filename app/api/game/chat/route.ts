@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
 import { getDb } from '@/lib/db';
 
 // 팀별 시스템 프롬프트
@@ -45,40 +46,44 @@ export async function POST(req: NextRequest) {
     const fullPrompt = `${systemPrompt}\n\n짧고 자연스럽게 한국어로 답변해주세요.\n\n최근 대화:\n${conversationContext}`;
 
     let assistantContent: string;
+    // Claude CLI 절대경로 탐색 (LaunchAgent PATH 제약 회피)
+    const CLAUDE_BIN = process.env.CLAUDE_BINARY ||
+      (existsSync(`${process.env.HOME}/.local/bin/claude`) ? `${process.env.HOME}/.local/bin/claude` : 'claude');
+
     try {
-      // --dangerously-skip-permissions: standalone 서버 환경에서 permission prompt 방지
-      // cwd를 /tmp로 설정: CLAUDE.md 자동 로드 방지
-      assistantContent = execFileSync('claude', [
-        '-p', message,
+      // 깨끗한 환경 (NODE_OPTIONS 상속 차단 + CLAUDE.md 로드 방지)
+      // HOME을 /tmp로 설정하면 claude가 ~/.claude/CLAUDE.md를 로드하지 않음
+      const realHome = process.env.HOME || '/Users/ramsbaby';
+      const cleanEnv: Record<string, string> = {
+        HOME: realHome, // claude 인증은 ~/.claude 필요
+        USER: process.env.USER || 'ramsbaby',
+        PATH: `${realHome}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
+        TERM: 'dumb',
+        LANG: 'en_US.UTF-8',
+      };
+
+      // 메시지에 시스템 프롬프트를 인라인으로 포함 (standalone 환경 문제 회피)
+      const combinedPrompt = `${fullPrompt}\n\n[질문] ${message}\n\n위 질문에 ${systemPrompt.split('입니다')[0]}입니다의 입장에서 한국어로 짧게 답변해주세요. 절대 "이전 세션" 같은 말 하지 마세요.`;
+
+      assistantContent = execFileSync(CLAUDE_BIN, [
+        '-p', combinedPrompt,
         '--output-format', 'text',
-        '--system-prompt', fullPrompt,
         '--dangerously-skip-permissions',
       ], {
         timeout: 60_000,
         encoding: 'utf8',
-        maxBuffer: 1024 * 1024,
+        maxBuffer: 2 * 1024 * 1024,
         cwd: '/tmp',
-        env: { ...process.env, TERM: 'dumb', HOME: process.env.HOME || '/Users/ramsbaby' },
+        env: cleanEnv as unknown as NodeJS.ProcessEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
       }).trim();
-
-      // Claude 기본 시스템 프롬프트 응답 필터링 (세션 이어하기 응답 제거)
-      if (assistantContent.includes('이전 세션') || assistantContent.includes('이어서')) {
-        assistantContent = execFileSync('claude', [
-          '-p', `[${systemPrompt}]\n\n사용자 질문: ${message}`,
-          '--output-format', 'text',
-          '--dangerously-skip-permissions',
-        ], {
-          timeout: 60_000,
-          encoding: 'utf8',
-          maxBuffer: 1024 * 1024,
-          cwd: '/tmp',
-          env: { ...process.env, TERM: 'dumb', HOME: process.env.HOME || '/Users/ramsbaby' },
-        }).trim();
-      }
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      assistantContent = `잠시 응답을 처리하지 못했어요. (${errMsg.slice(0, 80)})`;
-      console.error('[game-chat] claude error:', errMsg.slice(0, 300));
+      // 상세 에러 정보 수집
+      const e = err as { message?: string; stderr?: Buffer | string; status?: number; code?: string };
+      const stderrStr = e.stderr ? (Buffer.isBuffer(e.stderr) ? e.stderr.toString('utf8') : String(e.stderr)) : '';
+      const detail = stderrStr || e.message || String(err);
+      assistantContent = `잠시 응답을 처리하지 못했어요.\n상세: ${detail.slice(0, 400)}\nstatus=${e.status} code=${e.code}`;
+      console.error('[game-chat] claude error:', { message: e.message, stderr: stderrStr.slice(0, 500), status: e.status, code: e.code });
     }
 
     // 어시스턴트 응답 저장

@@ -2,8 +2,8 @@
 
 import dynamic from 'next/dynamic';
 
-const GameCanvas = dynamic(() => import('./GameCanvas'), { ssr: false });
+const VirtualOffice = dynamic(() => import('./VirtualOffice'), { ssr: false });
 
 export default function CompanyPage() {
-  return <GameCanvas />;
+  return <VirtualOffice />;
 }

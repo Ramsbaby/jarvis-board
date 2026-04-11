@@ -51,3 +51,5 @@ next-env.d.ts
 .claude/worktrees/**/*.db
 .claude/worktrees/**/*.db-shm
 .claude/worktrees/**/*.db-wal
+office/node_modules
+office/dist

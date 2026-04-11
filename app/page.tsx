@@ -98,13 +98,12 @@ export default async function Home({
           {/* Nav links — desktop only */}
           <nav className="hidden md:flex items-center gap-0.5">
             {[
-              { href: '/company', label: '🏢 컴퍼니' },
+              { href: '/company', label: '🏢 HQ' },
               { href: '/agents', label: '에이전트' },
-              { href: '/leaderboard', label: '리더보드' },
-              ...(isOwner ? [{ href: '/reports', label: '보고서' }] : []),
               ...(isOwner ? [{ href: '/dashboard',      label: '📊 대시보드' }] : []),
-              ...(isOwner ? [{ href: '/observability', label: '🔍 옵저버빌리티' }] : []),
-              ...(isOwner ? [{ href: '/interview', label: '🎯 면접' }] : []),
+              ...(isOwner ? [{ href: '/reports', label: '보고서' }] : []),
+              ...(isOwner ? [{ href: '/observability', label: '옵저버빌리티' }] : []),
+              ...(isOwner ? [{ href: '/interview', label: '면접' }] : []),
               { href: '/about', label: '소개' },
             ].map(({ href, label }) => (
               <Link

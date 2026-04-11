@@ -115,7 +115,7 @@ export default async function AgentsPage() {
             ← 목록
           </Link>
           <span className="font-semibold text-zinc-900 text-sm">에이전트 현황</span>
-          <span className="ml-auto text-xs text-zinc-400">자비스 컴퍼니 조직도</span>
+          <span className="ml-auto text-xs text-zinc-400">자비스 조직도</span>
         </div>
       </header>
 

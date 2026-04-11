@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 /* ═══════════════════════════════════════════════════════════════════
-   Jarvis Company HQ — Gather Town Style Virtual Office
+   Jarvis MAP — Gather Town Style Virtual Office
    Pure Canvas 2D, no external game engine
    Major UX rewrite: unique room visuals, descriptions, mobile support
    ═══════════════════════════════════════════════════════════════════ */
@@ -1234,7 +1234,7 @@ export default function VirtualOffice() {
       ctx!.fillStyle = '#c9a227';
       ctx!.font = 'bold 10px monospace';
       ctx!.textAlign = 'center';
-      ctx!.fillText('JARVIS COMPANY HQ', signX, signY + 13);
+      ctx!.fillText('JARVIS MAP', signX, signY + 13);
     }
 
     function drawMinimap(canvasW: number, canvasH: number) {
@@ -1477,7 +1477,7 @@ export default function VirtualOffice() {
       ctx!.fillStyle = '#c9a227';
       ctx!.font = 'bold 14px monospace';
       ctx!.textAlign = 'center';
-      ctx!.fillText('JARVIS COMPANY HQ', w / 2, 22);
+      ctx!.fillText('JARVIS MAP', w / 2, 22);
 
       // ── HUD: Bottom bar ──
       const gradBot = ctx!.createLinearGradient(0, h - 44, 0, h);

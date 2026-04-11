@@ -22,12 +22,14 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
     'Redisson watchdog 메커니즘을 설명하고, 결제 처리 중 서버가 갑자기 다운됐을 때 분산락이 어떻게 자동 해제됩니까? 단순 SETNX+TTL 방식과 비교했을 때 Redisson의 장단점을 말씀해 주세요.',
     '낙관적 락(Optimistic Lock)이 연속 충돌로 실패할 때 재시도 전략을 어떻게 구성합니까? 결제 시스템에서 재시도가 안전한 경우와 위험한 경우를 구분해 주세요.',
     '계좌 잔액 확인과 차감이 코어뱅킹 서비스와 결제 서버로 분산되어 있을 때 DB의 SELECT FOR UPDATE가 동작하지 않는 이유를 설명하고, 이 상황에서 잔액 초과 결제를 방지하는 방법을 설명해 주세요.',
+    'Redis @Cacheable과 @CachePut이 멀티 인스턴스 환경에서 동시성 문제를 일으키는 구체적 시나리오를 설명하고, putIfAbsent 전략으로 해결하는 방법을 말씀해 주세요.',
   ],
   'kafka': [
     '결제 이벤트를 Kafka로 발행할 때 at-least-once 보장으로 중복 이벤트가 발생했습니다. 컨슈머에서 멱등성을 어떻게 보장합니까?',
     'Kafka 컨슈머 리밸런싱 중 결제 완료 이벤트 처리에 실패했습니다. 오프셋 커밋 전략을 어떻게 설계하시겠습니까?',
     'Kafka를 이용한 Saga 구현에서 보상 이벤트가 순서대로 처리되지 않는 경우 어떻게 처리합니까?',
     '결제 완료 이벤트가 Kafka에 발행됐지만 정산 서비스 컨슈머가 다운된 상태입니다. 데이터 손실 없이 복구하는 과정을 설명해 주세요.',
+    'RabbitMQ에서 Kafka로 전환할 때 userId를 파티션 키로 사용해 동일 사용자 순차 처리를 보장하는 설계를 설명해 주세요. 중복 발행 방지를 위한 상태 전이 전략도 포함해 주세요.',
   ],
   'system-design': [
     '일일 1,000만 건 결제를 처리하는 시스템을 설계해 주세요. DB 병목 지점과 해결 방안을 포함해 주세요.',
@@ -35,6 +37,9 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
     '결제 서버 무중단 배포 중 진행 중인 트랜잭션이 있을 때 어떻게 처리합니까? Graceful Shutdown 구현 방법을 설명해 주세요.',
     '외부 PG사 API 응답이 불규칙할 때 Bulkhead 패턴으로 장애 격리를 어떻게 구현합니까? 스레드 풀 기반 격리와 세마포어 기반 격리의 차이를 결제 시스템 관점에서 설명해 주세요.',
     'CQRS 패턴을 결제 조회 서비스에 도입할 때 커맨드 DB와 조회 DB 간 일관성을 어떻게 보장합니까? 결제 완료 직후 내역 조회에서 데이터가 보이지 않는 문제를 어떻게 처리합니까?',
+    '분산 시스템에서 로컬 캐시 + Redis + DB 폴백으로 3중 캐싱을 설계해 주세요. Redis Pub/Sub 기반 캐시 무효화와 Eventual Consistency 트레이드오프를 설명해 주세요.',
+    'BFF(Backend For Frontend) 패턴으로 24개 외부 서비스를 조합하는 결제탭 서버를 설계한다면, Provider-Consumer-Aggregator 구조와 장애 전파 차단 전략을 어떻게 구성하겠습니까?',
+    'DDD에서 DomainEntity와 JPAEntity를 분리하는 이유를 설명하고, 결제 도메인의 Bounded Context를 어떻게 나누시겠습니까? 카카오페이가 헥사고날을 도입 후 철회한 사례를 어떻게 평가합니까?',
   ],
   'mysql-tuning': [
     '결제 이력 테이블(월 1억 건)에서 특정 userId의 최근 3개월 결제 내역 조회에 EXPLAIN을 실행했더니 type=ALL(풀 스캔)이 나왔습니다. 인덱스 전략을 어떻게 설계하겠습니까?',
@@ -43,6 +48,9 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
     '운영 중인 결제 테이블에 인덱스를 무중단으로 추가해야 합니다. Online DDL과 pt-online-schema-change(pt-osc)의 차이를 설명하고, 어떤 상황에서 무엇을 선택합니까?',
     '결제 승인 내역 조회 API에서 JPA N+1 문제가 발생했습니다. fetch join, EntityGraph, @BatchSize의 동작 방식과 적합한 사용 시나리오를 비교하고, 결제 조회에서 최적 선택을 설명해 주세요.',
     'MySQL Read Replica를 결제 조회 서비스에 도입할 때 복제 지연(Replication Lag)이 결제 직후 내역 조회 정합성에 미치는 영향과, 복제를 활용하면서도 정합성을 보장하는 전략을 설명해 주세요.',
+    'JpaPagingItemReader가 대량 데이터에서 기하급수적으로 느려지는 이유를 설명하고, ZeroOffset 패턴(WHERE id > last_id)으로 선형 스케일링을 달성하는 원리를 말씀해 주세요.',
+    '정산 배치에서 GROUP BY + SUM 집계 대신 Redis hincrby Pipeline을 사용하면 어떤 이점이 있습니까? 1천만 건 집계를 Redis로 오프로딩하는 구조를 설계해 주세요.',
+    '수억 건 배치 처리 시 월별 → 일별(N Worker) → 커서 스트리밍 3단계 파티셔닝 전략과 Worker 스레드 수 산정 기준을 설명해 주세요.',
   ],
   'java-spring': [
     'G1GC와 ZGC의 STW(Stop-The-World) 방식 차이를 설명하고, 결제 API처럼 p99 레이턴시가 중요한 서비스에 어느 GC가 적합한지 근거를 들어 설명해 주세요.',
@@ -51,6 +59,9 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
     'JDK 21 Virtual Thread를 결제 서버에 도입할 때 HikariCP 커넥션 풀 고갈 문제가 발생하는 이유를 설명하고, 풀 크기 산정과 pinning 방지 방법을 말씀해 주세요.',
     'Spring Batch로 월 정산 배치(수천만 건)를 구현할 때 Chunk 크기, 멀티스레드 Step, 파티셔닝 Step의 차이를 설명하고, 정산 도중 일부 실패 시 skip/retry/restart 전략을 어떻게 설계합니까?',
     '내부 마이크로서비스 간 통신에 gRPC와 REST 중 무엇을 선택하겠습니까? 결제 서버와 코어뱅킹 서비스 간 통신을 예로 들어 Protobuf 직렬화, 스트리밍, 서킷 브레이커 통합을 설명해 주세요.',
+    '카카오페이 기술블로그에서 JVM 웜업 문제를 다뤘습니다. 배포 직후 Connection Usage가 3ms에서 1.5초로 급증하고, Acquire 타임아웃(10초)이 터지는 원인을 설명하고, K8s startupProbe + ApplicationRunner로 해결하는 방법을 말씀해 주세요.',
+    '@Transactional의 propagation을 SUPPORTS로 설정하면 어떤 효과가 있습니까? 읽기 전용 API에서 트랜잭션을 아예 생성하지 않는 @ReadOnlyTransactional 전략의 장단점을 설명해 주세요.',
+    'Spring Cloud Stream의 함수형 프로그래밍 모델과 기존 spring-kafka @KafkaListener 방식의 차이를 설명해 주세요. Function 합성 기반 메시징 파이프라인의 장단점은?',
   ],
   'cs-basics': [
     'TCP TIME_WAIT 상태가 결제 서버에서 대량 단기 연결 시 포트 고갈 문제를 어떻게 유발합니까? SO_REUSEADDR, tcp_tw_reuse 설정과 커넥션 풀 사용이 각각 어떻게 완화합니까?',
@@ -66,6 +77,16 @@ export const KAKAOPAY_QUESTIONS: Record<string, string[]> = {
     '지금까지 경력에서 가장 심각한 장애를 대응한 경험을 STAR 방식으로 말씀해 주세요. 그 장애 이후 아키텍처나 운영 방식에서 무엇을 구조적으로 바꾸었습니까?',
     '새로운 기술 도입을 제안했지만 팀이나 조직의 반대에 부딪힌 경험이 있습니까? 어떻게 설득하려 했고 결과는 어땠습니까? 반대 의견에서 납득할 근거가 있었다면 어떻게 의견을 수정했습니까?',
     '9년 경력에서 가장 잘못된 기술적 판단을 하나 꼽는다면 무엇입니까? 당시 왜 그 판단을 내렸고, 지금이라면 어떻게 다르게 결정하겠습니까? 그 경험이 현재 의사결정에 어떤 영향을 미쳤습니까?',
+    'meta-bridge(사내 AI 플랫폼)를 만든 경험을 말씀해 주세요. 어떤 문제를 풀기 위해 만들었고, 팀에 어떤 가치를 줬습니까? AI를 도구로 활용하는 개발자의 역할을 어떻게 보시나요?',
+    '오픈소스 프로젝트(openclaw)를 공개한 이유와 과정을 말씀해 주세요. 개인 프로젝트가 아닌 공개 프로젝트로 만든 이유는 무엇이고, 피드백은 어떻게 반영했습니까?',
+  ],
+  'live-coding': [
+    '결제 승인 API를 구현해 주세요. 같은 주문에 대해 동시 요청이 들어올 때 이중 결제를 방지하는 멱등성 처리를 포함해야 합니다. Redis SETNX를 활용하세요.',
+    '계좌 잔액 차감 API를 낙관적 락(@Version)으로 구현해 주세요. 100명이 동시에 같은 계좌에서 출금할 때 잔액 초과를 방지해야 합니다. 재시도 로직도 포함하세요.',
+    '결제 상태 머신을 Java enum으로 구현해 주세요. PENDING→APPROVED→CAPTURED→CANCELLED 전이만 허용하고, 유효하지 않은 전이 시 예외를 던져야 합니다. 부분취소도 고려하세요.',
+    'Kafka 결제 이벤트 컨슈머를 구현해 주세요. at-least-once 보장 환경에서 중복 이벤트를 처리하는 멱등성 로직과 실패 시 DLQ 전송을 포함해야 합니다.',
+    'Spring Batch로 결제 대사(reconciliation) 배치를 구현해 주세요. 결제 원장과 카드사 데이터를 비교해서 불일치 건을 기록하는 ItemReader/Processor/Writer를 작성하세요.',
+    'Redis 분산 락을 직접 구현해 주세요. SETNX+TTL 방식과 Redisson RLock의 차이를 코드로 보여주고, 서버 다운 시 락이 자동 해제되는 메커니즘을 설명하세요.',
   ],
 };
 
@@ -81,16 +102,16 @@ export const COMPANIES = [
 
 /** 카테고리별 필수 키워드 — LLM이 답변에서 누락된 키워드를 감지하는 데 사용 */
 export const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'distributed-tx': ['Saga', 'TCC', '2PC', '보상 트랜잭션', '이벤트 소싱', '아웃박스', 'CQRS', '멱등성'],
-  'concurrency': ['낙관적 락', '비관적 락', 'Redis 분산락', '데드락', 'CAS', '원자적 연산', 'Redisson', 'watchdog'],
-  'payment-arch': ['승인', '취소', '매입', '대사', '정산', '멱등성', '이중 결제 방지', '결제 상태 머신'],
-  'mysql-tuning': ['인덱스', '실행 계획', 'EXPLAIN', '커버링 인덱스', '파티셔닝', '쿼리 최적화', 'N+1', 'Read Replica', 'Online DDL'],
-  'kafka': ['파티션', '컨슈머 그룹', '오프셋', 'at-least-once', 'exactly-once', '리밸런싱', '배압'],
-  'java-spring': ['JVM', 'GC', 'WebFlux', 'Reactor', 'IoC', 'AOP', 'gRPC', 'Protobuf', 'Virtual Thread', 'Spring Batch'],
-  'cs-basics': ['프로세스', '스레드', 'TCP', 'HTTP', 'ACID', '정규화', 'B-Tree', 'TIME_WAIT', 'Gap Lock'],
-  'system-design': ['로드 밸런서', 'Circuit Breaker', 'Auto Scaling', 'CDN', 'API Gateway', 'CAP 정리', 'CQRS', 'Bulkhead'],
-  'behavioral': ['STAR', '갈등', '기술 부채', '회고', '의사결정'],
-  'live-coding': ['시간복잡도', 'O(n)', '엣지 케이스', '테스트 케이스'],
+  'distributed-tx': ['Saga', 'TCC', '2PC', '보상 트랜잭션', '이벤트 소싱', '아웃박스', 'CQRS', '멱등성', 'Spring Cloud Stream', '함수형 메시징'],
+  'concurrency': ['낙관적 락', '비관적 락', 'Redis 분산락', '데드락', 'CAS', '원자적 연산', 'Redisson', 'watchdog', 'REQUIRES_NEW', 'HikariCP', 'putIfAbsent', 'ConcurrentHashMap'],
+  'payment-arch': ['승인', '취소', '매입', '대사', '정산', '멱등성', '이중 결제 방지', '결제 상태 머신', 'PG사', 'VAN사', 'Unknown 상태', 'Graceful Shutdown', 'ActResult', 'sealed class', '3중 캐싱', 'BFF'],
+  'mysql-tuning': ['인덱스', '실행 계획', 'EXPLAIN', '커버링 인덱스', '파티셔닝', '쿼리 최적화', 'N+1', 'Read Replica', 'Online DDL', 'QueryDSL', 'ZeroOffset', 'Redis Pipeline 집계', 'hincrby'],
+  'kafka': ['파티션', '컨슈머 그룹', '오프셋', 'at-least-once', 'exactly-once', '리밸런싱', '배압', 'DLQ', 'consumer lag', 'Spring Cloud Stream', 'StreamBridge', '파티션 키'],
+  'java-spring': ['JVM', 'GC', 'WebFlux', 'Reactor', 'IoC', 'AOP', 'gRPC', 'Protobuf', 'Virtual Thread', 'Spring Batch', 'OSIV', 'Sealed class', 'QueryDSL', '@Transactional 전파', 'JVM 웜업', 'startupProbe', 'pinning', 'ZGC', '@ReadOnlyTransactional'],
+  'cs-basics': ['프로세스', '스레드', 'TCP', 'HTTP', 'ACID', '정규화', 'B-Tree', 'TIME_WAIT', 'Gap Lock', 'ConcurrentHashMap', 'CAS'],
+  'system-design': ['로드 밸런서', 'Circuit Breaker', 'Auto Scaling', 'CDN', 'API Gateway', 'CAP 정리', 'CQRS', 'Bulkhead', 'DDD', '헥사고날', 'BFF', 'Graceful Shutdown', 'Provider-Consumer-Aggregator', '3중 캐싱', 'Bounded Context'],
+  'behavioral': ['STAR', '갈등', '기술 부채', '회고', '의사결정', 'AI 에이전트', '오픈소스', 'meta-bridge', 'RCA 포스트모템', 'MCP', '하이브리드 RAG'],
+  'live-coding': ['시간복잡도', 'O(n)', '엣지 케이스', '테스트 케이스', '멱등성', '동시성', '상태 머신'],
 };
 
 export const CATEGORIES = [
@@ -103,6 +124,7 @@ export const CATEGORIES = [
   { id: 'cs-basics', name: 'CS 기초', emoji: '📚', desc: 'OS·네트워크·DB ACID·자료구조', priority: 3 },
   { id: 'system-design', name: '시스템 디자인', emoji: '🏗️', desc: 'MSA, 대용량 아키텍처, 고가용성', priority: 3 },
   { id: 'behavioral', name: '행동 면접 (STAR)', emoji: '🧠', desc: '갈등·기술부채·성장 스토리', priority: 3 },
+  { id: 'live-coding', name: '라이브 코딩', emoji: '💻', desc: '멱등성 API, 동시성, 상태 머신, Batch', priority: 1 },
 ] as const;
 
 export const DIFFICULTIES = [
@@ -116,8 +138,36 @@ const CANDIDATE_PROFILE = `
 - 이름: 이정우
 - 경력: 9년+ 백엔드 개발자
 - 현직: SK D&D — IoT 플랫폼 개발, 계약·정산 자동화 시스템
-- 기술 스택: Java 17, Spring Boot, Spring WebFlux, gRPC, AWS (EC2/ECS/RDS/SQS/SNS/Lambda), Kafka, Redis
+- 이전: JANDI/토스랩 — SaaS 협업툴 백엔드, DAU 15만/MAU 300만 피크 운영
+- 기술 스택: Java 17, Spring Boot/WebFlux/Batch, gRPC, AWS (EC2/ECS/RDS/SQS/SNS/Lambda), Kafka, Redis, MySQL, Datadog
 - 특이사항: 카카오페이 서버 개발자 - 결제 서비스 서류 전형 합격 상태
+- 사이드: meta-bridge(사내 MCP 플랫폼, 61개 도구/24개 에이전트), Jarvis(Claude 기반 24/7 AI ops), openclaw 오픈소스 3종
+- 경력 흐름: 하몬소프트(SI 4년8개월, 풀스택) → 공백 9개월(JPA 집중, 백엔드 전환) → 토스랩/JANDI(SaaS 2년8개월, 백엔드 9명, 회사 70명) → SK D&D(IoT/정산 1년+, 백엔드 6명)
+
+[지원자 추가 경험 — 면접관이 이력서를 보고 파고들 소재]
+- SK D&D 계약 대사(Reconciliation): 이룸(자산관리 회사)과 우리 장부를 비교 대조하는 스케줄러 구축. 이룸 자본잠식으로 27만 건 계약 데이터 이관 중. → 카카오페이 "대사" 업무와 직접 연결
+- SK D&D 용산 IoT 자동화 DLQ: 도어락→공기질→에어컨→조명 자동화에서 일부 호실 장애. Datadog으로 발견, DLQ 테이블 + 3회 재시도 + 메신저 알럿 구축. 에러 한 줄만 찍고 스킵하던 구조를 개선
+- SK D&D 아카라 도어락: 토큰 유효하지 않을 때 재시도 없이 바로 실패 → DLQ + 재시도 로직 추가
+- SK D&D Lambda+AOP 캐시 무효화: Redis 없는 환경에서 Spring Caffeine 로컬 캐시를 Lambda가 로드밸런서 인스턴스 전체에 무효화 API 호출. 팀원들이 '혁신적이고 창의적'이라 평가
+- SK D&D Datadog 도입: JANDI에서 써봐서 적극 주장 → 구식 와탭 대체. 이슈 대응 2배 단축. 용산 IoT 이슈도 Datadog 없었으면 발견 못 했을 것
+- SK D&D Monthly Report 자동화: 매니저 1명이 4~5시간 엑셀 정리 → 5분으로 단축
+- SK D&D Spring 이벤트 리스너 EDA: 수백 줄 동기 코드 → 비동기 이벤트 분리 (계약 체결 후처리: 히스토리 기록, 방 상태 전환 등 응답 불필요한 작업)
+- JANDI 퇴사 이유: 자본잠식 → 인프라 비용 절감 → 대량 장애 → CTO와 백엔드팀 충돌. 면접에서 "왜 이직?" 물으면 이 맥락으로 답함
+- 공백기 9개월(2021.01~08): 풀스택→백엔드 전환 집중. JPA·Spring Boot 토이 프로젝트, 인프런+패스트캠퍼스 인강
+
+[지원자 약점 — 면접관은 이 약점을 반드시 파고들어야 합니다]
+- 결제/금융 도메인 직접 경험 없음 (정산 자동화만 있음). "정산과 결제의 차이를 어떻게 보시나요?" 압박 가능
+- Kotlin 미경험 (카카오페이 신규 서비스는 Kotlin 우선). "Kotlin 없이 팀에 바로 기여 가능한가요?" 압박 가능
+- 초당 수만 건(60K QPS) 트래픽 미경험 (JANDI DAU 15만 수준). "카카오페이 프로모션 60K QPS를 어떻게 처리할 건가요?" 압박 가능
+- Kafka EDA 운영 기간 짧음 (설계 2개월, 프로덕션 배포 후 퇴사 인계). "설계만 하고 운영은 안 했는데 신뢰할 수 있나요?" 압박 가능
+- meta-bridge는 사내 프로젝트로 GitHub 비공개. "증거를 보여줄 수 있나요?" 압박 가능
+- SK D&D 1년밖에 안 됨. "왜 벌써 나오려고?" 압박 가능 → "사업 확장 약속과 현실이 달랐고, 이룸 파산으로 마이그레이션이 주가 됐다" 방어
+
+[지원자 제출 자소서 핵심 에피소드 — 답변과 자소서 일관성 검증에 활용]
+- 에피소드1: SK D&D 정산 플로우 동시성 설계 → "금액이 틀리면 신뢰가 무너진다"
+- 에피소드2: Redis INCR/DECR 카운터 버그 발견 및 해결
+- 에피소드3: 배치 구조 재설계 (Tasklet→Chunk 전환)
+- 자소서 키메시지: "데이터가 흐르는 경로를 신뢰할 수 있게 만드는 것"
 
 [지원자 실제 경험 — 면접 평가 기준으로 활용]
 지원자는 아래 경험들을 보유합니다. 답변에서 이 경험을 언급하면 높이 평가하고,
@@ -151,6 +201,30 @@ const CANDIDATE_PROFILE = `
 - 원인: 가시성 타임아웃(30s) < 처리 시간(45s) → 메시지 중복 수신 후 중복 발송
 - 해결: 가시성 타임아웃 90s로 조정 + 멱등성 키 기반 중복 처리 방지 + CloudWatch DLQ 알림
 - 결과: 발송 실패율 3% → 0%, MTTD 3일 → 5분
+
+【STAR-6】gRPC 서버 최적화 (JANDI)
+- 상황: gRPC 인증 서버 20대 운영, 과잉 리소스
+- 분석: G1GC 파라미터 조정 + Heap Dump 분석으로 메모리 누수 특정
+- 해결: GC 튜닝 + HTTP/2 다중화 + WebFlux 논블로킹 최적화
+- 결과: gRPC 서버 20대 → 5대, 인프라 비용 75% 절감
+
+【STAR-7】Kafka EDA 설계 주도 (JANDI)
+- 상황: 서비스 간 동기 의존성으로 장애 전파 빈번
+- 설계: Choreography Saga 패턴, 보상 트랜잭션 구조, consumer group lag 대시보드
+- 결과: 2개월 설계 후 프로덕션 배포 완료, 팀 인계
+- 주의: 운영 기간 짧음 — 면접 시 "설계 근거와 트레이드오프"를 깊이 파고들어야
+
+【STAR-8】계약·정산 자동화 (SK D&D)
+- 상황: 임대 계약 정산이 수작업, 금액 오류 빈번
+- 해결: 계약 상태 머신 코드화, 청구 배치 구현, 정합성 검증 자동화
+- 결과: 수작업 오류 제거, "금액이 틀리면 신뢰가 무너진다" 원칙 체화
+- 연결: 결제 도메인 미경험을 보완하는 핵심 경험 — 정산과 결제의 정합성 요구 수준은 동일
+
+【STAR-9】meta-bridge 사내 AI 플랫폼 (SK D&D)
+- 상황: 팀 내 반복 업무(JIRA 정리, 회의록 요약, DB 조회) 수작업
+- 설계: Claude CLI + FastAPI + MCP 프로토콜, JIRA·MySQL·Datadog·Confluence·AWS 연동
+- 결과: 61개 MCP 도구, 24개 에이전트, 하이브리드 RAG(BM25+벡터), 온프레미스 LLM 보안 격리
+- 의의: "개발자가 AI를 도구로 만들어 팀 생산성을 높인" 차별화 경험
 `.trim();
 
 /** 답변 평가 전용 프롬프트 — 질문 생성 규칙 없이 JSON 평가에만 집중 */
@@ -210,7 +284,16 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
 ② Virtual Thread 서버 다운: HikariCP 풀 10개 고갈 → 커넥션 Deadlock → ALB 504 (JDK21 Virtual Thread 환경)
 ③ IoT 다중벤더 Adapter 패턴: if-else 100줄 → 공통 인터페이스 추상화 → 제조사 추가 2주 → 2일
 ④ 스케줄러 데드락: 20만건 Full Scan Lock 20초 → REQUIRES_NEW 분리 + 500건 Chunking → Lock 1ms
-⑤ SQS DLQ 멱등성: 가시성 타임아웃 < 처리시간 → 중복 수신 → 멱등성 키 + DLQ 알림 (3% → 0%)${kakaoPayEvalCriteria}
+⑤ SQS DLQ 멱등성: 가시성 타임아웃 < 처리시간 → 중복 수신 → 멱등성 키 + DLQ 알림 (3% → 0%)
+⑥ gRPC 서버 최적화: G1GC 튜닝 + Heap Dump → 메모리 누수 제거 → 서버 20대 → 5대 (JANDI)
+⑦ Kafka EDA 설계: Choreography Saga + 보상 트랜잭션, 2개월 설계 후 프로덕션 배포 (JANDI)
+⑧ 계약·정산 자동화: 상태 머신 코드화 + 청구 배치 → 수작업 오류 제거 (SK D&D, 결제 도메인 연결 핵심)
+⑨ meta-bridge: 사내 MCP 플랫폼 61개 도구/24개 에이전트, 하이브리드 RAG (AI 차별화 경험)
+
+[지원자 약점 — 평가 시 관련 질문이 나오면 약점을 인지하고 엄격하게 평가]
+- 결제/금융 도메인 직접 경험 없음 → "정산 경험을 결제 맥락으로 연결했는가?" 검증
+- Kotlin 미경험 → "JVM 공유를 넘어서 실제 전환 준비도가 있는가?" 검증
+- 초당 수만 건 트래픽 미경험 → "이론적 설계와 실제 경험의 갭을 인지하는가?" 검증${kakaoPayEvalCriteria}
 
 [평가 기준]
 - 기술 정확도, 실무 경험 연결, 구체성, 깊이를 종합 평가
@@ -221,10 +304,10 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
   "score": 50,
   "strengths": ["잘한 점 구체적으로 (최소 2개 필수. 단순 '좋은 구조' 금지 — 어떤 기술 원리·경험을 정확히 언급했는지 서술)"],
   "weaknesses": ["부족한 점 구체적으로 (최소 2개 필수. 단순 '설명 부족' 금지 — 어떤 키워드/원리/수치가 빠졌는지 명시)"],
-  "better_answer": "면접관 앞에서 실제로 말하듯 자연스러운 구어체 한국어로 작성한 모범 답안. 반드시 아래 구조를 따르되 산문 형식 유지 (불릿·번호 목록 절대 금지): ① 결론 먼저 — 핵심 선택과 이유 1~2문장 ② 기술 원리 — 왜 그 방식인지 원리·트레이드오프 2~3문장 ③ 실제 경험 연결 — 지원자 보유 경험(①~⑤ 중 해당 항목)을 구체적 수치와 함께 2~3문장 ④ 결과·교훈 — 측정 가능한 성과 또는 재발 방지 원칙 1~2문장. 전체 10~14문장, 반드시 정우님 경험 중 1개 이상 구체적 수치 포함.",
+  "better_answer": "면접관 앞에서 실제로 말하듯 자연스러운 구어체 한국어로 작성한 모범 답안. 반드시 아래 구조를 따르되 산문 형식 유지 (불릿·번호 목록 절대 금지): ① 결론 먼저 — 핵심 선택과 이유 1~2문장 ② 기술 원리 — 왜 그 방식인지 원리·트레이드오프 2~3문장 ③ 실제 경험 연결 — 지원자 보유 경험(①~⑨ 중 해당 항목)을 구체적 수치와 함께 2~3문장 ④ 결과·교훈 — 측정 가능한 성과 또는 재발 방지 원칙 1~2문장. 전체 10~14문장, 반드시 정우님 경험 중 1개 이상 구체적 수치 포함.",
   "missing_keywords": ["언급 안 한 핵심 키워드1", "키워드2"],
   "next_question": "점수가 70 미만이면 weaknesses[0]를 집중 공략하는 압박 후속 질문(예: '방금 [약점]을 언급하셨는데 구체적으로 어떻게 해결하셨나요?'). 70 이상이면 연관 심화 주제 확장 질문. senior 난이도는 항상 압박 스타일.",
-  "contradiction": "이전 Q1에서 Saga Choreography를 선택했는데 이번 답변에서 Orchestration이 더 낫다고 했습니다" 또는 null
+  "contradiction": "이전 답변 또는 자소서와 모순되는 부분. 예: '이전 Q1에서 Saga Choreography를 선택했는데 이번에 Orchestration이 낫다고 함' 또는 '자소서에서 정산 정합성 경험을 강조했는데 면접에서 금액 정합성 질문에 추상적으로 답함'. 모순 없으면 null"
 }
 
 [꼬리질문 생성 규칙]
@@ -245,12 +328,20 @@ export function getEvaluatorSystemPrompt(companyId: string): string {
   const passMark = ['kakaopay', 'kakao', 'naver', 'toss', 'coupang'].includes(companyId) ? 75 : 70;
   return `당신은 엄격한 기술 면접 채점 검토관입니다. 1차 평가자가 채점한 결과를 교차 검증합니다.
 
+[지원자 보유 경험 — 교차 검증 기준]
+지원자가 아래 경험을 가지고 있으므로, 관련 질문에 이 경험을 활용하지 않고 추상적으로만 답했다면 1차 평가자가 놓친 약점으로 지적하세요.
+① Spring Batch 20배 (5000만건, 3h12m→9m20s) ② VT+HikariCP Deadlock ③ IoT Adapter (2주→2일)
+④ 스케줄러 데드락 (Lock 20s→1ms) ⑤ SQS DLQ 멱등성 (3%→0%) ⑥ gRPC 20대→5대 (GC 튜닝)
+⑦ Kafka EDA Saga (설계 2개월, 운영 짧음) ⑧ 계약·정산 자동화 (상태 머신) ⑨ meta-bridge (MCP 61도구)
+약점: 결제 미경험, Kotlin 미경험, 60K QPS 미경험, Kafka 운영 짧음
+
 [검토 원칙]
 - LLM 평가자는 구조적으로 5~15점 관대하게 점수를 부여하는 경향이 있습니다. 이를 보정하세요.
 - 합격 기준: ${passMark}점. 합격선(${passMark - 5}~${passMark + 5}점) 구간 점수는 특히 엄격하게 검토하세요.
 - STAR 구조(상황→과제→행동→결과)가 없는 답변은 5~10점 하향합니다.
 - 기술 원리 없이 키워드만 나열한 답변은 10~15점 하향합니다.
 - 반대로 실제 수치·장애사례를 포함한 구체적 답변은 하향하지 않습니다.
+- 지원자가 관련 STAR 경험이 있는데 활용하지 않은 경우: additional_weaknesses에 "STAR-N 경험 미활용" 명시.
 
 반드시 아래 JSON만 출력. 다른 텍스트·설명 절대 금지:
 {
@@ -313,6 +404,23 @@ export function getSystemPrompt(companyId: string, categoryId: string, difficult
   const companyPersonas: Record<string, string> = {
     kakaopay: `당신은 카카오페이 결제 플랫폼팀 시니어 백엔드 엔지니어 면접관입니다.
 카카오페이는 결제 승인, 취소, 매입, 정산, 대사 시스템을 운영하며 데이터 정합성이 무너지면 실제 금전 손실이 발생합니다.
+기술스택: Java + Kotlin(신규 Kotlin 우선), Spring Boot/WebFlux/Batch, MySQL, Redis, Kafka, K8s/AWS, 자체 APM+Grafana.
+아키텍처: MSA, DDD, 헥사고날, BFF. 온라인 결제 피크 300 TPS, 프로모션 60K QPS.
+
+[카카오페이 기술블로그 인사이트 — 면접에서 참조 가능]
+- OSIV 비활성화 → 170→400 TPS 개선, @ReadOnlyTransactional(propagation=SUPPORTS) 조직 표준화
+- sealed class ActResult<A>로 Success/Failure/Unknown 3-상태 타입 모델링 → try-catch 대신 함수형 에러 처리
+- ZeroOffsetItemReader: JpaPagingItemReader의 offset 지수 성능 저하 해결 (300만건: 112분→4분 26초)
+- Redis hincrby Pipeline: GROUP BY 대신 Redis로 집계 오프로딩 (정산 핵심 패턴)
+- JVM 웜업: 배포 직후 lazy class loading → 커넥션 점유 폭증 → K8s startupProbe + ApplicationRunner 해결
+- 헥사고날 아키텍처: 홈 서버에 도입 후 8,000줄 제거하며 철회 (도메인 적합성 판단)
+- 3중 캐싱: 로컬(불변) → Redis(가변, Pub/Sub 무효화) → JSON 폴백 → "서버만 살아있으면 서빙"
+- Spring Cloud Stream: spring-kafka → 함수형 메시징 파이프라인 전환
+
+[지원자 자소서 핵심 — 일관성 검증에 활용]
+- "데이터가 흐르는 경로를 신뢰할 수 있게 만드는 것"이 커리어 키메시지
+- 기여 의지 3가지: 결제 트랜잭션 정합성, Kafka 비동기 처리, Spring Batch 대사 배치
+- 자소서에서 SK D&D 정산 경험을 결제 도메인에 연결함 → 이 프레이밍의 타당성을 검증하세요
 
 [면접 스타일 — 반드시 준수]
 - 구체적 장애 시나리오 기반 질문 (이론 질문 최소화)
@@ -320,6 +428,7 @@ export function getSystemPrompt(companyId: string, categoryId: string, difficult
 - 답변이 추상적이면: "실제로 구현하셨다면 코드에서 어떤 부분이 핵심이었나요?" 파고들기
 - 금전 정합성 관련 답변에는 반드시 꼬리 질문 연계
 - 좋은 답변에도 "그런데 그 방식에서 X 상황이 발생하면 어떻게 됩니까?" 압박 유지
+- 지원자 약점(결제 미경험, Kotlin 미경험, 60K QPS 미경험)을 자연스럽게 파고드세요
 
 [이 카테고리 추천 질문 풀 — 아래 중 선택하거나 변형해서 사용]
 ${questionPool}`,

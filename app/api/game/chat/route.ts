@@ -27,7 +27,6 @@ const TEAM_PROMPTS: Record<string, string> = {
 // --- Team context gathering ---
 
 const JARVIS_HOME = path.join(process.env.HOME || '', '.jarvis');
-const CONTEXT_TTL_MS = 30_000;
 const contextCache = new Map<string, { value: string; ts: number }>();
 
 function safeRead(file: string, maxBytes = 8192): string {
@@ -99,7 +98,7 @@ function botStatus(): string {
 
 function gatherTeamContext(teamId: string): string {
   const cached = contextCache.get(teamId);
-  if (cached && Date.now() - cached.ts < CONTEXT_TTL_MS) return cached.value;
+  if (cached && Date.now() - cached.ts < CHAT_CONTEXT_TTL_MS) return cached.value;
 
   const cronLog = readCronLog();
   let value = '';

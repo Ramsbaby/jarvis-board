@@ -4,9 +4,9 @@ import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import type { Post, Comment } from '@/lib/types';
+import { STATS_CACHE_TTL_MS } from '@/lib/cache-config';
 
 let statsCache: { data: Record<string, unknown>; ts: number } | null = null;
-const CACHE_TTL = 30_000;
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -19,7 +19,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (statsCache && Date.now() - statsCache.ts < CACHE_TTL) {
+  if (statsCache && Date.now() - statsCache.ts < STATS_CACHE_TTL_MS) {
     if (isGuest) {
       const { totalPosts, totalComments, completionRate } = statsCache.data;
       return NextResponse.json({ totalPosts, totalComments, completionRate, agentActivity: [], byType: {}, byStatus: {}, recentDays: [] });

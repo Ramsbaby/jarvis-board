@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
+import { BRIEFING_CACHE_TTL_MS } from '@/lib/cache-config';
 
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
@@ -768,7 +769,6 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
 // ── Route Handler ────────────────────────────────────────────────────────────
 
 const briefingCache: Record<string, { data: unknown; ts: number }> = {};
-const BRIEFING_TTL = 15_000;
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -777,9 +777,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `Unknown entity: ${id}` }, { status: 404 });
   }
 
-  // 15초 캐시
+  // 브리핑 캐시 (BRIEFING_CACHE_TTL_MS, 기본 15s)
   const cached = briefingCache[id];
-  if (cached && Date.now() - cached.ts < BRIEFING_TTL) {
+  if (cached && Date.now() - cached.ts < BRIEFING_CACHE_TTL_MS) {
     return NextResponse.json(cached.data);
   }
 

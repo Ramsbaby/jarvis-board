@@ -1,13 +1,14 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { execFile, execFileSync } from 'child_process';
-import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
+import { execFileSync } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
+import Anthropic from '@anthropic-ai/sdk';
 import { getDb } from '@/lib/db';
+import { checkAndConsume, getKey } from '@/lib/rate-limit';
+import { recordCost, getTodayCost, getDailyCap } from '@/lib/chat-cost';
+import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 
 const TEAM_PROMPTS: Record<string, string> = {
   ceo: '나는 Jarvis Company의 CEO(이정우)입니다. 전체 시스템 운영 현황을 파악하고 전략적 의사결정을 내립니다. 질문에 대표로서 답변합니다.',
@@ -184,47 +185,84 @@ function gatherTeamContext(teamId: string): string {
   return value;
 }
 
+// TODO(frontend): ChatPanel.tsx / VirtualOffice.tsx의 sendMessage는 SSE 파싱으로 전환 필요.
+// 응답은 JSON이 아닌 text/event-stream (data: {"token":"..."} / data: {"done":true,"id":N}).
+
+const MODEL = 'claude-sonnet-4-5';
+const MAX_TOKENS = 1200;
+
+const RATE_LIMIT = { perMin: 5, perDay: 50 };
+
+function sseHeaders(): HeadersInit {
+  return {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  };
+}
+
 export async function POST(req: NextRequest) {
+  let teamId: string;
+  let message: string;
   try {
-    const { teamId, message } = await req.json();
+    const body = await req.json();
+    teamId = body.teamId;
+    message = body.message;
+  } catch {
+    return NextResponse.json({ error: '잘못된 요청 본문입니다.' }, { status: 400 });
+  }
 
-    if (!teamId || !message) {
-      return NextResponse.json({ error: 'teamId와 message는 필수입니다.' }, { status: 400 });
+  if (!teamId || !message) {
+    return NextResponse.json({ error: 'teamId와 message는 필수입니다.' }, { status: 400 });
+  }
+
+  // Rate limit
+  const rlKey = getKey(req);
+  const rl = checkAndConsume(rlKey, RATE_LIMIT);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `요청이 너무 많습니다. ${rl.reason ?? ''}`.trim(), remaining: rl.remaining, resetAt: rl.resetAt },
+      { status: 429 },
+    );
+  }
+
+  // Cost cap
+  try {
+    const [today, cap] = await Promise.all([getTodayCost(), getDailyCap()]);
+    if (today >= cap) {
+      return NextResponse.json(
+        { error: `비용 상한 도달 (오늘 $${today.toFixed(4)} / 상한 $${cap.toFixed(2)})` },
+        { status: 429 },
+      );
     }
+  } catch (err) {
+    console.error('[game-chat] cost check failed:', err);
+    // 비용 파일 읽기 실패 시에는 통과 (hard-block 아님)
+  }
 
-    const systemPrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
-    const db = getDb();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
+  }
 
-    db.prepare('INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)').run(teamId, 'user', message);
+  const systemPrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
+  const db = getDb();
 
-    const recentMessages = db.prepare(
-      'SELECT role, content FROM game_chat WHERE team_id = ? ORDER BY created_at DESC LIMIT 6'
-    ).all(teamId) as Array<{ role: string; content: string }>;
+  db.prepare('INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)').run(teamId, 'user', message);
 
-    const conversationContext = recentMessages.reverse()
-      .map(m => `${m.role === 'user' ? '사용자' : '나'}: ${m.content}`)
-      .join('\n');
+  const recentMessages = db.prepare(
+    'SELECT role, content FROM game_chat WHERE team_id = ? ORDER BY created_at DESC LIMIT 6'
+  ).all(teamId) as Array<{ role: string; content: string }>;
 
-    const teamContext = gatherTeamContext(teamId);
+  const conversationContext = recentMessages.reverse()
+    .map(m => `${m.role === 'user' ? '사용자' : '나'}: ${m.content}`)
+    .join('\n');
 
-    let assistantContent: string;
-    const CLAUDE_BIN = process.env.CLAUDE_BINARY ||
-      (existsSync(`${process.env.HOME}/.local/bin/claude`) ? `${process.env.HOME}/.local/bin/claude` : 'claude');
+  const teamContext = gatherTeamContext(teamId);
+  const persona = systemPrompt.split('입니다')[0] + '입니다';
 
-    try {
-      const realHome = process.env.HOME || '/Users/ramsbaby';
-      const cleanEnv: Record<string, string> = {
-        HOME: realHome,
-        USER: process.env.USER || 'ramsbaby',
-        PATH: `${realHome}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
-        TERM: 'dumb',
-        LANG: 'en_US.UTF-8',
-      };
-
-      const persona = systemPrompt.split('입니다')[0] + '입니다';
-      const contextualMessage = `${systemPrompt}
-
-=== 오늘 팀의 실제 활동 데이터 ===
+  const userContent = `=== 오늘 팀의 실제 활동 데이터 ===
 ${teamContext || '(수집된 데이터 없음)'}
 
 === 이전 대화 ===
@@ -235,42 +273,100 @@ ${message}
 
 위 실제 데이터를 근거로 ${persona}의 입장에서 한국어로 답변하세요. 데이터에 없는 내용을 지어내지 마세요. 짧고 구체적으로. 절대 "이전 세션" 같은 말 하지 마세요.`;
 
-      const { stdout } = await execFileAsync(CLAUDE_BIN, [
-        '-p', contextualMessage,
-        '--output-format', 'text',
-        '--dangerously-skip-permissions',
-      ], {
-        timeout: 60_000,
-        encoding: 'utf8',
-        maxBuffer: 2 * 1024 * 1024,
-        cwd: '/tmp',
-        env: cleanEnv as unknown as NodeJS.ProcessEnv,
-      });
-      assistantContent = stdout.trim();
-    } catch (err: unknown) {
-      const e = err as { message?: string; stderr?: Buffer | string; status?: number; code?: string };
-      const stderrStr = e.stderr ? (Buffer.isBuffer(e.stderr) ? e.stderr.toString('utf8') : String(e.stderr)) : '';
-      const detail = stderrStr || e.message || String(err);
-      assistantContent = `잠시 응답을 처리하지 못했어요.\n상세: ${detail.slice(0, 400)}\nstatus=${e.status} code=${e.code}`;
-      console.error('[game-chat] claude error:', { message: e.message, stderr: stderrStr.slice(0, 500), status: e.status, code: e.code });
-    }
+  const anthropic = new Anthropic({ apiKey });
 
-    const result = db.prepare(
-      'INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)'
-    ).run(teamId, 'assistant', assistantContent);
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enc = new TextEncoder();
+      let fullText = '';
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let aborted = false;
 
-    const saved = db.prepare('SELECT * FROM game_chat WHERE id = ?').get(result.lastInsertRowid) as {
-      id: number; team_id: string; role: string; content: string; created_at: number;
-    };
+      const onAbort = () => {
+        aborted = true;
+      };
+      req.signal?.addEventListener('abort', onAbort);
 
-    return NextResponse.json({
-      id: saved.id,
-      role: saved.role,
-      content: saved.content,
-      created_at: saved.created_at,
-    });
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: errMsg }, { status: 500 });
-  }
+      try {
+        const claudeStream = anthropic.messages.stream({
+          model: MODEL,
+          max_tokens: MAX_TOKENS,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userContent }],
+        });
+
+        for await (const chunk of claudeStream) {
+          if (aborted) break;
+          if (chunk.type === 'message_start') {
+            // usage.input_tokens는 message_start 시점에 제공
+            const u = chunk.message?.usage;
+            if (u) {
+              inputTokens = u.input_tokens ?? 0;
+              outputTokens = u.output_tokens ?? 0;
+            }
+          } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            const token = chunk.delta.text;
+            fullText += token;
+            controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+          } else if (chunk.type === 'message_delta') {
+            const u = chunk.usage;
+            if (u) {
+              // message_delta의 output_tokens가 최종 값
+              outputTokens = u.output_tokens ?? outputTokens;
+            }
+          }
+        }
+
+        if (aborted) {
+          controller.close();
+          return;
+        }
+
+        // Persist assistant message
+        const result = db.prepare(
+          'INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)'
+        ).run(teamId, 'assistant', fullText);
+        const savedId = Number(result.lastInsertRowid);
+
+        // Record cost (best-effort)
+        try {
+          await recordCost({ model: MODEL, inputTokens, outputTokens });
+        } catch (costErr) {
+          console.error('[game-chat] recordCost failed:', costErr);
+        }
+
+        controller.enqueue(
+          enc.encode(`data: ${JSON.stringify({ done: true, id: savedId, usage: { inputTokens, outputTokens } })}\n\n`),
+        );
+        controller.close();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[game-chat] stream error:', msg);
+        try {
+          // 실패한 사용자 메시지에 대해 에러 컨텐츠도 assistant로 남겨서 UI 일관성 유지
+          if (fullText.length === 0) {
+            db.prepare('INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)')
+              .run(teamId, 'assistant', `응답 처리 중 오류: ${msg.slice(0, 200)}`);
+          }
+        } catch {
+          /* ignore persistence error */
+        }
+        try {
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ error: msg.slice(0, 500) })}\n\n`));
+        } catch {
+          /* controller may be closed */
+        }
+        try {
+          controller.close();
+        } catch {
+          /* ignore */
+        }
+      } finally {
+        req.signal?.removeEventListener('abort', onAbort);
+      }
+    },
+  });
+
+  return new Response(stream, { headers: sseHeaders() });
 }

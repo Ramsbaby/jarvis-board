@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
-import { BRIEFING_CACHE_TTL_MS } from '@/lib/cache-config';
+import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
@@ -777,9 +777,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `Unknown entity: ${id}` }, { status: 404 });
   }
 
-  // 브리핑 캐시 (BRIEFING_CACHE_TTL_MS, 기본 15s)
+  // 브리핑 캐시 (MAP_CACHE_TTL_MS, 기본 15s)
   const cached = briefingCache[id];
-  if (cached && Date.now() - cached.ts < BRIEFING_CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.ts < MAP_CACHE_TTL_MS) {
     return NextResponse.json(cached.data);
   }
 

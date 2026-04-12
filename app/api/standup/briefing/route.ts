@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { BRIEFING_CACHE_TTL_MS } from '@/lib/cache-config';
+import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 
 /**
  * 스탠드업홀(standup) 브리핑 — 매일 09:15 KST 전사 모닝 브리핑
@@ -77,7 +77,7 @@ interface StandupBriefing {
 let cache: { data: StandupBriefing; ts: number } | null = null;
 
 export async function GET() {
-  if (cache && Date.now() - cache.ts < BRIEFING_CACHE_TTL_MS) {
+  if (cache && Date.now() - cache.ts < MAP_CACHE_TTL_MS) {
     return NextResponse.json(cache.data);
   }
 

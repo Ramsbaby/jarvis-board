@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { BRIEFING_CACHE_TTL_MS } from '@/lib/cache-config';
+import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 
 /**
  * 사장실(president) 브리핑 — 대표님 전용 집무실
@@ -80,7 +80,7 @@ interface PresidentBriefing {
 let cache: { data: PresidentBriefing; ts: number } | null = null;
 
 export async function GET() {
-  if (cache && Date.now() - cache.ts < BRIEFING_CACHE_TTL_MS) {
+  if (cache && Date.now() - cache.ts < MAP_CACHE_TTL_MS) {
     return NextResponse.json(cache.data);
   }
 

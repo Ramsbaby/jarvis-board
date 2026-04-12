@@ -1,0 +1,112 @@
+export const runtime = 'nodejs';
+import { NextResponse } from 'next/server';
+import { readFileSync, readdirSync, existsSync } from 'fs';
+import { homedir } from 'os';
+import path from 'path';
+import { BRIEFING_CACHE_TTL_MS } from '@/lib/cache-config';
+
+/**
+ * 사장실(president) 브리핑 — 대표님 전용 집무실
+ *
+ * 데이터 소스:
+ *  - CEO 일일 요약 (ceo-daily-digest), 경영 점검 (council-insight) 크론 실행 결과
+ *  - 최신 board-minutes (전사 이사회 회의록)
+ *
+ * 인프라팀(태스크 #1)의 lib/map/rooms.ts 에서 president 방의 entityId를
+ * 이 엔드포인트로 매핑한다(해당 작업은 Wave 1 마지막에 함께 반영).
+ */
+
+const HOME = homedir();
+const JARVIS = path.join(HOME, '.jarvis');
+const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
+const BOARD_MINUTES_DIR = path.join(JARVIS, 'state', 'board-minutes');
+
+const PRESIDENT_KEYWORDS = ['ceo-daily-digest', 'council-insight', 'board-meeting', 'monthly-review'];
+
+interface CronEntry { time: string; task: string; result: string; message: string }
+
+function readSafe(p: string): string {
+  try { return readFileSync(p, 'utf8'); } catch { return ''; }
+}
+
+function parseRecent(keywords: string[], limit: number): CronEntry[] {
+  const raw = readSafe(CRON_LOG);
+  if (!raw) return [];
+  const LOG_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] (.+)$/;
+  const lines = raw.split('\n').filter(Boolean).slice(-3000);
+  const entries: CronEntry[] = [];
+  for (const line of lines) {
+    const m = line.match(LOG_RE);
+    if (!m) continue;
+    const [, ts, task, msg] = m;
+    if (/^task_\d+_/.test(task)) continue;
+    const lower = task.toLowerCase();
+    if (!keywords.some(kw => lower.includes(kw))) continue;
+    let result = 'unknown';
+    if (/\bDONE\b|\bSUCCESS\b/.test(line)) result = 'SUCCESS';
+    else if (/FAILED|ERROR|CRITICAL/.test(line)) result = 'FAILED';
+    else if (/\bSKIPPED\b/.test(line)) result = 'SKIPPED';
+    else if (/\bSTARTED?\b|\bRUNNING\b/.test(line)) result = 'RUNNING';
+    if (result !== 'unknown') entries.push({ time: ts, task, result, message: msg.slice(0, 120) });
+  }
+  return entries.reverse().slice(0, limit);
+}
+
+function getLatestBoardMinutes(): { filename: string; excerpt: string } | null {
+  try {
+    if (!existsSync(BOARD_MINUTES_DIR)) return null;
+    const files = readdirSync(BOARD_MINUTES_DIR).filter(f => f.endsWith('.md')).sort().reverse();
+    if (files.length === 0) return null;
+    const content = readFileSync(path.join(BOARD_MINUTES_DIR, files[0]), 'utf8');
+    const excerpt = content.split('\n').slice(0, 30).join('\n').slice(0, 800);
+    return { filename: files[0], excerpt };
+  } catch { return null; }
+}
+
+// ── Route Handler ────────────────────────────────────────────────────────────
+
+interface PresidentBriefing {
+  type: 'president';
+  id: 'president';
+  name: string;
+  title: string;
+  avatar: string;
+  summary: string;
+  recentActivity: CronEntry[];
+  lastBoardMinutes: { filename: string; excerpt: string } | null;
+  updatedAt: string;
+}
+
+let cache: { data: PresidentBriefing; ts: number } | null = null;
+
+export async function GET() {
+  if (cache && Date.now() - cache.ts < BRIEFING_CACHE_TTL_MS) {
+    return NextResponse.json(cache.data);
+  }
+
+  const recent = parseRecent(PRESIDENT_KEYWORDS, 10);
+  const boardMinutes = getLatestBoardMinutes();
+
+  const successCount = recent.filter(r => r.result === 'SUCCESS').length;
+  const failedCount = recent.filter(r => r.result === 'FAILED').length;
+  const summary = recent.length === 0
+    ? '오늘은 아직 보고된 CEO/경영 점검 이벤트가 없어요.'
+    : failedCount === 0
+      ? `최근 CEO·경영 보고 ${successCount}건이 모두 정상 전달됐습니다.`
+      : `최근 ${recent.length}건 중 ${failedCount}건에서 문제가 발생했습니다. 확인이 필요해요.`;
+
+  const data: PresidentBriefing = {
+    type: 'president',
+    id: 'president',
+    name: '사장실',
+    title: '대표님(이정우) 전용 집무실',
+    avatar: '🏛️',
+    summary,
+    recentActivity: recent,
+    lastBoardMinutes: boardMinutes,
+    updatedAt: new Date().toISOString(),
+  };
+
+  cache = { data, ts: Date.now() };
+  return NextResponse.json(data);
+}

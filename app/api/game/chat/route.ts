@@ -96,6 +96,251 @@ function botStatus(): string {
   return pid ? `running (PID ${pid.split('\n')[0]})` : 'down';
 }
 
+// ── 팀 뇌를 만드는 도우미들 ─────────────────────────────────────
+
+interface TaskDefFull {
+  id: string;
+  name?: string;
+  description?: string;
+  schedule?: string;
+  prompt?: string;
+  script?: string;
+  discordChannel?: string;
+  priority?: string;
+  enabled?: boolean;
+  disabled?: boolean;
+}
+
+let tasksJsonCache: { data: TaskDefFull[]; ts: number } | null = null;
+function loadTasksJson(): TaskDefFull[] {
+  if (tasksJsonCache && Date.now() - tasksJsonCache.ts < 15_000) return tasksJsonCache.data;
+  try {
+    const raw = readFileSync(path.join(JARVIS_HOME, 'config', 'tasks.json'), 'utf8');
+    const parsed = JSON.parse(raw) as { tasks?: TaskDefFull[] };
+    const list = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    tasksJsonCache = { data: list, ts: Date.now() };
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+function teamOwnedTasks(keywords: string[]): TaskDefFull[] {
+  if (keywords.length === 0) return [];
+  const tasks = loadTasksJson();
+  const kwLower = keywords.map(k => k.toLowerCase());
+  return tasks.filter(t => {
+    if (t.disabled || t.enabled === false) return false;
+    const id = (t.id || '').toLowerCase();
+    return kwLower.some(kw => id.includes(kw));
+  });
+}
+
+function cronStats24h(keywords: string[], cronLog: string): { total: number; success: number; failed: number; skipped: number; rate: number } {
+  if (!cronLog || keywords.length === 0) return { total: 0, success: 0, failed: 0, skipped: 0, rate: 0 };
+  const re = new RegExp(keywords.join('|'), 'i');
+  const cutoffMs = Date.now() - 24 * 3600_000;
+  const lines = cronLog.split('\n').filter(Boolean).slice(-3000);
+  let success = 0, failed = 0, skipped = 0;
+  for (const line of lines) {
+    const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\]/);
+    if (!m) continue;
+    const [, ts, task] = m;
+    if (/^task_\d+_/.test(task)) continue;
+    if (!re.test(task)) continue;
+    const tsMs = Date.parse(ts + '+09:00');
+    if (!isNaN(tsMs) && tsMs < cutoffMs) continue;
+    if (/\bSUCCESS\b|\bDONE\b/.test(line)) success++;
+    else if (/FAILED|ERROR|CRITICAL/.test(line)) failed++;
+    else if (/\bSKIPPED\b/.test(line)) skipped++;
+  }
+  const total = success + failed;
+  return { total, success, failed, skipped, rate: total > 0 ? Math.round((success / total) * 100) : 0 };
+}
+
+function cronStats7d(keywords: string[], cronLog: string): { days: number; success: number; failed: number; rate: number; dailyAvg: number } {
+  if (!cronLog || keywords.length === 0) return { days: 7, success: 0, failed: 0, rate: 0, dailyAvg: 0 };
+  const re = new RegExp(keywords.join('|'), 'i');
+  const cutoffMs = Date.now() - 7 * 86400_000;
+  const lines = cronLog.split('\n').filter(Boolean);
+  let success = 0, failed = 0;
+  for (const line of lines) {
+    const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\]/);
+    if (!m) continue;
+    if (/^task_\d+_/.test(m[2])) continue;
+    if (!re.test(m[2])) continue;
+    const tsMs = Date.parse(m[1] + '+09:00');
+    if (!isNaN(tsMs) && tsMs < cutoffMs) continue;
+    if (/\bSUCCESS\b|\bDONE\b/.test(line)) success++;
+    else if (/FAILED|ERROR|CRITICAL/.test(line)) failed++;
+  }
+  const total = success + failed;
+  return { days: 7, success, failed, rate: total > 0 ? Math.round((success / total) * 100) : 0, dailyAvg: Math.round(total / 7) };
+}
+
+function listCircuitBreakers(keywords: string[]): string {
+  const dir = path.join(JARVIS_HOME, 'state', 'circuit-breaker');
+  if (!existsSync(dir)) return '';
+  try {
+    const files = readdirSync(dir).filter(f => f.endsWith('.json'));
+    const kwLower = keywords.map(k => k.toLowerCase());
+    const hits: string[] = [];
+    for (const f of files) {
+      const taskId = f.replace('.json', '');
+      const tidLower = taskId.toLowerCase();
+      if (keywords.length > 0 && !kwLower.some(kw => tidLower.includes(kw))) continue;
+      try {
+        const data = JSON.parse(readFileSync(path.join(dir, f), 'utf8')) as {
+          failures?: number; state?: string; cooldownUntil?: string; lastFailureAt?: string;
+        };
+        if ((data.failures || 0) >= 2) {
+          const parts = [`- ${taskId}: ${data.failures}회 연속 실패`];
+          if (data.state) parts.push(`state=${data.state}`);
+          if (data.lastFailureAt) parts.push(`마지막실패=${data.lastFailureAt}`);
+          if (data.cooldownUntil) parts.push(`쿨다운해제=${data.cooldownUntil}`);
+          hits.push(parts.join(', '));
+        }
+      } catch { /* skip */ }
+    }
+    return hits.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+function recentResultsFor(taskId: string, maxFiles = 2, maxBytesPerFile = 1500): string {
+  const dir = path.join(JARVIS_HOME, 'results', taskId);
+  if (!existsSync(dir)) return '';
+  try {
+    const files = readdirSync(dir)
+      .filter(f => f.endsWith('.md') || f.endsWith('.txt'))
+      .map(f => ({ f, t: statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)
+      .slice(0, maxFiles);
+    const snippets: string[] = [];
+    for (const { f } of files) {
+      const content = safeRead(path.join(dir, f), maxBytesPerFile);
+      if (!content) continue;
+      snippets.push(`▼ ${f}:\n${tailLines(content, 15).slice(-maxBytesPerFile)}`);
+    }
+    return snippets.join('\n\n');
+  } catch {
+    return '';
+  }
+}
+
+// 팀의 여러 태스크 중 최신 산출물이 있는 것만 2~3개 샘플
+function sampleRecentResults(ownedTasks: TaskDefFull[], maxSamples = 2): string {
+  if (ownedTasks.length === 0) return '';
+  // results/ 디렉토리가 존재하는 태스크 우선
+  const candidates: Array<{ id: string; mtime: number }> = [];
+  for (const t of ownedTasks) {
+    const dir = path.join(JARVIS_HOME, 'results', t.id);
+    if (!existsSync(dir)) continue;
+    try {
+      const files = readdirSync(dir).filter(f => f.endsWith('.md') || f.endsWith('.txt'));
+      if (files.length === 0) continue;
+      const latestMtime = Math.max(...files.map(f => {
+        try { return statSync(path.join(dir, f)).mtimeMs; } catch { return 0; }
+      }));
+      candidates.push({ id: t.id, mtime: latestMtime });
+    } catch { /* skip */ }
+  }
+  candidates.sort((a, b) => b.mtime - a.mtime);
+  const picked = candidates.slice(0, maxSamples);
+  if (picked.length === 0) return '';
+  const sections: string[] = [];
+  for (const p of picked) {
+    const snippet = recentResultsFor(p.id, 1, 1200);
+    if (snippet) sections.push(`[${p.id}]\n${snippet}`);
+  }
+  return sections.join('\n\n');
+}
+
+function upcomingSchedulesFor(ownedTasks: TaskDefFull[]): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 3600_000);
+  const hour = kst.getUTCHours();
+  const minute = kst.getUTCMinutes();
+  const items: string[] = [];
+  for (const t of ownedTasks.slice(0, 30)) {
+    if (!t.schedule) continue;
+    // cron expression의 "M H DoM Mon DoW" — 단순 시간 추출만
+    const parts = t.schedule.split(/\s+/);
+    if (parts.length >= 2) {
+      const mm = parts[0];
+      const hh = parts[1];
+      // 지금보다 이후인지 대강 체크 (오늘 남은 실행만)
+      const hhNum = parseInt(hh);
+      if (!isNaN(hhNum) && (hhNum > hour || (hhNum === hour && parseInt(mm) > minute))) {
+        items.push(`- ${t.id}: ${t.schedule}${t.name ? ` (${t.name})` : ''}`);
+      }
+    }
+  }
+  return items.slice(0, 8).join('\n');
+}
+
+function buildRichBase(teamId: string, keywords: string[], cronLog: string): string {
+  if (keywords.length === 0) return '';
+  const sections: string[] = [];
+
+  // 1. 책임 태스크 전수
+  const owned = teamOwnedTasks(keywords);
+  if (owned.length > 0) {
+    const taskLines = owned.slice(0, 20).map(t => {
+      const bits: string[] = [`- ${t.id}`];
+      if (t.schedule) bits.push(`스케줄:${t.schedule}`);
+      if (t.script) bits.push('[script]');
+      else if (t.prompt) bits.push('[LLM]');
+      if (t.priority) bits.push(`우선:${t.priority}`);
+      let line = bits.join(' · ');
+      const caption = t.name || t.description;
+      if (caption) line += `\n    → ${caption.replace(/\s+/g, ' ').slice(0, 140)}`;
+      return line;
+    });
+    sections.push(`## 책임 태스크 (${owned.length}개)\n${taskLines.join('\n')}${owned.length > 20 ? `\n... 외 ${owned.length - 20}개` : ''}`);
+  }
+
+  // 2. 24h 통계
+  const s24 = cronStats24h(keywords, cronLog);
+  const s7d = cronStats7d(keywords, cronLog);
+  if (s24.total > 0 || s7d.success + s7d.failed > 0) {
+    sections.push(`## 실행 통계\n- 최근 24h: 전체 ${s24.total}건 / 성공 ${s24.success}건 / 실패 ${s24.failed}건 / 스킵 ${s24.skipped}건 / 성공률 ${s24.rate}%\n- 최근 7d: 성공 ${s7d.success}건 / 실패 ${s7d.failed}건 / 성공률 ${s7d.rate}% / 일평균 ${s7d.dailyAvg}건`);
+  }
+
+  // 3. 최근 24h cron.log 스니펫 (팀 관련 라인만)
+  const crons = grepLines(cronLog, keywords, 15);
+  if (crons) {
+    sections.push(`## 최근 24h cron.log\n${crons}`);
+  }
+
+  // 4. 실패 원인 상세 (stderr tail 포함)
+  const failures = gatherFailureDetails(keywords, cronLog);
+  if (failures) {
+    sections.push(`## 현재 실패 중인 작업 (stderr 포함)\n${failures}`);
+  }
+
+  // 5. 서킷브레이커
+  const cbs = listCircuitBreakers(keywords);
+  if (cbs) {
+    sections.push(`## 연속 실패 / 서킷브레이커 상태\n${cbs}`);
+  }
+
+  // 6. 최근 산출물
+  const results = sampleRecentResults(owned, 2);
+  if (results) {
+    sections.push(`## 최근 산출물 (샘플)\n${results}`);
+  }
+
+  // 7. 오늘 남은 예정 실행
+  const upcoming = upcomingSchedulesFor(owned);
+  if (upcoming) {
+    sections.push(`## 오늘 남은 예정 실행\n${upcoming}`);
+  }
+
+  return sections.join('\n\n');
+}
+
 // 팀 키워드 → 최근 실패 태스크 + stderr 세부 원인 수집
 function gatherFailureDetails(keywords: string[], cronLog: string, maxTasks = 3): string {
   if (!cronLog) return '';
@@ -168,89 +413,92 @@ function gatherTeamContext(teamId: string): string {
 
   switch (teamId) {
     case 'infra-lead': {
-      const kw = ['infra-daily', 'system-doctor', 'system-health', 'disk-alert', 'scorecard-enforcer', 'glances'];
-      const crons = grepLines(cronLog, kw, 15);
+      const kw = TEAM_KEYWORDS['infra-lead'];
+      const base = buildRichBase(teamId, kw, cronLog);
       const minutesFile = latestFileIn(path.join(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
       const minutes = minutesFile ? safeRead(minutesFile, 4000) : '';
-      const infraSection = grepLines(minutes, ['인프라', 'Infra', 'infra'], 10);
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `오늘 실행된 인프라 크론 (최근):\n${crons || '(없음)'}\n\n현재 시스템 상태:\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}\n\n보드 미팅 인프라 섹션:\n${infraSection || '(없음)'}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      const infraSection = grepLines(minutes, ['인프라', 'Infra', 'infra', 'SRE', '디스크', '서버'], 10);
+      const extras: string[] = [];
+      extras.push(`## 실시간 시스템 상태\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}`);
+      if (infraSection) extras.push(`## 최근 이사회 인프라 섹션\n${infraSection}`);
+      value = `${base}\n\n${extras.join('\n\n')}`;
       break;
     }
     case 'finance': {
-      // 재무실 — market/tqqq/cost/preply 통합
-      const kw = ['tqqq-monitor', 'market-alert', 'finance-monitor', 'macro-briefing', 'cost-monitor'];
-      const marketCrons = grepLines(cronLog, kw, 10);
-      const costCrons = grepLines(cronLog, ['cost-monitor'], 5);
+      const kw = TEAM_KEYWORDS.finance;
+      const base = buildRichBase(teamId, kw, cronLog);
       const preplyDir = path.join(JARVIS_HOME, 'results', 'personal-schedule-daily');
       const preplyFile = latestFileIn(preplyDir, /\.md$/);
       const preplyContent = preplyFile ? safeRead(preplyFile, 2000) : '';
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `시장/재무 크론 최근:\n${marketCrons || '(없음)'}\n\n비용 모니터:\n${costCrons || '(없음)'}\n\nPreply 수입 (오늘):\n${tailLines(preplyContent, 15) || '(없음)'}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      const tqqqDir = path.join(JARVIS_HOME, 'results', 'tqqq-monitor');
+      const tqqqFile = latestFileIn(tqqqDir, /\.md$/);
+      const tqqqContent = tqqqFile ? safeRead(tqqqFile, 1500) : '';
+      const extras: string[] = [];
+      if (preplyContent) extras.push(`## 최근 Preply 수입 리포트\n${tailLines(preplyContent, 15)}`);
+      if (tqqqContent) extras.push(`## 최근 TQQQ 모니터\n${tailLines(tqqqContent, 12)}`);
+      value = `${base}${extras.length > 0 ? '\n\n' + extras.join('\n\n') : ''}`;
       break;
     }
     case 'trend-lead': {
-      // 재무 계열 제거, 순수 트렌드/뉴스/GitHub만
-      const kw = ['news-briefing', 'github-monitor', 'trend', 'recon'];
-      const crons = grepLines(cronLog, kw, 15);
+      const kw = TEAM_KEYWORDS['trend-lead'];
+      const base = buildRichBase(teamId, kw, cronLog);
       const reportFile = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^trend.*\.md$/);
       const report = reportFile ? safeRead(reportFile, 3000) : '';
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `오늘 전략기획실 크론 활동:\n${crons || '(없음)'}\n\n최근 트렌드 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      const extras: string[] = [];
+      if (report) extras.push(`## 최근 트렌드 리포트 (${path.basename(reportFile)})\n${tailLines(report, 25)}`);
+      value = `${base}${extras.length > 0 ? '\n\n' + extras.join('\n\n') : ''}`;
       break;
     }
     case 'record-lead': {
-      const kw = ['record-daily', 'memory', 'session-sum', 'compact'];
-      const crons = grepLines(cronLog, kw, 15);
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `오늘 데이터실(백엔드) 크론 활동:\n${crons || '(없음)'}\n\n사용자 검색 UI는 라이브러리 소관${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      const kw = TEAM_KEYWORDS['record-lead'];
+      const base = buildRichBase(teamId, kw, cronLog);
+      value = `${base}\n\n## 데이터실 경계\n- 백엔드(인덱싱/아카이빙/정리)는 나의 소관\n- 사용자 검색 UI는 자료실(library / 문지아) 소관`;
       break;
     }
     case 'library': {
-      // 라이브러리 — RAG 인덱스 + 메모리
-      const kw = ['rag-index', 'rag-bench'];
-      const ragCrons = grepLines(cronLog, kw, 10);
+      const kw = TEAM_KEYWORDS.library;
+      const base = buildRichBase(teamId, kw, cronLog);
       const ragData = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'rag', 'data')]);
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `RAG 인덱싱 활동:\n${ragCrons || '(없음)'}\n\nRAG 데이터 크기:\n${ragData || 'unknown'}\n\n*데이터실이 관리하는 백엔드를 사용자 접근 레이어로 제공*${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      value = `${base}\n\n## RAG 데이터 물리 크기\n${ragData || 'unknown'}\n\n## 자료실의 포지션\n- 데이터실(한소희)이 쌓은 RAG 인덱스·메모리 파일을 오너가 검색·탐색하도록 돕는 프론트엔드 레이어`;
       break;
     }
     case 'growth-lead': {
-      // 성장실 — 커리어 + 학습 통합
-      const kw = ['career', 'commitment', 'interview', 'job', 'academy', 'learning', 'study'];
-      const careerCrons = grepLines(cronLog, ['career', 'commitment', 'interview', 'job'], 10);
-      const academyCrons = grepLines(cronLog, ['academy', 'learning', 'study'], 10);
+      const kw = TEAM_KEYWORDS['growth-lead'];
+      const base = buildRichBase(teamId, kw, cronLog);
       const careerReport = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^career.*\.md$/);
       const academyReport = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^academy.*\.md$/);
       const careerContent = careerReport ? safeRead(careerReport, 2000) : '';
       const academyContent = academyReport ? safeRead(academyReport, 2000) : '';
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `커리어 크론:\n${careerCrons || '(없음)'}\n\n학습 크론:\n${academyCrons || '(없음)'}\n\n커리어 리포트:\n${tailLines(careerContent, 12) || '(없음)'}\n\n학습 리포트:\n${tailLines(academyContent, 12) || '(없음)'}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      const extras: string[] = [];
+      if (careerContent) extras.push(`## 최근 커리어 리포트 (${path.basename(careerReport)})\n${tailLines(careerContent, 15)}`);
+      if (academyContent) extras.push(`## 최근 학습 리포트 (${path.basename(academyReport)})\n${tailLines(academyContent, 15)}`);
+      value = `${base}${extras.length > 0 ? '\n\n' + extras.join('\n\n') : ''}`;
       break;
     }
     case 'brand-lead': {
-      const kw = ['brand', 'openclaw', 'blog', 'oss', 'github-star'];
-      const crons = grepLines(cronLog, kw, 15);
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `오늘 마케팅실 크론 활동:\n${crons || '(없음)'}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      const kw = TEAM_KEYWORDS['brand-lead'];
+      value = buildRichBase(teamId, kw, cronLog);
       break;
     }
     case 'audit-lead': {
-      const kw = ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'];
-      const crons = grepLines(cronLog, kw, 15);
+      const kw = TEAM_KEYWORDS['audit-lead'];
+      const base = buildRichBase(teamId, kw, cronLog);
       const stats = cronStats(cronLog);
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `오늘 QA실 크론 활동:\n${crons || '(없음)'}\n\n오늘 전체 크론 통계:\n- 총 실행 라인: ${stats.total}\n- 실패/에러 라인: ${stats.fail}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+      value = `${base}\n\n## 전사 크론 통계 (QA 감시)\n- 오늘 총 실행 라인: ${stats.total}\n- 실패/에러 라인: ${stats.fail}`;
       break;
     }
     case 'president': {
-      // 대표실 — AI 경영 데이터 + 오너 개인 데이터 통합
+      const kw = TEAM_KEYWORDS.president;
+      const base = buildRichBase(teamId, kw, cronLog);
       const minutesFile = latestFileIn(path.join(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
       const minutes = minutesFile ? safeRead(minutesFile, 5000) : '';
       const contextBus = safeRead(path.join(JARVIS_HOME, 'state', 'context-bus.md'), 3000);
       const stats = cronStats(cronLog);
-      const commits = grepLines(cronLog, ['board-meeting', 'ceo-daily-digest', 'council'], 8);
-      value = `자비스 AI 경영 최근 활동:\n${commits || '(없음)'}\n\n최근 보드 미팅${minutesFile ? ` (${path.basename(minutesFile)})` : ''}:\n${tailLines(minutes, 30) || '(없음)'}\n\n컨텍스트 버스:\n${tailLines(contextBus, 20) || '(없음)'}\n\n오늘 전체 통계:\n- 크론 실행: ${stats.total}\n- 실패: ${stats.fail}\n- 디스크: ${diskUsage()}\n- Discord 봇: ${botStatus()}`;
+      const extras: string[] = [];
+      extras.push(`## 전사 운영 스냅샷\n- 오늘 크론 실행: ${stats.total}\n- 실패/에러: ${stats.fail}\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}`);
+      if (minutes) extras.push(`## 최근 이사회 회의록 (${path.basename(minutesFile)})\n${tailLines(minutes, 35)}`);
+      if (contextBus) extras.push(`## 컨텍스트 버스 (전사 상태 공유)\n${tailLines(contextBus, 20)}`);
+      value = `${base}\n\n${extras.join('\n\n')}`;
       break;
     }
     case 'cron-engine': {
@@ -271,23 +519,18 @@ function gatherTeamContext(teamId: string): string {
     }
     case 'secretary': {
       const kw = TEAM_KEYWORDS.secretary;
-      const crons = grepLines(cronLog, kw, 15);
-      const failures = gatherFailureDetails(kw, cronLog);
-      value = `Discord 봇 상태: ${botStatus()}\n\n봇 품질 자가 점검 최근 활동:\n${crons || '(없음)'}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}\n\n* 컨시어지는 /ask, /logs, /brief 등 Discord 슬래시 명령으로 언제든 호출 가능합니다.`;
+      const base = buildRichBase(teamId, kw, cronLog);
+      value = `${base}\n\n## 컨시어지 운영 현황\n- Discord 봇: ${botStatus()}\n- 상시 대응: /ask, /logs, /brief, /status 등 슬래시 명령\n- 소관: 봇 품질 자가 점검, 응답 로깅, 스킬 평가`;
       break;
     }
     default: {
-      // ── 범용 fallback: 팀 키워드 맵에서 찾아 동적으로 수집 ──
+      // 팀 키워드가 있으면 풀 rich base, 없으면 시스템 스냅샷
       const kw = TEAM_KEYWORDS[teamId] || [];
       if (kw.length > 0) {
-        const crons = grepLines(cronLog, kw, 15);
-        const failures = gatherFailureDetails(kw, cronLog);
-        const stats = cronStats(cronLog);
-        value = `오늘 ${teamId} 팀 크론 활동 (키워드: ${kw.slice(0, 5).join(', ')}):\n${crons || '(최근 24h 이력 없음)'}\n\n오늘 전체 크론 통계:\n- 총 실행 라인: ${stats.total}\n- 실패/에러: ${stats.fail}${failures ? `\n\n=== 최근 24h 실패 원인 상세 ===\n${failures}` : ''}`;
+        value = buildRichBase(teamId, kw, cronLog);
       } else {
-        // 정말 키워드도 없는 팀 — 전체 시스템 스냅샷이라도 제공
         const stats = cronStats(cronLog);
-        value = `${teamId} 팀의 고유 키워드가 등록되어 있지 않습니다.\n\n대신 전체 시스템 스냅샷:\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}\n- 오늘 크론 실행: ${stats.total}\n- 실패/에러: ${stats.fail}\n- 최근 cron.log:\n${tailLines(cronLog, 10)}`;
+        value = `## ${teamId} 팀의 고유 크론 키워드가 아직 등록되지 않았습니다\n\n## 전사 시스템 스냅샷\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}\n- 오늘 크론 실행: ${stats.total}\n- 실패/에러: ${stats.fail}\n\n## 최근 cron.log (아무 필터 없음)\n${tailLines(cronLog, 10)}`;
       }
     }
   }

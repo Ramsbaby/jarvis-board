@@ -8,14 +8,15 @@ import {
   buildCollisionMap, aStarPath,
 } from '@/lib/map/rooms';
 import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
-import { drawRoomFurniture, drawDecorations } from '@/lib/map/canvas-draw';
+import { drawRoomFurniture, drawDecorations, drawLightShafts, drawCafeCorner, updateAndDrawDust, initDustParticles, type DustParticle } from '@/lib/map/canvas-draw';
 import TeamBriefingPopup from '@/components/map/TeamBriefingPopup';
 import CronGridPopup from '@/components/map/CronGridPopup';
 import CronDetailPopup from '@/components/map/CronDetailPopup';
 import MobileControls from '@/components/map/MobileControls';
 import BoardBanner from '@/components/map/BoardBanner';
 import CronToastStack from '@/components/map/CronToastStack';
-import CostMeter from '@/components/map/CostMeter';
+import Statusline from '@/components/map/Statusline';
+import RightInfoPanels from '@/components/map/RightInfoPanels';
 import DashboardTable from '@/components/map/DashboardTable';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -73,6 +74,7 @@ export default function VirtualOffice() {
   const logicalSizeRef = useRef({ w: 1280, h: 800 });
   // 발자국 이펙트
   const footstepsRef = useRef<{ x: number; y: number; life: number }[]>([]);
+  const dustRef = useRef<DustParticle[] | null>(null);
   // 구역 진입 토스트 (캔버스 레이어)
   const zoneToastRef = useRef<{ text: string; color: string; emoji: string; frame: number } | null>(null);
   const lastNearbyIdRef = useRef<string | null>(null);
@@ -1478,6 +1480,16 @@ export default function VirtualOffice() {
       // Decorations
       drawDecorations(ctx!, camX, camY, frameCountRef.current);
 
+      // 중앙 카페 코너 (lounge area) — 바둑판 느낌 탈피
+      drawCafeCorner(ctx!, camX, camY, frameCountRef.current);
+
+      // 천장 빛줄기 (ambient diagonal light shafts)
+      drawLightShafts(ctx!, camX, camY, frameCountRef.current);
+
+      // 먼지 파티클 (ambient motes)
+      if (!dustRef.current) dustRef.current = initDustParticles(40, COLS, ROWS);
+      updateAndDrawDust(ctx!, dustRef.current, camX, camY, COLS, ROWS);
+
       // ── 시간대별 mood overlay (KST) ──
       // 캔버스 전체에 얇은 컬러 레이어로 시간감 부여 (드로잉 완료 후 맨 위)
       {
@@ -1979,11 +1991,14 @@ export default function VirtualOffice() {
       {/* 우상단 Board 배너 (오늘 회의록 KPI) */}
       {viewMode === 'map' && <BoardBanner />}
 
+      {/* 우상단 2차 정보 패널 (예정 크론 + 최근 커밋) */}
+      {viewMode === 'map' && <RightInfoPanels isMobile={isMobile} />}
+
       {/* 좌하단 실시간 크론 이벤트 토스트 (SSE) */}
       {viewMode === 'map' && <CronToastStack />}
 
-      {/* 좌상단 Claude 비용 메터 */}
-      <CostMeter isMobile={isMobile} />
+      {/* 좌상단 통합 statusline (Claude/CPU/RAM/Disk/Cron 24h) */}
+      <Statusline isMobile={isMobile} />
 
       {/* ── 게임 인트로 오버레이 ── */}
       {showIntro && (

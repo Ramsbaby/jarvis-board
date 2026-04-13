@@ -294,62 +294,7 @@ export default function CronDetailPopup({
             );
           })()}
 
-          {/* 토큰 사용량 감지 (LLM 크론 전용) */}
-          {cronPopup.hasLLM && (() => {
-            // lastMessage + recentRuns에서 토큰 수 추출
-            const allMsgs = [cronPopup.lastMessage, ...cronPopup.recentRuns.map(r => r.message)].filter(Boolean);
-            const tokenEntries: Array<{ label: string; input?: number; output?: number; total?: number }> = [];
-            for (const msg of allMsgs) {
-              // 패턴: input_tokens=123 output_tokens=456 / tokens: 789 / total_tokens: 123
-              const inputM = msg.match(/input[_\s]tokens?[=:]\s*(\d+)/i);
-              const outputM = msg.match(/output[_\s]tokens?[=:]\s*(\d+)/i);
-              const totalM = msg.match(/total[_\s]tokens?[=:]\s*(\d+)/i) || msg.match(/tokens?[=:]\s*(\d+)/i);
-              if (inputM || outputM || totalM) {
-                tokenEntries.push({
-                  label: msg === cronPopup.lastMessage ? '최근 실행' : '이전 실행',
-                  input: inputM ? parseInt(inputM[1]) : undefined,
-                  output: outputM ? parseInt(outputM[1]) : undefined,
-                  total: totalM ? parseInt(totalM[1]) : undefined,
-                });
-                if (tokenEntries.length >= 3) break;
-              }
-            }
-            if (tokenEntries.length === 0) return null;
-            // 최근 total 기준 비용 추산 (Claude Sonnet 3.7: ~$3/$15 per 1M)
-            const latest = tokenEntries[0];
-            const inputCost = latest.input ? (latest.input / 1_000_000 * 3).toFixed(4) : null;
-            const outputCost = latest.output ? (latest.output / 1_000_000 * 15).toFixed(4) : null;
-            const approxCost = inputCost && outputCost
-              ? `~$${(parseFloat(inputCost) + parseFloat(outputCost)).toFixed(4)}`
-              : null;
-            return (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>🪙 토큰 사용량</div>
-                <div style={{
-                  padding: '12px 14px', background: '#0d0b1e',
-                  border: '1px solid #7c3aed25', borderLeft: '3px solid #7c3aed50',
-                  borderRadius: 10,
-                }}>
-                  {tokenEntries.map((te, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: i < tokenEntries.length - 1 ? 6 : 0 }}>
-                      <span style={{ fontSize: 10, color: '#4b5563', minWidth: 60 }}>{te.label}</span>
-                      {te.input !== undefined && <span style={{ fontSize: 11, color: '#a78bfa' }}>IN {te.input.toLocaleString()}</span>}
-                      {te.output !== undefined && <span style={{ fontSize: 11, color: '#c4b5fd' }}>OUT {te.output.toLocaleString()}</span>}
-                      {te.total !== undefined && !te.input && <span style={{ fontSize: 11, color: '#a78bfa' }}>TOTAL {te.total.toLocaleString()}</span>}
-                    </div>
-                  ))}
-                  {approxCost && (
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #7c3aed20', fontSize: 11, color: '#6b7280' }}>
-                      추산 비용(최근 1회) {approxCost}
-                      <span style={{ color: '#374151', marginLeft: 6, fontSize: 10 }}>Sonnet 기준</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* 🤖 LLM 토큰 점검 (hasLLM 크론만) */}
+          {/* 🤖 LLM 토큰 점검 (hasLLM 크론만) — 중복 섹션 제거됨, 아래 통합 섹션 하나만 유지 */}
           {cronPopup.hasLLM && (() => {
             // 최근 이력 전체에서 토큰 정보 탐색
             const allMsgs = [

@@ -6,6 +6,7 @@
 import React from 'react';
 import { ROOMS, ROOM_TO_CRON_TEAM, statusExplanation, activityIcon } from '@/lib/map/rooms';
 import type { BriefingData, CronItem } from '@/lib/map/rooms';
+import { cronToHuman } from '@/lib/map/cron-human';
 import MarkdownContent from '@/components/MarkdownContent';
 
 interface ChatMessage { role: string; content: string; created_at: number }
@@ -547,16 +548,20 @@ export default function TeamBriefingPopup({
                       🔜 예정 작업
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {deduped.slice(0, 4).map((u, i) => (
-                        <div key={i} style={{
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          padding: '9px 12px', borderRadius: 9,
-                          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                        }}>
-                          <span style={{ fontSize: 12, color: '#b8c2d8', fontWeight: 500 }}>{u.taskKo || u.task}</span>
-                          <span style={{ fontSize: 11, color: '#5a6480', fontFamily: 'monospace', flexShrink: 0, marginLeft: 8 }}>{u.time}</span>
-                        </div>
-                      ))}
+                      {deduped.slice(0, 4).map((u, i) => {
+                        // u.time은 raw cron expression ("30 4 * * 0") — 사람 친화 변환
+                        const humanTime = cronToHuman(u.time || '');
+                        return (
+                          <div key={i} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '9px 12px', borderRadius: 9,
+                            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                          }}>
+                            <span style={{ fontSize: 12, color: '#b8c2d8', fontWeight: 500 }}>{u.taskKo || u.task}</span>
+                            <span style={{ fontSize: 11, color: '#5a6480', flexShrink: 0, marginLeft: 8 }}>{humanTime || u.time}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

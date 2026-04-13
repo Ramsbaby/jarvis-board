@@ -895,6 +895,176 @@ export function drawRoomFurniture(
 }
 
 // Decorative elements (corridor props, signs, clock, lights)
+/**
+ * Ambient atmosphere — 움직이는 먼지 파티클 + 천장 조명 빛줄기.
+ * 게임 루프에서 매 프레임 호출. 퍼시스턴트 파티클 상태는 particles 인자로 전달.
+ */
+export interface DustParticle {
+  x: number;      // world coords (tile units)
+  y: number;
+  vx: number;     // tile/frame
+  vy: number;
+  life: number;   // 0~1
+}
+
+export function initDustParticles(count: number, cols: number, rows: number): DustParticle[] {
+  const particles: DustParticle[] = [];
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * cols,
+      y: Math.random() * rows,
+      vx: (Math.random() - 0.5) * 0.004,
+      vy: -0.002 - Math.random() * 0.003,
+      life: Math.random(),
+    });
+  }
+  return particles;
+}
+
+export function updateAndDrawDust(
+  ctx: CanvasRenderingContext2D,
+  particles: DustParticle[],
+  camX: number,
+  camY: number,
+  cols: number,
+  rows: number,
+) {
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.002;
+    if (p.life <= 0 || p.y < 0 || p.x < 0 || p.x > cols || p.y > rows) {
+      p.x = Math.random() * cols;
+      p.y = rows + 0.5;
+      p.life = 0.6 + Math.random() * 0.4;
+      p.vx = (Math.random() - 0.5) * 0.004;
+      p.vy = -0.002 - Math.random() * 0.003;
+    }
+    const sx = p.x * T - camX;
+    const sy = p.y * T - camY;
+    const alpha = Math.min(0.4, p.life * 0.35);
+    ctx.fillStyle = `rgba(255, 240, 200, ${alpha})`;
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+}
+
+export function drawLightShafts(
+  ctx: CanvasRenderingContext2D,
+  camX: number,
+  camY: number,
+  fc: number,
+) {
+  // 천장 조명 위치에서 대각 아래 방향 빛줄기
+  const shaftSources = [
+    { x: 10, y: 8 }, { x: 20, y: 8 }, { x: 30, y: 8 },
+    { x: 10, y: 16 }, { x: 20, y: 16 }, { x: 30, y: 16 },
+  ];
+  const pulse = 0.7 + Math.sin(fc * 0.02) * 0.3;
+  for (const s of shaftSources) {
+    const sx = s.x * T - camX;
+    const sy = s.y * T - camY;
+    const grad = ctx.createLinearGradient(sx, sy, sx + T * 2, sy + T * 3);
+    grad.addColorStop(0, `rgba(255, 245, 210, ${0.035 * pulse})`);
+    grad.addColorStop(0.5, `rgba(255, 245, 210, ${0.018 * pulse})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(sx - T * 0.3, sy);
+    ctx.lineTo(sx + T * 0.3, sy);
+    ctx.lineTo(sx + T * 2.4, sy + T * 3);
+    ctx.lineTo(sx + T * 1.4, sy + T * 3);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/**
+ * 중앙 로비 카페 코너 — 소파 2개 + 원탁 + 커피 머신
+ * 위치: 대략 x=18~20, y=12 (맵 중앙 열 corridor)
+ */
+export function drawCafeCorner(ctx: CanvasRenderingContext2D, camX: number, camY: number, fc: number) {
+  const baseX = 18 * T - camX;
+  const baseY = 12.5 * T - camY;
+
+  // 카페 카펫 (둥근 바닥)
+  ctx.fillStyle = 'rgba(139, 92, 246, 0.08)';
+  ctx.beginPath();
+  ctx.ellipse(baseX + T, baseY + T * 0.8, T * 2.5, T * 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(139, 92, 246, 0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(baseX + T, baseY + T * 0.8, T * 2.5, T * 1.2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 원탁 (원형 테이블)
+  ctx.fillStyle = '#3a2e1c';
+  ctx.beginPath();
+  ctx.ellipse(baseX + T, baseY + T * 0.8, 14, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#5a4424';
+  ctx.beginPath();
+  ctx.ellipse(baseX + T, baseY + T * 0.8 - 2, 13, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 커피 컵 위
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(baseX + T - 3, baseY + T * 0.8 - 4, 3, 3);
+  ctx.fillStyle = '#6b3410';
+  ctx.fillRect(baseX + T - 2, baseY + T * 0.8 - 3, 1, 1);
+  // 스팀 (애니메이션)
+  const steamY = baseY + T * 0.8 - 5 + Math.sin(fc * 0.1) * 1;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.fillRect(baseX + T - 2, steamY - 3, 1, 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.fillRect(baseX + T - 2, steamY - 5, 1, 2);
+
+  // 좌측 소파
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.roundRect(baseX - 6, baseY + T * 0.6, 14, 10, 3);
+  ctx.fill();
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(baseX - 4, baseY + T * 0.6 + 2, 10, 6);
+  // 쿠션
+  ctx.fillStyle = '#8b5cf640';
+  ctx.beginPath();
+  ctx.arc(baseX, baseY + T * 0.6 + 5, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 우측 소파
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.roundRect(baseX + T * 1.7, baseY + T * 0.6, 14, 10, 3);
+  ctx.fill();
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(baseX + T * 1.7 + 2, baseY + T * 0.6 + 2, 10, 6);
+  ctx.fillStyle = '#8b5cf640';
+  ctx.beginPath();
+  ctx.arc(baseX + T * 1.7 + 7, baseY + T * 0.6 + 5, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 커피 머신 (배경 뒤쪽)
+  const cmx = baseX + T - 8;
+  const cmy = baseY - 4;
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(cmx, cmy, 16, 14);
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(cmx + 2, cmy + 2, 12, 5);
+  // LED 표시등 (깜빡임)
+  const ledOn = Math.sin(fc * 0.1) > 0;
+  ctx.fillStyle = ledOn ? '#22c55e' : '#166534';
+  ctx.fillRect(cmx + 12, cmy + 3, 2, 2);
+  // 커피 입 (아래)
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(cmx + 6, cmy + 10, 4, 3);
+
+  // 카페 표지 (위)
+  ctx.fillStyle = 'rgba(139, 92, 246, 0.6)';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('☕ LOUNGE', baseX + T, baseY - 10);
+}
+
 export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, camY: number, fc: number) {
 
   // Potted plants at corridor intersections

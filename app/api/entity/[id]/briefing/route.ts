@@ -160,7 +160,7 @@ const ENTITIES: Record<string, EntityDef> = {
   },
   // 재무실 — market/tqqq/cost/preply 등 돈 관련 크론 전담 (정보팀에서 분리)
   'finance': {
-    type: 'team-lead', name: '재무실 · 장재원', title: 'AI 운영 비용 + 시장 포지션 + 개인 수입 통합',
+    type: 'team-lead', name: '재무실 · 장원석', title: 'AI 운영 비용 + 시장 포지션 + 개인 수입 통합',
     avatar: '💰', keywords: ['tqqq', 'market-alert', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule'],
     discordChannel: 'jarvis-ceo', schedule: '매일',
   },

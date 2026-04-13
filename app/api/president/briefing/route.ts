@@ -92,10 +92,12 @@ interface PresidentBriefing {
   name: string;
   title: string;
   avatar: string;
+  emoji: string;
   status: 'GREEN' | 'YELLOW' | 'RED';
   summary: string;
-  recentActivity: CronEntry[];
-  lastBoardMinutes: { filename: string; excerpt: string } | null;
+  recentActivity: Array<{ time: string; task: string; result: string; description: string; icon: string }>;
+  lastBoardMinutes: string | null;       // 팝업 컴포넌트가 string을 기대 — React 렌더 에러 방지
+  boardMinutesFile: string | null;       // 파일명은 별도 필드로
   updatedAt: string;
 }
 
@@ -130,16 +132,31 @@ export async function GET() {
     : recent.length === 0 || (successCount === 0 && skippedCount > 0) ? 'YELLOW'
     : 'GREEN';
 
+  // recentActivity를 팝업 호환 포맷으로 변환 (time → "HH:MM" + description 주입)
+  const richActivity = recent.map(e => {
+    const timeOnly = e.time.includes(' ') ? e.time.split(' ')[1].slice(0, 5) : e.time;
+    const resultLower = e.result.toLowerCase();
+    const icon = e.result === 'SUCCESS' ? '💚' : e.result === 'FAILED' ? '🔴' : e.result === 'SKIPPED' ? '⏭️' : '🔄';
+    const description =
+      e.result === 'SUCCESS' ? `${e.task} 완료` :
+      e.result === 'FAILED' ? `${e.task} 실패 — ${e.message.slice(0, 80)}` :
+      e.result === 'SKIPPED' ? `${e.task} 건너뜀` :
+      `${e.task} 진행중`;
+    return { time: timeOnly, task: e.task, result: resultLower, description, icon };
+  });
+
   const data: PresidentBriefing = {
     type: 'president',
     id: 'president',
     name: '사장실',
     title: '대표님(이정우) 전용 집무실',
     avatar: '🏛️',
+    emoji: '🏛️',
     status,
     summary,
-    recentActivity: recent,
-    lastBoardMinutes: boardMinutes,
+    recentActivity: richActivity,
+    lastBoardMinutes: boardMinutes ? boardMinutes.excerpt : null,
+    boardMinutesFile: boardMinutes ? boardMinutes.filename : null,
     updatedAt: new Date().toISOString(),
   };
 

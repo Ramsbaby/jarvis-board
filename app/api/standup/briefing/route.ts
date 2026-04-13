@@ -113,10 +113,12 @@ interface StandupBriefing {
   name: string;
   title: string;
   avatar: string;
+  emoji: string;
   status: 'GREEN' | 'YELLOW' | 'RED';
   summary: string;
-  recentActivity: CronEntry[];
-  latestStandup: { filename: string; excerpt: string } | null;
+  recentActivity: Array<{ time: string; task: string; result: string; description: string; icon: string }>;
+  lastBoardMinutes: string | null;       // 팝업 호환 — 최신 스탠드업 본문을 이 필드에 담음
+  boardMinutesFile: string | null;
   schedule: string;
   nextRunKst: string | null;
   updatedAt: string;
@@ -159,16 +161,31 @@ export async function GET() {
     : recent.length === 0 || (successCount === 0 && skippedCount > 0) ? 'YELLOW'
     : 'GREEN';
 
+  // recentActivity를 팝업 호환 포맷으로 변환
+  const richActivity = recent.map(e => {
+    const timeOnly = e.time.includes(' ') ? e.time.split(' ')[1].slice(0, 5) : e.time;
+    const resultLower = e.result.toLowerCase();
+    const icon = e.result === 'SUCCESS' ? '💚' : e.result === 'FAILED' ? '🔴' : e.result === 'SKIPPED' ? '⏭️' : '🔄';
+    const description =
+      e.result === 'SUCCESS' ? `${e.task} 완료` :
+      e.result === 'FAILED' ? `${e.task} 실패 — ${e.message.slice(0, 80)}` :
+      e.result === 'SKIPPED' ? `${e.task} 건너뜀` :
+      `${e.task} 진행중`;
+    return { time: timeOnly, task: e.task, result: resultLower, description, icon };
+  });
+
   const data: StandupBriefing = {
     type: 'standup',
     id: 'standup',
     name: '스탠드업홀',
     title: `전사 모닝 브리핑 — ${titleTime}`,
     avatar: '🎤',
+    emoji: '🎤',
     status,
     summary,
-    recentActivity: recent,
-    latestStandup: latest,
+    recentActivity: richActivity,
+    lastBoardMinutes: latest ? latest.excerpt : null,
+    boardMinutesFile: latest ? latest.filename : null,
     schedule: next.schedule,
     nextRunKst: next.nextRunKst,
     updatedAt: new Date().toISOString(),

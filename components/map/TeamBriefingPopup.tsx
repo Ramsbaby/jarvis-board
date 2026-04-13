@@ -501,7 +501,13 @@ export default function TeamBriefingPopup({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <span style={{ fontSize: 13, flexShrink: 0 }}>{activityIcon(g.result)}</span>
                               <span style={{ color: '#6e7681', fontFamily: 'monospace', fontSize: 10, flexShrink: 0 }}>
-                                {(g.latestTime || '').slice(11, 16)}
+                                {(() => {
+                                  const t = g.latestTime || '';
+                                  // "2026-04-13 10:10:00" → "10:10", "10:10" → "10:10"
+                                  if (t.length >= 16 && t.includes(' ')) return t.slice(11, 16);
+                                  if (t.length >= 5) return t.slice(0, 5);
+                                  return t;
+                                })()}
                               </span>
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#c9d1d9', fontSize: 12, fontWeight: 600, flex: 1 }}>
                                 {g.task}

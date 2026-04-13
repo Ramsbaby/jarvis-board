@@ -72,12 +72,12 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
     <div
       style={{
         position: 'fixed',
-        top: 130,        // BoardBanner 아래
-        right: 14,
+        bottom: 90,      // BoardBanner(1줄 요약) 위 스택
+        right: 16,
         zIndex: 450,
         width: 280,
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column-reverse',  // 위에서 아래 방향 확장(펼칠 때 위로)
         gap: 10,
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
         pointerEvents: 'auto',

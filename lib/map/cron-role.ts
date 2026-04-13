@@ -119,3 +119,44 @@ export function inferCronRole(id: string): string {
   }
   return '';
 }
+
+/**
+ * 크론 실패 메시지를 분석해서 권장 조치를 반환.
+ */
+export function inferSuggestedFix(cron: {
+  lastMessage?: string;
+  outputSummary?: string;
+  hasLLM?: boolean;
+  hasScript?: boolean;
+}): string {
+  const msg = `${cron.lastMessage ?? ''} ${cron.outputSummary ?? ''}`.toLowerCase();
+
+  if (/timeout|etimedout|econnreset|socket hang up/.test(msg)) {
+    return '네트워크 타임아웃입니다. API 서버 상태를 확인하거나 재실행해보세요.';
+  }
+  if (/enoent|no such file|not found|cannot find/.test(msg)) {
+    return '스크립트 또는 파일 경로를 확인하세요. 최근 파일 이동이 있었을 수 있습니다.';
+  }
+  if (/permission denied|eacces/.test(msg)) {
+    return '실행 권한을 확인하세요 (chmod +x). 또는 sudo 필요 여부를 점검하세요.';
+  }
+  if (/429|rate.?limit|too many request/.test(msg)) {
+    return 'API 호출 한도 초과입니다. 스케줄 간격을 늘리거나 잠시 후 재시도하세요.';
+  }
+  if (/token|credit|quota|billing|insufficient/.test(msg)) {
+    return 'API 크레딧/토큰 잔액을 확인하세요. 한도 초과일 수 있습니다.';
+  }
+  if (/disk|enospc|no space/.test(msg)) {
+    return '디스크 용량이 부족합니다. 로그/캐시 파일 정리가 필요합니다.';
+  }
+  if (/oom|out of memory|killed/.test(msg)) {
+    return '메모리 부족으로 프로세스가 종료됐습니다. 메모리 사용량을 점검하세요.';
+  }
+  if (/syntax|unexpected token|parse error/.test(msg)) {
+    return '스크립트 문법 오류입니다. 최근 코드 변경사항을 확인하세요.';
+  }
+  if (cron.hasLLM) {
+    return 'LLM 호출 실패일 수 있습니다. API 키·모델 가용성을 확인 후 재실행하세요.';
+  }
+  return '재실행으로 일시적 오류 여부를 확인하세요. 반복 실패 시 로그를 점검하세요.';
+}

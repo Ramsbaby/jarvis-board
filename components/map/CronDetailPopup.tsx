@@ -3,9 +3,9 @@
    Jarvis MAP — Cron detail popup (tile click)
    Extracted from app/company/VirtualOffice.tsx
    ═══════════════════════════════════════════════════════════════════ */
-import React from 'react';
+import React, { useState } from 'react';
 import type { CronItem } from '@/lib/map/rooms';
-import { detectTokenUsage, estimateCost, inferCronRole } from '@/lib/map/cron-role';
+import { detectTokenUsage, estimateCost, inferCronRole, inferSuggestedFix } from '@/lib/map/cron-role';
 
 interface CronDetailPopupProps {
   cronPopup: CronItem;
@@ -290,6 +290,15 @@ export default function CronDetailPopup({
                 }}>
                   {summary || (isFail ? '실패 상세 정보 없음' : '출력 없음')}
                 </div>
+                {/* 💡 권장 조치 (실패 시) */}
+                {isFail && (
+                  <div style={{ marginTop: 10, padding: '10px 14px', background: '#eff6ff', border: '1px solid #3b82f640', borderRadius: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', marginBottom: 6 }}>💡 권장 조치</div>
+                    <div style={{ fontSize: 12, color: '#4a5060', lineHeight: 1.6 }}>
+                      {inferSuggestedFix(cronPopup)}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -387,18 +396,89 @@ export default function CronDetailPopup({
             </div>
           )}
 
-          {/* 닫기 버튼 */}
-          <button
-            onClick={() => { setCronPopup(null); setPopupOpen(false); }}
-            style={{
-              width: '100%', padding: '13px 0',
-              background: `linear-gradient(135deg, ${statusColor}15, ${statusColor}08)`,
-              border: `1px solid ${statusColor}35`,
-              borderRadius: 10, color: statusColor,
-              cursor: 'pointer', fontSize: 14, fontWeight: 700,
-            }}
-          >닫기</button>
+          {/* 액션 버튼 바 */}
+          <ActionBar cronId={cronPopup.id} status={cronPopup.status} statusColor={statusColor}
+            lastMessage={cronPopup.lastMessage} outputSummary={cronPopup.outputSummary}
+            onClose={() => { setCronPopup(null); setPopupOpen(false); }} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 하단 액션 버튼 바 ── */
+function ActionBar({ cronId, status, statusColor, lastMessage, outputSummary, onClose }: {
+  cronId: string; status: string; statusColor: string;
+  lastMessage: string; outputSummary: string;
+  onClose: () => void;
+}) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryResult, setRetryResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    setRetryResult(null);
+    try {
+      const res = await fetch('/api/crons/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cronId }),
+      });
+      const data = await res.json();
+      setRetryResult({ ok: data.success, msg: data.message });
+    } catch (e) {
+      setRetryResult({ ok: false, msg: `요청 실패: ${String(e)}` });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const handleCopyLog = () => {
+    const text = [lastMessage, outputSummary].filter(Boolean).join('\n---\n');
+    navigator.clipboard.writeText(text || '(로그 없음)');
+    setRetryResult({ ok: true, msg: '로그가 클립보드에 복사됨' });
+    setTimeout(() => setRetryResult(null), 2000);
+  };
+
+  return (
+    <div>
+      {retryResult && (
+        <div style={{
+          marginBottom: 8, padding: '8px 12px', borderRadius: 8, fontSize: 12,
+          background: retryResult.ok ? '#ecfdf5' : '#fef2f2',
+          color: retryResult.ok ? '#16a34a' : '#dc2626',
+          border: `1px solid ${retryResult.ok ? '#22c55e40' : '#f8514940'}`,
+        }}>
+          {retryResult.ok ? '✅' : '❌'} {retryResult.msg}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={handleRetry}
+          disabled={retrying || status === 'running'}
+          style={{
+            flex: 1, padding: '12px 0', borderRadius: 10, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, border: 'none',
+            background: statusColor, color: '#fff',
+            opacity: (retrying || status === 'running') ? 0.5 : 1,
+          }}
+        >{retrying ? '⏳ 실행 중...' : '🔄 재실행'}</button>
+        <button
+          onClick={handleCopyLog}
+          style={{
+            flex: 1, padding: '12px 0', borderRadius: 10, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700,
+            background: '#f5f6f8', border: '1px solid #e0e4ea', color: '#4a5060',
+          }}
+        >📋 로그 복사</button>
+        <button
+          onClick={onClose}
+          style={{
+            padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700,
+            background: 'transparent', border: '1px solid #e0e4ea', color: '#6b7280',
+          }}
+        >닫기</button>
       </div>
     </div>
   );

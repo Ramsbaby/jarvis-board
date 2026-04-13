@@ -569,36 +569,33 @@ export default function VirtualOffice() {
       const rw = r.w * T, rh = r.h * T;
       const state = npcStatesRef.current[r.id];
 
-      // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분 (다크 테마)
+      // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분 (밝은 오피스)
       if (r.wallStyle === 'pod') {
-        // 방 드롭 섀도
         ctx!.save();
         ctx!.shadowBlur = 12;
-        ctx!.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx!.fillStyle = '#1a1d24';
+        ctx!.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx!.fillStyle = '#ffffff';
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
 
-        // 2. 팀 컬러 러그 (방 내부 60%, 중앙 배치) + 미세 스트라이프 패턴
+        // 팀 컬러 러그 (40% — 강한 구분)
         const rugMarginX = rw * 0.2;
         const rugMarginY = rh * 0.2;
         const rugX = rx + rugMarginX;
         const rugY = ry + rugMarginY;
         const rugW = rw - rugMarginX * 2;
         const rugH = rh - rugMarginY * 2;
-        ctx!.fillStyle = r.teamColor + '15';
+        ctx!.fillStyle = r.teamColor + '40';
         ctx!.fillRect(rugX, rugY, rugW, rugH);
-        // 러그 스트라이프 패턴 (가로줄, 미세)
-        ctx!.fillStyle = r.teamColor + '08';
+        ctx!.fillStyle = r.teamColor + '20';
         for (let sy = 0; sy < rugH; sy += 6) {
           ctx!.fillRect(rugX, rugY + sy, rugW, 2);
         }
-        // 러그 테두리
-        ctx!.strokeStyle = r.teamColor + '25';
+        ctx!.strokeStyle = r.teamColor + '50';
         ctx!.lineWidth = 1;
         ctx!.strokeRect(rugX + 1, rugY + 1, rugW - 2, rugH - 2);
 
-        // 3. 상태 indicator (LED 점) — 우상단 구석
+        // 상태 indicator (LED 점)
         if (state) {
           const stColor = state.status === 'green' ? '#3fb950' : state.status === 'red' ? '#f85149' : '#d29922';
           ctx!.save();
@@ -611,19 +608,19 @@ export default function VirtualOffice() {
           ctx!.restore();
         }
 
-        // 4. 떠있는 팀 태그 (상단 중앙 pill, 다크)
+        // 팀 태그 (밝은 pill)
         const tagText = `${r.emoji} ${r.name}`;
         ctx!.font = 'bold 10px -apple-system, monospace';
         const tagW = ctx!.measureText(tagText).width + 14;
         const tagX = rx + rw / 2 - tagW / 2;
         const tagY = ry + 4;
-        ctx!.fillStyle = 'rgba(13, 17, 23, 0.88)';
+        ctx!.fillStyle = 'rgba(255,255,255,0.92)';
         ctx!.beginPath();
         ctx!.roundRect(tagX, tagY, tagW, 16, 8);
         ctx!.fill();
         ctx!.fillStyle = r.teamColor;
         ctx!.fillRect(tagX, tagY + 2, 2, 12);
-        ctx!.fillStyle = '#e6edf3';
+        ctx!.fillStyle = '#2d3340';
         ctx!.textAlign = 'center';
         ctx!.fillText(tagText, rx + rw / 2, tagY + 11);
 
@@ -636,29 +633,29 @@ export default function VirtualOffice() {
       // 방 드롭 섀도
       ctx!.save();
       ctx!.shadowBlur = 12;
-      ctx!.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx!.fillStyle = '#181b22';
+      ctx!.shadowColor = 'rgba(0,0,0,0.08)';
+      ctx!.fillStyle = '#ffffff';
       ctx!.fillRect(rx, ry, rw, rh);
       ctx!.restore();
 
-      // Floor based on floorStyle (다크 테마)
+      // Floor based on floorStyle (밝은 오피스)
       switch (r.floorStyle) {
         case 'executive': {
-          ctx!.fillStyle = '#1e2028';
+          ctx!.fillStyle = '#fafbfc';
           ctx!.fillRect(rx, ry, rw, rh);
           for (let y = 0; y < r.h; y++) {
             for (let x = 0; x < r.w; x++) {
               const offset = (y % 2) * (T / 2);
-              ctx!.fillStyle = (x + y) % 3 === 0 ? '#24282f08' : '#20242a08';
+              ctx!.fillStyle = (x + y) % 3 === 0 ? '#e8e2d808' : '#e0dace08';
               ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              ctx!.fillStyle = '#2a2e3508';
+              ctx!.fillStyle = '#d8d0c008';
               ctx!.fillRect(rx + x * T + offset, ry + y * T + 6, T - 2, 1);
               ctx!.fillRect(rx + x * T + offset, ry + y * T + 18, T - 4, 1);
               ctx!.fillRect(rx + x * T + offset, ry + y * T + 28, T - 1, 1);
             }
           }
           const grdExec = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.6);
-          grdExec.addColorStop(0, '#c9a22708');
+          grdExec.addColorStop(0, '#c9a22715');
           grdExec.addColorStop(1, 'transparent');
           ctx!.fillStyle = grdExec;
           ctx!.fillRect(rx, ry, rw, rh);
@@ -666,9 +663,9 @@ export default function VirtualOffice() {
         }
         case 'metal': {
           const isCronCenter = r.id === 'cron-center';
-          ctx!.fillStyle = isCronCenter ? '#0f1420' : '#161b22';
+          ctx!.fillStyle = isCronCenter ? '#f0f1f4' : '#f4f5f7';
           ctx!.fillRect(rx, ry, rw, rh);
-          ctx!.strokeStyle = isCronCenter ? '#1e293b40' : '#21262d40';
+          ctx!.strokeStyle = isCronCenter ? '#c0c8d240' : '#b8c0cc40';
           ctx!.lineWidth = 0.5;
           for (let gx = 0; gx < r.w * 2; gx++) {
             ctx!.beginPath();
@@ -685,7 +682,7 @@ export default function VirtualOffice() {
           for (let y = 0; y < r.h; y++) {
             for (let x = 0; x < r.w; x++) {
               if ((x + y) % 4 === 0) {
-                ctx!.fillStyle = isCronCenter ? '#1e293b08' : '#21262d08';
+                ctx!.fillStyle = isCronCenter ? '#dde0e808' : '#c8cdd508';
                 ctx!.fillRect(rx + x * T + 2, ry + y * T + 2, T - 4, T - 4);
               }
             }
@@ -693,50 +690,50 @@ export default function VirtualOffice() {
           break;
         }
         case 'stage': {
-          ctx!.fillStyle = '#1c1f28';
+          ctx!.fillStyle = '#fafbfc';
           ctx!.fillRect(rx, ry, rw, rh);
           for (let y = 0; y < r.h; y++) {
             for (let x = 0; x < r.w; x++) {
-              ctx!.fillStyle = '#22252e06';
+              ctx!.fillStyle = '#f0ece406';
               ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              ctx!.fillStyle = '#2a2e3808';
+              ctx!.fillStyle = '#e0dcd008';
               ctx!.fillRect(rx + x * T, ry + y * T + T - 1, T, 1);
             }
           }
           const grdStage = ctx!.createRadialGradient(rx + rw / 2, ry + rh * 0.3, 0, rx + rw / 2, ry + rh * 0.3, rw * 0.5);
-          grdStage.addColorStop(0, '#eab3080a');
+          grdStage.addColorStop(0, '#eab30818');
           grdStage.addColorStop(1, 'transparent');
           ctx!.fillStyle = grdStage;
           ctx!.fillRect(rx, ry, rw, rh);
           break;
         }
         default: {
-          ctx!.fillStyle = '#1a1d24';
+          ctx!.fillStyle = '#ffffff';
           ctx!.fillRect(rx, ry, rw, rh);
           break;
         }
       }
 
-      // 팀 컬러 바닥 러그 (방 내부 80%, 다크 배경에 맞게 낮은 알파)
+      // 팀 컬러 바닥 러그 (40% — 확실한 구분)
       const rugPadX = rw * 0.1;
       const rugPadY = rh * 0.1;
-      ctx!.fillStyle = r.teamColor + '15';
+      ctx!.fillStyle = r.teamColor + '40';
       ctx!.fillRect(rx + rugPadX, ry + rugPadY, rw - rugPadX * 2, rh - rugPadY * 2);
 
-      // Inner shadow along walls (depth effect, 다크 배경에 강화)
+      // Inner shadow along walls (subtle on bright)
       const innerShadowSize = 8;
       const grdTop = ctx!.createLinearGradient(rx, ry, rx, ry + innerShadowSize);
-      grdTop.addColorStop(0, 'rgba(0,0,0,0.12)');
+      grdTop.addColorStop(0, 'rgba(0,0,0,0.04)');
       grdTop.addColorStop(1, 'transparent');
       ctx!.fillStyle = grdTop;
       ctx!.fillRect(rx, ry, rw, innerShadowSize);
       const grdLeft = ctx!.createLinearGradient(rx, ry, rx + innerShadowSize, ry);
-      grdLeft.addColorStop(0, 'rgba(0,0,0,0.10)');
+      grdLeft.addColorStop(0, 'rgba(0,0,0,0.03)');
       grdLeft.addColorStop(1, 'transparent');
       ctx!.fillStyle = grdLeft;
       ctx!.fillRect(rx, ry, innerShadowSize, rh);
       const grdRight = ctx!.createLinearGradient(rx + rw, ry, rx + rw - innerShadowSize, ry);
-      grdRight.addColorStop(0, 'rgba(0,0,0,0.08)');
+      grdRight.addColorStop(0, 'rgba(0,0,0,0.03)');
       grdRight.addColorStop(1, 'transparent');
       ctx!.fillStyle = grdRight;
       ctx!.fillRect(rx + rw - innerShadowSize, ry, innerShadowSize, rh);
@@ -756,28 +753,28 @@ export default function VirtualOffice() {
       if (isClosed) {
         // ── Closed room: 두꺼운 벽 + 드롭 섀도 (다크) ──
         ctx!.save();
-        ctx!.shadowColor = 'rgba(0,0,0,0.4)';
+        ctx!.shadowColor = 'rgba(0,0,0,0.15)';
         ctx!.shadowBlur = 14;
         ctx!.shadowOffsetX = 3;
         ctx!.shadowOffsetY = 3;
-        ctx!.fillStyle = '#2d3340';
+        ctx!.fillStyle = '#e0e4ea';
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
 
-        // 벽 본체 (안쪽, 다크 슬레이트)
-        ctx!.fillStyle = '#2d3340';
+        // 벽 본체 (밝은 그레이)
+        ctx!.fillStyle = '#e0e4ea';
         ctx!.fillRect(rx, ry, rw, 5);
         ctx!.fillRect(rx, ry + rh - 5, rw, 5);
         ctx!.fillRect(rx, ry, 5, rh);
         ctx!.fillRect(rx + rw - 5, ry, 5, rh);
         // 상단 하이라이트
-        ctx!.fillStyle = '#3a4050';
+        ctx!.fillStyle = '#f0f2f5';
         ctx!.fillRect(rx + 1, ry + 1, rw - 2, 2);
         // 팀 컬러 스트라이프 (상단 벽)
         ctx!.fillStyle = r.teamColor + 'cc';
         ctx!.fillRect(rx + 5, ry + 1, rw - 10, 3);
         // 내부 테두리
-        ctx!.strokeStyle = '#2a2e38';
+        ctx!.strokeStyle = '#d0d5dd';
         ctx!.lineWidth = 1;
         ctx!.strokeRect(rx + 5, ry + 5, rw - 10, rh - 10);
 
@@ -787,9 +784,9 @@ export default function VirtualOffice() {
           const windowW = T * 1.2;
           for (let i = 0; i < windowCount; i++) {
             const wx = rx + T * 1.2 + i * T * 2.2;
-            ctx!.fillStyle = '#58a6ff15';
+            ctx!.fillStyle = '#87CEEB30';
             ctx!.fillRect(wx, ry, windowW, 5);
-            ctx!.strokeStyle = '#58a6ff30';
+            ctx!.strokeStyle = '#87CEEB50';
             ctx!.lineWidth = 0.5;
             ctx!.strokeRect(wx, ry, windowW, 5);
           }
@@ -800,12 +797,12 @@ export default function VirtualOffice() {
         if (r.type === 'cron') {
           // 크론센터: 좌측 문
           const doorY = (r.y + Math.floor(r.h / 2)) * T - camY;
-          ctx!.fillStyle = '#3a4050';
+          ctx!.fillStyle = '#c8cdd5';
           ctx!.fillRect(rx - 2, doorY - T, 8, T * 3);
           ctx!.fillStyle = '#58a6ff80';
           ctx!.fillRect(rx, doorY - T, 3, T * 3);
         } else {
-          ctx!.fillStyle = '#3a4050';
+          ctx!.fillStyle = '#c8cdd5';
           ctx!.fillRect(doorX - T / 2, ry + rh - 6, T * 1.5, 8);
           ctx!.fillStyle = '#58a6ff';
           ctx!.fillRect(doorX - T / 2, ry + rh - 3, T * 1.5, 3);
@@ -813,11 +810,11 @@ export default function VirtualOffice() {
       } else {
         // ── Pod (오픈 데스크): 벽 없음, 카펫 테두리 + 약한 그림자 (다크) ──
         ctx!.save();
-        ctx!.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx!.shadowColor = 'rgba(0,0,0,0.06)';
         ctx!.shadowBlur = 6;
         ctx!.shadowOffsetX = 1;
         ctx!.shadowOffsetY = 2;
-        ctx!.strokeStyle = r.teamColor + '40';
+        ctx!.strokeStyle = r.teamColor + '60';
         ctx!.lineWidth = 3;
         ctx!.beginPath();
         ctx!.roundRect(rx + 2, ry + 2, rw - 4, rh - 4, 4);
@@ -825,7 +822,7 @@ export default function VirtualOffice() {
         ctx!.restore();
         // Pod 내부 글로우 (팀색 은은하게)
         const podGlow = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.6);
-        podGlow.addColorStop(0, r.teamColor + '0a');
+        podGlow.addColorStop(0, r.teamColor + '12');
         podGlow.addColorStop(1, 'transparent');
         ctx!.fillStyle = podGlow;
         ctx!.fillRect(rx + 4, ry + 4, rw - 8, rh - 8);
@@ -837,20 +834,20 @@ export default function VirtualOffice() {
       // Draw furniture
       drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
 
-      // Room name plate (다크)
+      // Room name plate (밝은 오피스)
       ctx!.font = 'bold 11px monospace';
       const plateText = `${r.emoji} ${r.name}`;
       const plateW = ctx!.measureText(plateText).width + 20;
-      ctx!.fillStyle = 'rgba(13, 17, 23, 0.88)';
+      ctx!.fillStyle = 'rgba(255,255,255,0.92)';
       ctx!.beginPath();
       ctx!.roundRect(rx + rw / 2 - plateW / 2, ry + 10, plateW, 20, 5);
       ctx!.fill();
-      ctx!.strokeStyle = '#30363d';
+      ctx!.strokeStyle = '#d0d5dd';
       ctx!.lineWidth = 1;
       ctx!.beginPath();
       ctx!.roundRect(rx + rw / 2 - plateW / 2, ry + 10, plateW, 20, 5);
       ctx!.stroke();
-      ctx!.fillStyle = '#e6edf3';
+      ctx!.fillStyle = '#2d3340';
       ctx!.textAlign = 'center';
       ctx!.fillText(plateText, rx + rw / 2, ry + 24);
     }
@@ -1354,19 +1351,19 @@ export default function VirtualOffice() {
       const my = canvasH - mmH - 16;
       const scale = Math.min(mmW / (COLS * T), mmH / (ROWS * T));
 
-      // Background (다크)
-      ctx!.fillStyle = 'rgba(13, 17, 23, 0.88)';
+      // Background (다크 오버레이)
+      ctx!.fillStyle = 'rgba(0,0,0,0.5)';
       ctx!.beginPath();
       ctx!.roundRect(mx - 4, my - 4, mmW + 8, mmH + 8, 6);
       ctx!.fill();
-      ctx!.strokeStyle = '#30363d';
+      ctx!.strokeStyle = 'rgba(255,255,255,0.3)';
       ctx!.lineWidth = 1;
       ctx!.beginPath();
       ctx!.roundRect(mx - 4, my - 4, mmW + 8, mmH + 8, 6);
       ctx!.stroke();
 
-      // Label (다크)
-      ctx!.fillStyle = '#8b949e';
+      // Label
+      ctx!.fillStyle = '#ffffff';
       ctx!.font = '8px monospace';
       ctx!.textAlign = 'left';
       ctx!.fillText('MINIMAP', mx, my - 8);
@@ -1612,18 +1609,18 @@ export default function VirtualOffice() {
       const camY = Math.round(cameraRef.current.y);
 
       // Clear (월드 패스 좌표계 — wZ×hZ, 다크)
-      ctx!.fillStyle = '#0d1117';
+      ctx!.fillStyle = '#f0f2f5';
       ctx!.fillRect(0, 0, wZ, hZ);
 
       // ── Outer wall border (다크 테마) ──
       const wallThick = 6;
-      ctx!.fillStyle = '#21262d';
+      ctx!.fillStyle = '#d0d5dd';
       ctx!.fillRect(0 - camX, 0 - camY, COLS * T, wallThick);
       ctx!.fillRect(0 - camX, ROWS * T - wallThick - camY, COLS * T, wallThick);
       ctx!.fillRect(0 - camX, 0 - camY, wallThick, ROWS * T);
       ctx!.fillRect(COLS * T - wallThick - camX, 0 - camY, wallThick, ROWS * T);
       // Wall top highlight
-      ctx!.fillStyle = '#30363d';
+      ctx!.fillStyle = '#ffffff';
       ctx!.fillRect(0 - camX, 0 - camY, COLS * T, 2);
       ctx!.fillRect(0 - camX, 0 - camY, 2, ROWS * T);
       // Exterior window pattern on top wall
@@ -1653,61 +1650,55 @@ export default function VirtualOffice() {
           }
           if (inRoom) continue; // Room floors are drawn by drawRoom
 
-          // Corridor tiles — 다크 오피스 바닥재 (55×32 상하 레이아웃)
-          const isOfficeHCorridor = y >= 10 && y <= 11; // Row1-Row2 사이 복도
-          const isLobby = y >= 18 && y <= 19; // 오피스-크론 사이 로비
+          // Corridor tiles — 밝은 오피스 바닥재
+          const isOfficeHCorridor = y >= 10 && y <= 11;
+          const isLobby = y >= 18 && y <= 19;
 
           if (isOfficeHCorridor || isLobby) {
-            // 오피스 복도/로비 — 약간 밝은 다크
             const tileCol = Math.floor(x / 2);
-            const baseColor = (tileCol + y) % 2 === 0 ? '#181c24' : '#161a22';
+            const baseColor = (tileCol + y) % 2 === 0 ? '#ebedf0' : '#e8eaed';
             ctx!.fillStyle = baseColor;
             ctx!.fillRect(sx, sy, T, T);
-            // 미세 패턴
             if ((x * 5 + y * 7) % 11 === 0) {
-              ctx!.strokeStyle = 'rgba(255,255,255,0.02)';
+              ctx!.strokeStyle = 'rgba(0,0,0,0.03)';
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
               ctx!.moveTo(sx + 5, sy + T - 5);
               ctx!.lineTo(sx + T - 5, sy + 5);
               ctx!.stroke();
             }
-            // 타일 그라우트 (경계선)
-            ctx!.strokeStyle = '#21262d';
+            ctx!.strokeStyle = '#d0d5dd';
             ctx!.lineWidth = 1;
             if (x % 2 === 0) { ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx, sy + T); ctx!.stroke(); }
             ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx + T, sy); ctx!.stroke();
-            // 복도 중앙 동선 라인 (파란 악센트, 다크에 맞게)
             if (y === 10 || y === 11 || y === 18) {
               const refGrd = ctx!.createLinearGradient(sx, sy, sx, sy + T);
-              refGrd.addColorStop(0, 'rgba(88,166,255,0.04)');
-              refGrd.addColorStop(0.5, 'rgba(88,166,255,0.02)');
+              refGrd.addColorStop(0, 'rgba(100,120,160,0.06)');
+              refGrd.addColorStop(0.5, 'rgba(100,120,160,0.03)');
               refGrd.addColorStop(1, 'transparent');
               ctx!.fillStyle = refGrd;
               ctx!.fillRect(sx, sy, T, T);
             }
           } else {
-            // 일반 오픈 영역 — 다크 헤링본 패턴
-            const hbBase = (x + y) % 2 === 0 ? '#161b22' : '#141820';
+            const hbBase = (x + y) % 2 === 0 ? '#f5f6f8' : '#f0f1f3';
             ctx!.fillStyle = hbBase;
             ctx!.fillRect(sx, sy, T, T);
-            // 헤링본 대각선 결
             if ((x + y) % 4 === 0) {
-              ctx!.strokeStyle = 'rgba(255,255,255,0.015)';
+              ctx!.strokeStyle = 'rgba(0,0,0,0.03)';
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
               ctx!.moveTo(sx + T * 0.2, sy + T * 0.8);
               ctx!.lineTo(sx + T * 0.8, sy + T * 0.2);
               ctx!.stroke();
             } else if ((x + y) % 4 === 2) {
-              ctx!.strokeStyle = 'rgba(255,255,255,0.01)';
+              ctx!.strokeStyle = 'rgba(0,0,0,0.02)';
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
               ctx!.moveTo(sx + T * 0.2, sy + T * 0.2);
               ctx!.lineTo(sx + T * 0.8, sy + T * 0.8);
               ctx!.stroke();
             }
-            ctx!.strokeStyle = '#1e222a20';
+            ctx!.strokeStyle = '#dde0e630';
             ctx!.lineWidth = 0.3;
             ctx!.strokeRect(sx, sy, T, T);
           }
@@ -1896,8 +1887,8 @@ export default function VirtualOffice() {
       const _isMob = w < 768;
       const topBarH = _isMob ? 28 : 40;
       const grad = ctx!.createLinearGradient(0, 0, 0, topBarH);
-      grad.addColorStop(0, 'rgba(13,17,23,0.85)');
-      grad.addColorStop(1, 'rgba(13,17,23,0)');
+      grad.addColorStop(0, 'rgba(0,0,0,0.5)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx!.fillStyle = grad;
       ctx!.fillRect(0, 0, w, topBarH);
 
@@ -1910,8 +1901,8 @@ export default function VirtualOffice() {
 
       // ── HUD: Bottom bar (다크) ──
       const gradBot = ctx!.createLinearGradient(0, h - 44, 0, h);
-      gradBot.addColorStop(0, 'rgba(13,17,23,0)');
-      gradBot.addColorStop(1, 'rgba(13,17,23,0.85)');
+      gradBot.addColorStop(0, 'rgba(0,0,0,0)');
+      gradBot.addColorStop(1, 'rgba(0,0,0,0.5)');
       ctx!.fillStyle = gradBot;
       ctx!.fillRect(0, h - 44, w, 44);
 
@@ -1957,7 +1948,7 @@ export default function VirtualOffice() {
           // 배경
           ctx!.save();
           ctx!.globalAlpha = toastAlpha;
-          ctx!.fillStyle = 'rgba(13,17,23,0.92)';
+          ctx!.fillStyle = 'rgba(0,0,0,0.5)';
           ctx!.beginPath();
           ctx!.roundRect(toastX, toastY, toastW, toastH, 8);
           ctx!.fill();
@@ -1982,13 +1973,13 @@ export default function VirtualOffice() {
       // ── Vignette overlay (다크 테마) ──
       const vigSize = 40;
       const vigTop = ctx!.createLinearGradient(0, 0, 0, vigSize);
-      vigTop.addColorStop(0, 'rgba(0,0,0,0.15)');
+      vigTop.addColorStop(0, 'rgba(0,0,0,0.04)');
       vigTop.addColorStop(1, 'transparent');
       ctx!.fillStyle = vigTop;
       ctx!.fillRect(0, 0, w, vigSize);
       const vigBot = ctx!.createLinearGradient(0, h - vigSize, 0, h);
       vigBot.addColorStop(0, 'transparent');
-      vigBot.addColorStop(1, 'rgba(0,0,0,0.15)');
+      vigBot.addColorStop(1, 'rgba(0,0,0,0.04)');
       ctx!.fillStyle = vigBot;
       ctx!.fillRect(0, h - vigSize, w, vigSize);
 
@@ -2193,11 +2184,11 @@ export default function VirtualOffice() {
         right: isMobile ? 12 : 24,
         zIndex: 900,
         display: 'flex',
-        background: 'rgba(13,17,23,0.88)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(0,0,0,0.6)',
+        border: '1px solid rgba(255,255,255,0.15)',
         borderRadius: 10,
         padding: 3,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
         backdropFilter: 'blur(8px)',
       }}>
         {(['map', 'table'] as const).map(mode => {
@@ -2247,22 +2238,22 @@ export default function VirtualOffice() {
           backdropFilter: 'blur(4px)',
         }}>
           <div style={{
-            background: '#0d1117',
-            border: '1px solid #30363d',
+            background: '#ffffff',
+            border: '1px solid #e0e4ea',
             borderTop: '3px solid #c9a227',
             borderRadius: 20,
             padding: isMobile ? '28px 24px 32px' : '36px 44px 40px',
             maxWidth: 520,
             width: isMobile ? '92vw' : '90vw',
-            color: '#e6edf3',
+            color: '#2d3340',
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+            boxShadow: '0 32px 80px rgba(0,0,0,0.3)',
           }}>
             {/* 헤더 */}
             <div style={{ textAlign: 'center', marginBottom: 28 }}>
               <div style={{ fontSize: 40, marginBottom: 8 }}>🏢</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#e6edf3', marginBottom: 6 }}>JARVIS MAP</div>
-              <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a202c', marginBottom: 6 }}>JARVIS MAP</div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>
                 자비스 컴퍼니의 가상 오피스입니다.<br />
                 팀장·크론잡을 클릭해 실시간 현황을 확인하세요.
               </div>
@@ -2278,13 +2269,13 @@ export default function VirtualOffice() {
               ].map(({ icon, label, desc }) => (
                 <div key={label} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px', background: '#161b22',
-                  border: '1px solid #21262d', borderRadius: 10,
+                  padding: '10px 14px', background: '#f5f6f8',
+                  border: '1px solid #e0e4ea', borderRadius: 10,
                 }}>
                   <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#e6edf3' }}>{label}</div>
-                    <div style={{ fontSize: 11, color: '#8b949e', marginTop: 1 }}>{desc}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2d3340' }}>{label}</div>
+                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>{desc}</div>
                   </div>
                 </div>
               ))}
@@ -2317,8 +2308,8 @@ export default function VirtualOffice() {
           top: tooltipRoom.y - 50,
           padding: '8px 12px',
           borderRadius: 8,
-          background: 'rgba(13,17,23,0.92)',
-          color: '#e6edf3',
+          background: 'rgba(255,255,255,0.95)',
+          color: '#2d3340',
           fontSize: 12,
           fontFamily: 'monospace',
           pointerEvents: 'none',
@@ -2343,7 +2334,7 @@ export default function VirtualOffice() {
           bottom: 54,
           left: '50%', transform: 'translateX(-50%)',
           padding: '8px 18px', borderRadius: 10,
-          background: 'rgba(13,17,23,0.88)', color: '#e6edf3',
+          background: 'rgba(255,255,255,0.92)', color: '#2d3340',
           fontSize: 13, fontFamily: 'monospace', pointerEvents: 'none',
           border: `1px solid ${nearbyRoom.teamColor}50`,
           boxShadow: `0 0 12px ${nearbyRoom.teamColor}20`,

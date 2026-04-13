@@ -3,7 +3,7 @@
    Jarvis MAP — Team briefing popup (팀장 클릭 시)
    Extracted from app/company/VirtualOffice.tsx
    ═══════════════════════════════════════════════════════════════════ */
-import React from 'react';
+import React, { useState } from 'react';
 import { ROOMS, ROOM_TO_CRON_TEAM, statusExplanation, activityIcon } from '@/lib/map/rooms';
 import type { BriefingData, CronItem } from '@/lib/map/rooms';
 import { cronToHuman } from '@/lib/map/cron-human';
@@ -331,6 +331,8 @@ export default function TeamBriefingPopup({
                           {!c.outputSummary && c.lastMessage && <div style={{ color: '#8b949e', fontSize: 11, marginLeft: 14 }}>{c.lastMessage.slice(0, 80)}</div>}
                         </div>
                       ))}
+                      {/* 실패 크론 일괄 재실행 */}
+                      {failingCrons.length > 0 && <BulkRetryButton cronIds={failingCrons.map(c => c.id)} count={failingCrons.length} />}
                     </div>
                   </div>
                 );
@@ -754,6 +756,50 @@ export default function TeamBriefingPopup({
         )}
 
       </div>
+    </div>
+  );
+}
+
+/* ── 실패 크론 일괄 재실행 버튼 ── */
+function BulkRetryButton({ cronIds, count }: { cronIds: string[]; count: number }) {
+  const [retrying, setRetrying] = useState(false);
+  const [result, setResult] = useState<{ ok: number; fail: number } | null>(null);
+
+  const handleBulkRetry = async () => {
+    setRetrying(true);
+    let ok = 0, fail = 0;
+    for (const id of cronIds) {
+      try {
+        const res = await fetch('/api/crons/retry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cronId: id }),
+        });
+        const data = await res.json();
+        if (data.success) ok++; else fail++;
+      } catch { fail++; }
+    }
+    setResult({ ok, fail });
+    setRetrying(false);
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      {result && (
+        <div style={{ marginBottom: 6, fontSize: 11, color: result.fail > 0 ? '#d29922' : '#16a34a' }}>
+          ✅ {result.ok}건 성공 {result.fail > 0 ? `/ ❌ ${result.fail}건 실패` : ''}
+        </div>
+      )}
+      <button
+        onClick={handleBulkRetry}
+        disabled={retrying}
+        style={{
+          width: '100%', padding: '10px 0', borderRadius: 8, cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, border: 'none',
+          background: '#f85149', color: '#fff',
+          opacity: retrying ? 0.5 : 1,
+        }}
+      >{retrying ? '⏳ 재실행 중...' : `🔄 실패 크론 일괄 재실행 (${count}건)`}</button>
     </div>
   );
 }

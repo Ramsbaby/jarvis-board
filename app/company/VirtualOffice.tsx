@@ -13,6 +13,8 @@ import TeamBriefingPopup from '@/components/map/TeamBriefingPopup';
 import CronGridPopup from '@/components/map/CronGridPopup';
 import CronDetailPopup from '@/components/map/CronDetailPopup';
 import MobileControls from '@/components/map/MobileControls';
+import BoardBanner from '@/components/map/BoardBanner';
+import DashboardTable from '@/components/map/DashboardTable';
 
 /* ═══════════════════════════════════════════════════════════════════
    Jarvis MAP — Gather Town Style Virtual Office
@@ -46,6 +48,12 @@ export default function VirtualOffice() {
     return sessionStorage.getItem('jarvis-map-intro-v2') !== '1';
   });
   const [chatPanelOpen, setChatPanelOpen] = useState(false); // 팀장 채팅 패널 (기본 닫힘)
+  // 뷰 모드 (맵 / 표) — localStorage 영속화
+  const [viewMode, setViewMode] = useState<'map' | 'table'>(() => {
+    if (typeof window === 'undefined') return 'map';
+    const v = localStorage.getItem('jarvis-map-view-mode');
+    return v === 'table' ? 'table' : 'map';
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // 게임 상태 refs
@@ -80,6 +88,20 @@ export default function VirtualOffice() {
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // 뷰 모드 변경 시 localStorage 저장
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('jarvis-map-view-mode', viewMode);
+  }, [viewMode]);
+
+  // 표 모드에서 행 클릭 → 기존 팝업 로직 재사용
+  const handleTableRowClick = useCallback((room: RoomDef, rowBriefing: BriefingData) => {
+    setBriefing(rowBriefing);
+    setPopupOpen(true);
+    setPopupLoading(false);
+    setChatResp('');
   }, []);
 
   // ── 팝업 닫기 ──────────────────────────────────────────────
@@ -1838,11 +1860,60 @@ export default function VirtualOffice() {
       <canvas
         ref={canvasRef}
         style={{
-          display: 'block', width: '100vw', height: '100vh', touchAction: 'none',
+          display: viewMode === 'map' ? 'block' : 'none',
+          width: '100vw', height: '100vh', touchAction: 'none',
           // 인터랙터블 요소 호버 시 포인터 커서
           cursor: tooltipRoom ? 'pointer' : 'default',
         }}
       />
+
+      {/* ── 표 모드 ── */}
+      {viewMode === 'table' && (
+        <DashboardTable isMobile={isMobile} onRowClick={handleTableRowClick} />
+      )}
+
+      {/* ── 맵/표 토글 (우상단) ── */}
+      <div style={{
+        position: 'fixed',
+        top: isMobile ? 12 : 20,
+        right: isMobile ? 12 : 24,
+        zIndex: 900,
+        display: 'flex',
+        background: 'rgba(13,17,23,0.92)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 10,
+        padding: 3,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(8px)',
+      }}>
+        {(['map', 'table'] as const).map(mode => {
+          const active = viewMode === mode;
+          const label = mode === 'map' ? '🗺️ 맵' : '📊 표';
+          return (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              aria-pressed={active}
+              style={{
+                padding: isMobile ? '6px 10px' : '7px 14px',
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: 700,
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                background: active ? '#c9a227' : 'transparent',
+                color: active ? '#0d1117' : '#8b949e',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 우상단 Board 배너 (오늘 회의록 KPI) */}
+      {viewMode === 'map' && <BoardBanner />}
 
       {/* ── 게임 인트로 오버레이 ── */}
       {showIntro && (

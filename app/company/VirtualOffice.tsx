@@ -1085,7 +1085,9 @@ export default function VirtualOffice() {
 
     function drawMinimap(canvasW: number, canvasH: number) {
       const mmW = 180, mmH = 130;
-      const mx = canvasW - mmW - 12, my = 36;
+      // 우하단으로 이동 (구 우상단 → 우하단. 정보 패널이 우상단 차지)
+      const mx = canvasW - mmW - 16;
+      const my = canvasH - mmH - 16;
       const scale = Math.min(mmW / (COLS * T), mmH / (ROWS * T));
 
       // Background

@@ -72,10 +72,77 @@ export default function TeamBriefingPopup({
       >
         {popupLoading ? (
           <div style={{ padding: 60, textAlign: 'center', color: '#8b949e' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-            <div style={{ fontSize: 14, color: '#6b7280', letterSpacing: 0.5 }}>브리핑 로딩 중...</div>
-            <div style={{ marginTop: 16, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1, overflow: 'hidden', width: 100, margin: '16px auto 0' }}>
-              <div style={{ height: '100%', width: '60%', background: 'linear-gradient(90deg, transparent, #58a6ff, transparent)' }} />
+            <style>{`
+              @keyframes jmShimmer {
+                0%   { transform: translateX(-100%); }
+                100% { transform: translateX(200%); }
+              }
+              @keyframes jmPulse {
+                0%, 100% { transform: scale(1); opacity: 0.85; }
+                50%      { transform: scale(1.12); opacity: 1; }
+              }
+              @keyframes jmRotate {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+              }
+              @keyframes jmFadeDots {
+                0%, 20%  { opacity: 0.2; }
+                40%      { opacity: 1; }
+                60%, 100% { opacity: 0.2; }
+              }
+            `}</style>
+            {/* 회전 링 스피너 */}
+            <div style={{
+              width: 56, height: 56,
+              margin: '0 auto 18px',
+              position: 'relative',
+            }}>
+              <div style={{
+                position: 'absolute', inset: 0,
+                border: '3px solid rgba(88,166,255,0.08)',
+                borderRadius: '50%',
+              }} />
+              <div style={{
+                position: 'absolute', inset: 0,
+                border: '3px solid transparent',
+                borderTopColor: '#58a6ff',
+                borderRightColor: '#58a6ff',
+                borderRadius: '50%',
+                animation: 'jmRotate 0.9s linear infinite',
+              }} />
+              {/* 가운데 pulse 코어 */}
+              <div style={{
+                position: 'absolute',
+                top: '50%', left: '50%',
+                width: 18, height: 18,
+                marginTop: -9, marginLeft: -9,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at center, #58a6ff 0%, #1f6feb 70%, transparent 100%)',
+                animation: 'jmPulse 1.4s ease-in-out infinite',
+                filter: 'blur(0.5px)',
+              }} />
+            </div>
+            <div style={{ fontSize: 14, color: '#c9d1d9', letterSpacing: 0.5, fontWeight: 600 }}>
+              브리핑 로딩 중
+              <span style={{ animation: 'jmFadeDots 1.4s infinite', animationDelay: '0s' }}>.</span>
+              <span style={{ animation: 'jmFadeDots 1.4s infinite', animationDelay: '0.2s' }}>.</span>
+              <span style={{ animation: 'jmFadeDots 1.4s infinite', animationDelay: '0.4s' }}>.</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>cron.log · 메모리 · RAG 집계 중</div>
+            {/* 하단 shimmer 바 */}
+            <div style={{
+              marginTop: 20, height: 3,
+              background: 'rgba(255,255,255,0.06)',
+              borderRadius: 2, overflow: 'hidden',
+              width: 160, margin: '20px auto 0',
+              position: 'relative',
+            }}>
+              <div style={{
+                position: 'absolute', top: 0, left: 0,
+                width: '50%', height: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(88,166,255,0.8), transparent)',
+                animation: 'jmShimmer 1.3s ease-in-out infinite',
+              }} />
             </div>
           </div>
         ) : briefing ? (() => {

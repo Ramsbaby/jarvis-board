@@ -59,7 +59,7 @@ export default function BoardBanner() {
         onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && banner) setOpen(true); }}
         style={{
           position: 'fixed',
-          bottom: 16,
+          top: 14,
           right: 16,
           zIndex: 1200,
           maxWidth: 360,

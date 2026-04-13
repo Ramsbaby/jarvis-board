@@ -24,11 +24,11 @@ export interface RoomDef {
 
 export const ROOMS: RoomDef[] = [
   // Row 1 (y=2)
-  // x=2 y=2 → 재무실 (신설). 좌상단 프리미엄 자리.
-  { id: 'finance',     entityId: 'finance',      name: '재무실',     emoji: '💰', description: '자비스 AI 운영 비용(chat-cost/cost-monitor) + TQQQ·시장 포지션(tqqq-monitor/market-alert) + 오너 개인 수입(Preply/finance-monitor) 통합. 이번 주/월 얼마 벌고 얼마 썼는지 한 곳에서.',     x: 2,  y: 2,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 4,  teamColor: '#10b981', floorStyle: 'executive' },
+  // 대표실 → 맨 왼쪽 (권위 있는 프리미엄 자리). 재무실 → 맨 오른쪽.
+  { id: 'president',   entityId: 'president',    name: '대표실',     emoji: '🏛️', description: '이정우(실 대표)의 공간. 자비스 AI 경영 데이터(이사회·KPI·경영 점검) + 오너 개인 데이터(Discord 약속·Claude 세션·메모리)를 하나로 통합. 구 CEO실은 여기로 흡수됨.',                 x: 2,  y: 2,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 4,  teamColor: '#c9a227', floorStyle: 'executive' },
   { id: 'infra-lead',  entityId: 'infra-lead',  name: '인프라팀',   emoji: '🖥️', description: '서버·봇·크론·디스크 안정성 관리. 매일 09:00 자동 자가진단을 실행하고 이상 감지 시 Discord #jarvis-system에 즉시 경보를 발송합니다.',                                               x: 11, y: 2,  w: 7, h: 5, type: 'team',    npcX: 14, npcY: 4,  teamColor: '#22c55e', floorStyle: 'carpet' },
   { id: 'trend-lead',  entityId: 'trend-lead',  name: '정보팀',     emoji: '📡', description: '시장·기술·뉴스 트렌드 인텔리전스. 평일 07:30 글로벌 동향 분석 리포트를 생성하고 Discord #jarvis-ceo 채널로 전송합니다.',                                                            x: 20, y: 2,  w: 7, h: 5, type: 'team',    npcX: 23, npcY: 4,  teamColor: '#3b82f6', floorStyle: 'carpet' },
-  { id: 'president',   entityId: 'president',    name: '대표실',     emoji: '🏛️', description: '이정우(실 대표)의 공간. 자비스 AI 경영 데이터(이사회·KPI·경영 점검) + 오너 개인 데이터(Discord 약속·Claude 세션·메모리)를 하나로 통합. 구 CEO실은 여기로 흡수됨.',                 x: 29, y: 2,  w: 7, h: 5, type: 'meeting', npcX: 32, npcY: 4,  teamColor: '#c9a227', floorStyle: 'executive' },
+  { id: 'finance',     entityId: 'finance',      name: '재무실',     emoji: '💰', description: '자비스 AI 운영 비용(chat-cost/cost-monitor) + TQQQ·시장 포지션(tqqq-monitor/market-alert) + 오너 개인 수입(Preply/finance-monitor) 통합. 이번 주/월 얼마 벌고 얼마 썼는지 한 곳에서.',     x: 29, y: 2,  w: 7, h: 5, type: 'meeting', npcX: 32, npcY: 4,  teamColor: '#10b981', floorStyle: 'executive' },
   // Row 2 (y=10)
   { id: 'record-lead', entityId: 'record-lead', name: '기록팀',     emoji: '📁', description: '메모리·기록 관리 및 RAG 아카이빙 (백엔드). 매일 23:50 전사 대화 기록을 정리하고 12만 청크 규모의 RAG 벡터 DB를 최신 상태로 유지합니다. 프론트 검색은 라이브러리가 담당.',                     x: 2,  y: 10, w: 7, h: 5, type: 'team',    npcX: 5,  npcY: 12, teamColor: '#92702a', floorStyle: 'carpet' },
   { id: 'audit-lead',  entityId: 'audit-lead',  name: '감사팀',     emoji: '🔒', description: '내부감사·KPI 평가·크론 성과 추적. 매일 23:00 전사 크론 성공률을 집계하고 연속 실패 크론을 감지하여 에스컬레이션합니다.',                                                            x: 11, y: 10, w: 7, h: 5, type: 'team',    npcX: 14, npcY: 12, teamColor: '#dc2626', floorStyle: 'carpet' },

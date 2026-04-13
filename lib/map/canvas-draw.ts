@@ -54,6 +54,31 @@ export function drawPlantSmall(ctx: CanvasRenderingContext2D, px: number, py: nu
   ctx.fill();
 }
 
+// ── 오픈 데스크 pod용 심플 가구 (데스크 1개 + 모니터 1개 + 의자 1개) ──
+function drawSimplePod(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw: number, rh: number, teamColor: string) {
+  const cx = rx + rw / 2;
+  const cy = ry + rh / 2;
+
+  // L자 데스크 (심플)
+  ctx.fillStyle = '#2a2a3e';
+  ctx.fillRect(cx - T * 1.2, cy - T * 0.3, T * 2.4, T * 0.5);
+  ctx.fillStyle = '#1e1e30';
+  ctx.fillRect(cx - T * 1.2, cy - T * 0.3, T * 2.4, 2);  // 상단 엣지
+
+  // 모니터 (중앙 1개)
+  drawMonitor(ctx, cx - T * 0.4, cy - T * 1, T * 0.9, T * 0.5, teamColor + '20', '#222');
+  // 모니터 화면 내용 (상태 표시등 느낌)
+  ctx.fillStyle = teamColor + '40';
+  ctx.fillRect(cx - T * 0.25, cy - T * 0.85, T * 0.2, T * 0.15);
+  ctx.fillRect(cx + T * 0.1, cy - T * 0.85, T * 0.2, T * 0.15);
+
+  // 의자 (뒤쪽)
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.arc(cx, cy + T * 0.6, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 // ── 룸별 가구 드로잉 ──────────────────────────────────────
 export function drawRoomFurniture(
   ctx: CanvasRenderingContext2D,
@@ -65,6 +90,12 @@ export function drawRoomFurniture(
   fc: number,
   cronItems: CronItem[],
 ) {
+  // pod(오픈 데스크)는 심플 가구로 통일
+  if (r.wallStyle === 'pod') {
+    drawSimplePod(ctx, rx, ry, _rw, _rh, r.teamColor);
+    return;
+  }
+
   switch (r.id) {
     case 'finance': {
       // 재무실 — 금고 + 차트 모니터 + 금화

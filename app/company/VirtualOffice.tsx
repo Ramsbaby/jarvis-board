@@ -33,6 +33,7 @@ export default function VirtualOffice() {
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupLoading, setPopupLoading] = useState(false);
+  const [activeRoom, setActiveRoom] = useState<RoomDef | null>(null);
   const [nearbyRoom, setNearbyRoom] = useState<RoomDef | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [chatResp, setChatResp] = useState('');
@@ -81,7 +82,7 @@ export default function VirtualOffice() {
   const cameraRef = useRef({ x: 0, y: 0 });
   const frameCountRef = useRef(0);
   const historyPushedRef = useRef(false);
-  const zoomRef = useRef(0.7); // 줌 레벨 (0.6 ~ 2.5) — 55×32 맵 대응
+  const zoomRef = useRef(1.0); // 줌 레벨 (0.55 ~ 2.4) — 초기 100%
   const cronDataRef = useRef<CronItem[]>([]);
 
   useEffect(() => { popupOpenRef.current = popupOpen || cronGridOpen; }, [popupOpen, cronGridOpen]);
@@ -167,6 +168,10 @@ export default function VirtualOffice() {
         const roomId = AGENT_TEAM_TO_ROOM[team.teamId];
         if (!roomId) continue;
         const st = team.status === 'failed' ? 'red' : team.status === 'success' ? 'green' : 'yellow';
+        // 여러 팀이 같은 룸에 매핑될 때 (ex. growth-lead = growth-team + academy-team):
+        // skipped/unknown 상태가 이미 의미 있는 상태(success/failed)를 덮어쓰지 않음
+        const existing = states[roomId];
+        if (existing && (team.status === 'skipped' || team.status === 'unknown')) continue;
         states[roomId] = { status: st, task: team.lastTask || '', activity: team.lastMessage || '' };
       }
 
@@ -230,26 +235,31 @@ export default function VirtualOffice() {
     setPopupOpen(true);
     setPopupLoading(true);
     setBriefing(null);
+    setActiveRoom(room);
     setChatResp('');
 
     const entityId = room.entityId;
 
-    // Server room: fetch Mac Mini metrics instead of cron-engine
+    // Server room: fetch Mac Mini metrics + RAG health
     if (room.id === 'server-room') {
       try {
-        const [diskRes, botRes] = await Promise.all([
+        const [diskRes, botRes, ragRes] = await Promise.all([
           fetch('/api/entity/disk-storage/briefing').catch(() => null),
           fetch('/api/entity/discord-bot/briefing').catch(() => null),
+          fetch('/api/entity/rag-memory/briefing').catch(() => null),
         ]);
         const diskData = diskRes?.ok ? await diskRes.json() as BriefingData : null;
         const botData = botRes?.ok ? await botRes.json() as BriefingData : null;
+        const ragData = ragRes?.ok ? await ragRes.json() as BriefingData : null;
 
-        const worstStatus = (diskData?.status === 'RED' || botData?.status === 'RED') ? 'RED'
-          : (diskData?.status === 'YELLOW' || botData?.status === 'YELLOW') ? 'YELLOW' : 'GREEN';
+        const statuses = [diskData?.status, botData?.status, ragData?.status];
+        const worstStatus = statuses.includes('RED') ? 'RED'
+          : statuses.includes('YELLOW') ? 'YELLOW' : 'GREEN';
 
         const summaryParts: string[] = [];
         if (diskData?.summary) summaryParts.push(diskData.summary);
         if (botData?.summary) summaryParts.push(botData.summary);
+        if (ragData?.summary) summaryParts.push(ragData.summary);
 
         setBriefing({
           id: room.id, name: room.name, emoji: room.emoji,
@@ -257,8 +267,8 @@ export default function VirtualOffice() {
           summary: summaryParts.join(' / ') || room.description,
           roomDescription: room.description,
           stats: diskData?.stats || botData?.stats,
-          recentActivity: diskData?.recentActivity || botData?.recentActivity,
-          alerts: [...(diskData?.alerts || []), ...(botData?.alerts || [])],
+          recentActivity: diskData?.recentActivity || botData?.recentActivity || ragData?.recentActivity,
+          alerts: [...(diskData?.alerts || []), ...(botData?.alerts || []), ...(ragData?.alerts || [])],
         });
         setPopupLoading(false);
         return;
@@ -321,7 +331,15 @@ export default function VirtualOffice() {
           name: team.label || room.name,
           emoji: room.emoji,
           status: team.status === 'success' ? 'GREEN' : team.status === 'failed' ? 'RED' : 'YELLOW',
-          summary: `최근: ${team.lastTask || 'idle'} — ${team.lastMessage || '대기 중'}`,
+          summary: [
+            team.lastTask && team.lastTask !== 'idle'
+              ? `**최근 작업** · \`${team.lastTask}\``
+              : null,
+            team.lastMessage && !['SKIPPED','disabled','START','시작'].some(k => (team.lastMessage||'').includes(k))
+              ? `**결과** · ${team.lastMessage}`
+              : null,
+            team.schedule ? `**스케줄** · ${team.schedule}` : null,
+          ].filter(Boolean).join('\n\n') || `**${team.label}** 대기 중`,
           schedule: team.schedule,
           roomDescription: room.description,
           stats: {
@@ -404,9 +422,14 @@ export default function VirtualOffice() {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // Pointer/touch: tap on NPC or anywhere inside room
-    const onPointerDown = (e: PointerEvent) => {
+    // ── 클릭/탭 핸들러 ──
+    // pointer 이벤트 대신 click 이벤트 사용:
+    //   - touch-action: none 환경에서 click은 탭 직후 즉시 발생 (300ms 지연 없음)
+    //   - 브라우저가 탭 vs 드래그를 자동 구분 (드래그 시 click 미발생)
+    //   - pointercancel/capture 복잡도 없이 모바일/데스크탑 동일 동작 보장
+    const onClick = (e: MouseEvent) => {
       if (popupOpenRef.current) return;
+
       const rect = canvas.getBoundingClientRect();
       const clickX = (e.clientX - rect.left) / zoomRef.current;
       const clickY = (e.clientY - rect.top) / zoomRef.current;
@@ -416,13 +439,11 @@ export default function VirtualOffice() {
       // 크론 NPC 클릭 체크 — grid-based (proximity overlap 없음)
       const cronRoom = ROOMS.find(r => r.id === 'cron-center');
       if (cronRoom) {
-        // 크론센터 방 전체 화면 영역
         const crRx = cronRoom.x * T - camX;
         const crRy = cronRoom.y * T - camY;
         const crRw = cronRoom.w * T;
         const crRh = cronRoom.h * T;
         if (clickX >= crRx && clickX < crRx + crRw && clickY >= crRy && clickY < crRy + crRh) {
-          // 방 내부 상대 좌표 → col/row 계산 (T/2 오프셋 보정 — 워크스테이션 center = tile*T + T/2)
           const relX = clickX - (crRx + CRON_COL_START * T) - T / 2;
           const relY = clickY - (crRy + CRON_ROW_START * T) - T / 2;
           const col = Math.round(relX / (CRON_COL_SPACING * T));
@@ -436,14 +457,13 @@ export default function VirtualOffice() {
               return;
             }
           }
-          // 크론센터 방 안이지만 빈 영역 — 크론센터 전체 그리드 열기
           setCronGridOpen(true);
-          setPopupOpen(true);
+          // setPopupOpen(true) 호출 금지 — TeamBriefingPopup(zIndex:9999)이 CronGridPopup(1050)을 덮음
           return;
         }
       }
 
-      // First check NPC proximity (desktop/precise click)
+      // NPC 근접 체크 (데스크탑 정밀 클릭)
       for (const r of ROOMS) {
         const nx = r.npcX * T - camX + T / 2;
         const ny = r.npcY * T - camY + T / 2;
@@ -454,7 +474,7 @@ export default function VirtualOffice() {
         }
       }
 
-      // Then check if tap is inside any room area (mobile-friendly)
+      // 방 영역 탭 (모바일 — 넓은 터치 타겟)
       for (const r of ROOMS) {
         const rx = r.x * T - camX;
         const ry = r.y * T - camY;
@@ -478,10 +498,12 @@ export default function VirtualOffice() {
         }
       }
     };
-    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('click', onClick);
 
-    // Hover tooltip for rooms
+    // Hover tooltip for rooms (데스크탑 마우스 전용)
     const onPointerMove = (e: PointerEvent) => {
+      // 터치 디바이스는 hover 툴팁 비활성화
+      if (e.pointerType === 'touch') { setTooltipRoom(null); return; }
       if (popupOpenRef.current) { setTooltipRoom(null); return; }
       const rect = canvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) / zoomRef.current;
@@ -503,22 +525,34 @@ export default function VirtualOffice() {
     };
     canvas.addEventListener('pointermove', onPointerMove);
 
-    // ── 줌: 마우스 휠 ──────────────────────────────────────────
+    // ── 줌: 마우스 휠 (커서 위치 기준 중심점 보정) ──────────────
     const ZOOM_MIN = 0.55, ZOOM_MAX = 2.4;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.08 : 0.93;
-      zoomRef.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current * factor));
+      const prevZoom = zoomRef.current;
+      const nextZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prevZoom * factor));
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left;
+      const my = e.clientY - rect2.top;
+      cameraRef.current.x += mx / prevZoom - mx / nextZoom;
+      cameraRef.current.y += my / prevZoom - my / nextZoom;
+      zoomRef.current = nextZoom;
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
     // ── 줌: 핀치 제스처 (모바일 두 손가락) ─────────────────────
+    // 핀치 중심점 기준 카메라 보정: 줌 전후 중심점이 같은 월드 좌표를 가리키도록
     let _pinchDist = 0;
+    let _pinchMidX = 0;  // 핀치 중심 CSS 픽셀 X
+    let _pinchMidY = 0;  // 핀치 중심 CSS 픽셀 Y
     const onTouchStartZoom = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         _pinchDist = Math.sqrt(dx * dx + dy * dy);
+        _pinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        _pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       }
     };
     const onTouchMoveZoom = (e: TouchEvent) => {
@@ -527,10 +561,21 @@ export default function VirtualOffice() {
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (_pinchDist > 0) {
-        const scale = dist / _pinchDist;
-        zoomRef.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current * scale));
+        const scaleDelta = dist / _pinchDist;
+        const prevZoom = zoomRef.current;
+        const nextZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prevZoom * scaleDelta));
+        // 핀치 중심점이 줌 전후 동일한 월드 좌표를 가리키도록 카메라 보정
+        // 월드 좌표 = (midX / prevZoom + camX) → nextZoom 적용 후 같은 midX 위치 유지
+        const rect2 = canvas.getBoundingClientRect();
+        const midX = _pinchMidX - rect2.left;
+        const midY = _pinchMidY - rect2.top;
+        cameraRef.current.x += midX / prevZoom - midX / nextZoom;
+        cameraRef.current.y += midY / prevZoom - midY / nextZoom;
+        zoomRef.current = nextZoom;
       }
       _pinchDist = dist;
+      _pinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      _pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       e.preventDefault();
     };
     const onTouchEndZoom = () => { _pinchDist = 0; };
@@ -1165,8 +1210,13 @@ export default function VirtualOffice() {
       ctx!.fillText(nameText, nx, ny + 29);
 
       // Status text (current task) — 하단 라벨 (항상, 반투명 배경)
-      if (state?.task) {
-        const taskLabel = state.task.length > 14 ? state.task.slice(0, 13) + '\u2026' : state.task;
+      // SKIPPED/disabled/idle은 표시 제외, 크론명 humanize (하이픈→공백)
+      const _taskRaw = (state?.task || '').replace(/-/g, ' ').replace(/_/g, ' ');
+      const _isSkipped = (state?.activity || '').toLowerCase().includes('skipped')
+        || (state?.activity || '').toLowerCase().includes('disabled')
+        || (state?.task || '') === 'idle';
+      if (state?.task && !_isSkipped) {
+        const taskLabel = _taskRaw.length > 14 ? _taskRaw.slice(0, 13) + '\u2026' : _taskRaw;
         ctx!.font = '7px monospace';
         const taskW = ctx!.measureText(taskLabel).width + 6;
         ctx!.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1179,7 +1229,7 @@ export default function VirtualOffice() {
       }
 
       // ── NPC 머리 위 현재작업 배지 (플레이어 거리 기반 선명도) ──
-      if (state?.task && state.task !== 'idle') {
+      if (state?.task && state.task !== 'idle' && !_isSkipped) {
         const p = playerRef.current;
         const dx = p.x - r.npcX;
         const dy = p.y - r.npcY;
@@ -1187,7 +1237,7 @@ export default function VirtualOffice() {
         // 5타일 이내 선명(1.0), 12타일 밖은 0, 사이는 linear
         const clarity = dist <= 5 ? 1 : dist >= 12 ? 0 : 1 - (dist - 5) / 7;
         if (clarity > 0.05) {
-          const badgeText = state.task.length > 18 ? state.task.slice(0, 17) + '\u2026' : state.task;
+          const badgeText = _taskRaw.length > 18 ? _taskRaw.slice(0, 17) + '\u2026' : _taskRaw;
           ctx!.save();
           ctx!.font = 'bold 9px monospace';
           const badgeW = ctx!.measureText(badgeText).width + 10;
@@ -1997,7 +2047,7 @@ export default function VirtualOffice() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', resize);
-      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('click', onClick);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('touchstart', onTouchStartZoom);
@@ -2177,51 +2227,74 @@ export default function VirtualOffice() {
         <DashboardTable isMobile={isMobile} onRowClick={handleTableRowClick} />
       )}
 
-      {/* ── 맵/표 토글 (우상단) ── */}
+      {/* ── 맵/표 토글 + 도움말 (우상단) ── */}
       <div style={{
         position: 'fixed',
         top: isMobile ? 12 : 20,
         right: isMobile ? 12 : 24,
         zIndex: 900,
         display: 'flex',
-        background: 'rgba(0,0,0,0.6)',
-        border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 10,
-        padding: 3,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-        backdropFilter: 'blur(8px)',
+        gap: 6,
+        alignItems: 'center',
       }}>
-        {(['map', 'table'] as const).map(mode => {
-          const active = viewMode === mode;
-          const label = mode === 'map' ? '🗺️ 맵' : '📊 표';
-          return (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              aria-pressed={active}
-              style={{
-                padding: isMobile ? '6px 10px' : '7px 14px',
-                fontSize: isMobile ? 11 : 12,
-                fontWeight: 700,
-                borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                background: active ? '#c9a227' : 'transparent',
-                color: active ? '#fff' : '#8b949e',
-                transition: 'background 0.15s, color 0.15s',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
+        <button
+          onClick={() => setShowIntro(true)}
+          title="도움말"
+          style={{
+            width: 34, height: 34,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.6)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            color: '#8b949e',
+            fontSize: 15, fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(8px)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            transition: 'color 0.15s',
+          }}
+        >?</button>
+        <div style={{
+          display: 'flex',
+          background: 'rgba(0,0,0,0.6)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 10,
+          padding: 3,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          backdropFilter: 'blur(8px)',
+        }}>
+          {(['map', 'table'] as const).map(mode => {
+            const active = viewMode === mode;
+            const label = mode === 'map' ? '🗺️ 맵' : '📊 표';
+            return (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                aria-pressed={active}
+                style={{
+                  padding: isMobile ? '6px 10px' : '7px 14px',
+                  fontSize: isMobile ? 11 : 12,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: active ? '#c9a227' : 'transparent',
+                  color: active ? '#fff' : '#8b949e',
+                  transition: 'background 0.15s, color 0.15s',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* 우상단 Board 배너 (오늘 회의록 KPI) */}
-      {viewMode === 'map' && <BoardBanner />}
+      {/* 우상단 Board 배너 (오늘 회의록 KPI) — 모바일에서 Statusline과 겹침 방지로 숨김 */}
+      {viewMode === 'map' && !isMobile && <BoardBanner />}
 
-      {/* 우상단 2차 정보 패널 (예정 크론 + 최근 커밋) */}
-      {viewMode === 'map' && <RightInfoPanels isMobile={isMobile} />}
+      {/* 우상단 2차 정보 패널 (예정 크론 + 최근 커밋) — 모바일 숨김 */}
+      {viewMode === 'map' && !isMobile && <RightInfoPanels isMobile={isMobile} />}
 
       {/* 좌하단 실시간 크론 이벤트 토스트 (SSE) */}
       {viewMode === 'map' && <CronToastStack isMobile={isMobile} />}
@@ -2345,11 +2418,12 @@ export default function VirtualOffice() {
       )}
 
 
-      {/* ── Team Briefing Popup ── */}
+      {/* ── Team Briefing Popup (크론 상세/그리드 팝업 열려있으면 숨김) ── */}
       <TeamBriefingPopup
-        popupOpen={popupOpen}
+        popupOpen={popupOpen && !cronPopup && !cronGridOpen}
         popupLoading={popupLoading}
         briefing={briefing}
+        activeRoom={activeRoom}
         isMobile={isMobile}
         cronData={cronData}
         closePopup={closePopup}

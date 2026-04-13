@@ -15,6 +15,7 @@ import CronDetailPopup from '@/components/map/CronDetailPopup';
 import MobileControls from '@/components/map/MobileControls';
 import BoardBanner from '@/components/map/BoardBanner';
 import CronToastStack from '@/components/map/CronToastStack';
+import CostMeter from '@/components/map/CostMeter';
 import DashboardTable from '@/components/map/DashboardTable';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1980,6 +1981,9 @@ export default function VirtualOffice() {
 
       {/* 좌하단 실시간 크론 이벤트 토스트 (SSE) */}
       {viewMode === 'map' && <CronToastStack />}
+
+      {/* 좌상단 Claude 비용 메터 */}
+      <CostMeter isMobile={isMobile} />
 
       {/* ── 게임 인트로 오버레이 ── */}
       {showIntro && (

@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execFileSync } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
-import Anthropic from '@anthropic-ai/sdk';
 import { getDb } from '@/lib/db';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap } from '@/lib/chat-cost';
@@ -187,8 +186,10 @@ function gatherTeamContext(teamId: string): string {
 // TODO(frontend): ChatPanel.tsx / VirtualOffice.tsx의 sendMessage는 SSE 파싱으로 전환 필요.
 // 응답은 JSON이 아닌 text/event-stream (data: {"token":"..."} / data: {"done":true,"id":N}).
 
-const MODEL = 'claude-sonnet-4-5';
+// Groq llama-3.3-70b-versatile (OpenAI 호환 SSE 스트리밍)
+const MODEL = 'llama-3.3-70b-versatile';
 const MAX_TOKENS = 1200;
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const RATE_LIMIT = { perMin: 5, perDay: 50 };
 
@@ -240,9 +241,9 @@ export async function POST(req: NextRequest) {
     // 비용 파일 읽기 실패 시에는 통과 (hard-block 아님)
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
+    return NextResponse.json({ error: 'GROQ_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
   }
 
   const systemPrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
@@ -272,8 +273,6 @@ ${message}
 
 위 실제 데이터를 근거로 ${persona}의 입장에서 한국어로 답변하세요. 데이터에 없는 내용을 지어내지 마세요. 짧고 구체적으로. 절대 "이전 세션" 같은 말 하지 마세요.`;
 
-  const anthropic = new Anthropic({ apiKey });
-
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -288,31 +287,80 @@ ${message}
       req.signal?.addEventListener('abort', onAbort);
 
       try {
-        const claudeStream = anthropic.messages.stream({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userContent }],
+        const groqRes = await fetch(GROQ_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            max_tokens: MAX_TOKENS,
+            temperature: 0.5,
+            stream: true,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent },
+            ],
+          }),
+          signal: req.signal,
         });
 
-        for await (const chunk of claudeStream) {
-          if (aborted) break;
-          if (chunk.type === 'message_start') {
-            // usage.input_tokens는 message_start 시점에 제공
-            const u = chunk.message?.usage;
-            if (u) {
-              inputTokens = u.input_tokens ?? 0;
-              outputTokens = u.output_tokens ?? 0;
-            }
-          } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-            const token = chunk.delta.text;
-            fullText += token;
-            controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
-          } else if (chunk.type === 'message_delta') {
-            const u = chunk.usage;
-            if (u) {
-              // message_delta의 output_tokens가 최종 값
-              outputTokens = u.output_tokens ?? outputTokens;
+        if (!groqRes.ok || !groqRes.body) {
+          const errBody = await groqRes.text().catch(() => '');
+          throw new Error(`Groq HTTP ${groqRes.status}: ${errBody.slice(0, 300)}`);
+        }
+
+        const reader = groqRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        // Groq SSE는 OpenAI 호환: `data: {...}\n\n` lines, 마지막은 `data: [DONE]`
+        // 마지막 청크 직전(stream_options 없이도)에 `usage` 필드가 포함된 chunk가 옴
+        outer: while (true) {
+          if (aborted) {
+            try { await reader.cancel(); } catch { /* ignore */ }
+            break;
+          }
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE 이벤트 단위 분리: 빈 줄(\n\n)이 구분자
+          let sepIdx;
+          while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, sepIdx);
+            buffer = buffer.slice(sepIdx + 2);
+
+            // 각 이벤트는 여러 줄 가능하지만 Groq는 보통 단일 `data: ` 라인
+            for (const line of rawEvent.split('\n')) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith('data:')) continue;
+              const payload = trimmed.slice(5).trim();
+              if (!payload) continue;
+              if (payload === '[DONE]') {
+                break outer;
+              }
+              try {
+                const parsed = JSON.parse(payload) as {
+                  choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+                  usage?: { prompt_tokens?: number; completion_tokens?: number };
+                  x_groq?: { usage?: { prompt_tokens?: number; completion_tokens?: number } };
+                };
+                const token = parsed.choices?.[0]?.delta?.content;
+                if (token) {
+                  fullText += token;
+                  controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+                }
+                // usage는 마지막 chunk에 옴 (top-level 또는 x_groq 안)
+                const usage = parsed.usage ?? parsed.x_groq?.usage;
+                if (usage) {
+                  inputTokens = usage.prompt_tokens ?? inputTokens;
+                  outputTokens = usage.completion_tokens ?? outputTokens;
+                }
+              } catch {
+                // 비-JSON 라인은 무시
+              }
             }
           }
         }
@@ -328,11 +376,13 @@ ${message}
         ).run(teamId, 'assistant', fullText);
         const savedId = Number(result.lastInsertRowid);
 
-        // Record cost (best-effort)
-        try {
-          await recordCost({ model: MODEL, inputTokens, outputTokens });
-        } catch (costErr) {
-          console.error('[game-chat] recordCost failed:', costErr);
+        // Record cost (best-effort) — usage가 비어 있으면 skip
+        if (inputTokens > 0 || outputTokens > 0) {
+          try {
+            await recordCost({ model: MODEL, inputTokens, outputTokens });
+          } catch (costErr) {
+            console.error('[game-chat] recordCost failed:', costErr);
+          }
         }
 
         controller.enqueue(

@@ -569,6 +569,44 @@ export default function VirtualOffice() {
       const rw = r.w * T, rh = r.h * T;
       const state = npcStatesRef.current[r.id];
 
+      // 오픈 오피스 파드는 벽/깊이 그림자/문 건너뛰고 단순 카펫 존 + 가구만 그림
+      if (r.wallStyle === 'pod') {
+        // 팀 컬러 카펫 존 (경계 부드럽게, 벽 없음)
+        const podCarpet = ctx!.createRadialGradient(
+          rx + rw / 2, ry + rh / 2, 0,
+          rx + rw / 2, ry + rh / 2, Math.max(rw, rh) * 0.6,
+        );
+        podCarpet.addColorStop(0, r.teamColor + '22');
+        podCarpet.addColorStop(0.7, r.teamColor + '10');
+        podCarpet.addColorStop(1, 'transparent');
+        ctx!.fillStyle = podCarpet;
+        ctx!.fillRect(rx, ry, rw, rh);
+        // 파드 경계선 (dashed, 아주 얇게) — 시각적 구분만
+        ctx!.strokeStyle = r.teamColor + '30';
+        ctx!.lineWidth = 1;
+        ctx!.setLineDash([4, 4]);
+        ctx!.strokeRect(rx + 4, ry + 4, rw - 8, rh - 8);
+        ctx!.setLineDash([]);
+        // 팀 상태 글로우 (조금 줄임)
+        if (state) {
+          const glowColor = state.status === 'green' ? '#3fb950' : state.status === 'red' ? '#f85149' : '#d29922';
+          const grdGlow = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.5);
+          grdGlow.addColorStop(0, glowColor + '08');
+          grdGlow.addColorStop(1, 'transparent');
+          ctx!.fillStyle = grdGlow;
+          ctx!.fillRect(rx, ry, rw, rh);
+        }
+        // 파드 라벨 (top-left, 작게)
+        ctx!.font = 'bold 9px monospace';
+        ctx!.fillStyle = r.teamColor;
+        ctx!.textAlign = 'left';
+        ctx!.fillText(`${r.emoji} ${r.name}`, rx + 6, ry + 12);
+        // 가구만 그림 (벽/문 없음)
+        drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
+        return;
+      }
+
+      // Closed room — 기존 로직 그대로
       // Floor based on floorStyle
       switch (r.floorStyle) {
         case 'executive':

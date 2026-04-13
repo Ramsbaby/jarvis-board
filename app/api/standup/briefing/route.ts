@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
@@ -10,7 +10,7 @@ import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
  *
  * 데이터 소스:
  *  - morning-standup / daily-summary / personal-schedule-daily 크론 실행 결과
- *  - ~/.jarvis/state/context/morning-standup.md (마지막 스탠드업 결과 파일)
+ *  - ~/.jarvis/results/morning-standup/<YYYY-MM-DD>_<HHMMSS>.md (가장 최신 1건)
  *
  * 인프라팀(태스크 #1)의 lib/map/rooms.ts 에서 standup 방의 entityId를
  * 이 엔드포인트로 매핑한다(해당 작업은 Wave 1 마지막에 함께 반영).
@@ -19,7 +19,7 @@ import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
 const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
-const STANDUP_CONTEXT_FILE = path.join(JARVIS, 'state', 'context', 'morning-standup.md');
+const STANDUP_RESULTS_DIR = path.join(JARVIS, 'results', 'morning-standup');
 
 const STANDUP_KEYWORDS = ['morning-standup', 'daily-summary', 'personal-schedule-daily'];
 
@@ -52,11 +52,14 @@ function parseRecent(keywords: string[], limit: number): CronEntry[] {
   return entries.reverse().slice(0, limit);
 }
 
-function getLatestStandupContent(): string | null {
+function getLatestStandupContent(): { filename: string; excerpt: string } | null {
   try {
-    if (!existsSync(STANDUP_CONTEXT_FILE)) return null;
-    const content = readFileSync(STANDUP_CONTEXT_FILE, 'utf8');
-    return content.slice(0, 1200);
+    if (!existsSync(STANDUP_RESULTS_DIR)) return null;
+    const files = readdirSync(STANDUP_RESULTS_DIR).filter(f => f.endsWith('.md')).sort().reverse();
+    if (files.length === 0) return null;
+    const filename = files[0];
+    const content = readFileSync(path.join(STANDUP_RESULTS_DIR, filename), 'utf8');
+    return { filename, excerpt: content.slice(0, 1200) };
   } catch { return null; }
 }
 
@@ -70,7 +73,7 @@ interface StandupBriefing {
   avatar: string;
   summary: string;
   recentActivity: CronEntry[];
-  latestStandup: string | null;
+  latestStandup: { filename: string; excerpt: string } | null;
   updatedAt: string;
 }
 
@@ -86,11 +89,19 @@ export async function GET() {
 
   const successCount = recent.filter(r => r.result === 'SUCCESS').length;
   const failedCount = recent.filter(r => r.result === 'FAILED').length;
-  const summary = recent.length === 0
-    ? '오늘은 아직 스탠드업 실행 이력이 없어요.'
-    : failedCount === 0
-      ? `오늘 모닝 스탠드업 포함 ${successCount}건이 정상 전송됐어요.`
-      : `스탠드업 관련 이벤트 ${recent.length}건 중 ${failedCount}건에서 문제가 있었어요.`;
+  const skippedCount = recent.filter(r => r.result === 'SKIPPED').length;
+  let summary: string;
+  if (recent.length === 0) {
+    summary = '아직 스탠드업 실행 이력이 없어요.';
+  } else if (failedCount > 0) {
+    summary = `스탠드업 관련 이벤트 ${recent.length}건 중 ${failedCount}건에서 문제가 있었어요.`;
+  } else if (successCount === 0 && skippedCount > 0) {
+    summary = `최근 ${recent.length}건 모두 조건이 맞지 않아 건너뛴 상태예요.`;
+  } else if (successCount > 0) {
+    summary = `오늘 모닝 스탠드업 포함 ${successCount}건이 정상 전송됐어요${skippedCount > 0 ? ` (건너뛴 건 ${skippedCount}건)` : ''}.`;
+  } else {
+    summary = `최근 ${recent.length}건이 진행중이거나 확인 대기 상태예요.`;
+  }
 
   const data: StandupBriefing = {
     type: 'standup',

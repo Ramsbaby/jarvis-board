@@ -20,6 +20,11 @@ const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
 const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
 const BOARD_MINUTES_DIR = path.join(JARVIS, 'state', 'board-minutes');
+// 결과 dir 폴백 — board-minutes 가 비어있을 때 가장 최신 보고서를 본다
+const RESULT_FALLBACK_DIRS = [
+  path.join(JARVIS, 'results', 'board-meeting'),
+  path.join(JARVIS, 'results', 'ceo-daily-digest'),
+];
 
 const PRESIDENT_KEYWORDS = ['ceo-daily-digest', 'council-insight', 'board-meeting', 'monthly-review'];
 
@@ -52,14 +57,30 @@ function parseRecent(keywords: string[], limit: number): CronEntry[] {
   return entries.reverse().slice(0, limit);
 }
 
-function getLatestBoardMinutes(): { filename: string; excerpt: string } | null {
+function pickLatestMd(dir: string): { filename: string; full: string } | null {
   try {
-    if (!existsSync(BOARD_MINUTES_DIR)) return null;
-    const files = readdirSync(BOARD_MINUTES_DIR).filter(f => f.endsWith('.md')).sort().reverse();
+    if (!existsSync(dir)) return null;
+    const files = readdirSync(dir).filter(f => f.endsWith('.md')).sort().reverse();
     if (files.length === 0) return null;
-    const content = readFileSync(path.join(BOARD_MINUTES_DIR, files[0]), 'utf8');
+    return { filename: files[0], full: path.join(dir, files[0]) };
+  } catch { return null; }
+}
+
+function getLatestBoardMinutes(): { filename: string; excerpt: string } | null {
+  // 1차: board-minutes (전사 회의록)
+  let pick = pickLatestMd(BOARD_MINUTES_DIR);
+  // 2차: 결과 dir 폴백
+  if (!pick) {
+    for (const d of RESULT_FALLBACK_DIRS) {
+      pick = pickLatestMd(d);
+      if (pick) break;
+    }
+  }
+  if (!pick) return null;
+  try {
+    const content = readFileSync(pick.full, 'utf8');
     const excerpt = content.split('\n').slice(0, 30).join('\n').slice(0, 800);
-    return { filename: files[0], excerpt };
+    return { filename: pick.filename, excerpt };
   } catch { return null; }
 }
 
@@ -89,11 +110,19 @@ export async function GET() {
 
   const successCount = recent.filter(r => r.result === 'SUCCESS').length;
   const failedCount = recent.filter(r => r.result === 'FAILED').length;
-  const summary = recent.length === 0
-    ? '오늘은 아직 보고된 CEO/경영 점검 이벤트가 없어요.'
-    : failedCount === 0
-      ? `최근 CEO·경영 보고 ${successCount}건이 모두 정상 전달됐습니다.`
-      : `최근 ${recent.length}건 중 ${failedCount}건에서 문제가 발생했습니다. 확인이 필요해요.`;
+  const skippedCount = recent.filter(r => r.result === 'SKIPPED').length;
+  let summary: string;
+  if (recent.length === 0) {
+    summary = '아직 보고된 CEO·경영 점검 이벤트가 없어요.';
+  } else if (failedCount > 0) {
+    summary = `최근 ${recent.length}건 중 ${failedCount}건에서 문제가 발생했습니다. 확인이 필요해요.`;
+  } else if (successCount === 0 && skippedCount > 0) {
+    summary = `최근 ${recent.length}건 모두 비활성/조건 불일치로 건너뛴 상태예요.`;
+  } else if (successCount > 0) {
+    summary = `최근 CEO·경영 보고 ${successCount}건이 정상 전달됐습니다${skippedCount > 0 ? ` (건너뛴 건 ${skippedCount}건)` : ''}.`;
+  } else {
+    summary = `최근 ${recent.length}건이 진행중이거나 확인 대기 상태예요.`;
+  }
 
   const data: PresidentBriefing = {
     type: 'president',

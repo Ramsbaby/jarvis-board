@@ -4,8 +4,8 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 export const T = 32; // tile size
-export const COLS = 40;
-export const ROWS = 28;
+export const COLS = 82;
+export const ROWS = 26;
 export const MOVE_SPEED = 130; // ms per tile
 
 // ── 방 정의 ────────────────────────────────────────────────────
@@ -32,26 +32,30 @@ export interface RoomDef {
 // 벽 색상 #21262d 단일 — teamColor는 바닥 러그로만 구분
 // ═════════════════════════════════════════════════════════════════════════
 export const ROOMS: RoomDef[] = [
-  // ── Row 1 (y=3~7): closed 2개 + pod 4개 ───────────────────────────────
-  { id: 'president',   entityId: 'president',   name: '대표실',     emoji: '🏛️', description: '이정우(실 대표)의 공간. 자비스 AI 경영 데이터(이사회·KPI·경영 점검) + 오너 개인 데이터(Discord 약속·Claude 세션·메모리)를 하나로 통합.',   x: 2,  y: 3,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 5,  teamColor: '#c9a227', floorStyle: 'executive', wallStyle: 'closed' },
-  { id: 'infra-lead',  entityId: 'infra-lead',  name: '인프라팀',   emoji: '🖥️', description: '서버·봇·크론·디스크 안정성 관리 (오픈 오피스). 매일 09:00 자동 자가진단.',                                                       x: 9,  y: 3,  w: 5, h: 4, type: 'team',    npcX: 11, npcY: 5,  teamColor: '#22c55e', floorStyle: 'open',      wallStyle: 'pod' },
-  { id: 'trend-lead',  entityId: 'trend-lead',  name: '정보팀',     emoji: '📡', description: '뉴스·기술 트렌드 인텔리전스 (오픈 오피스). 평일 07:30 글로벌 동향 분석 리포트.',                                                 x: 14, y: 3,  w: 5, h: 4, type: 'team',    npcX: 16, npcY: 5,  teamColor: '#3b82f6', floorStyle: 'open',      wallStyle: 'pod' },
-  { id: 'record-lead', entityId: 'record-lead', name: '기록팀',     emoji: '📁', description: '메모리·기록·RAG 아카이빙 백엔드 (오픈 오피스). 12만 청크 관리.',                                                                 x: 19, y: 3,  w: 5, h: 4, type: 'team',    npcX: 21, npcY: 5,  teamColor: '#92702a', floorStyle: 'open',      wallStyle: 'pod' },
-  { id: 'audit-lead',  entityId: 'audit-lead',  name: '감사팀',     emoji: '🔒', description: '내부감사·KPI 평가·크론 성과 추적 (오픈 오피스). 매일 23:00 집계.',                                                               x: 24, y: 3,  w: 5, h: 4, type: 'team',    npcX: 26, npcY: 5,  teamColor: '#dc2626', floorStyle: 'open',      wallStyle: 'pod' },
-  { id: 'finance',     entityId: 'finance',     name: '재무실',     emoji: '💰', description: '자비스 AI 운영 비용 + TQQQ·시장 포지션 + 오너 개인 수입(Preply) 통합. 이번 주/월 얼마 벌고 얼마 썼는지 한 곳에서.',               x: 29, y: 3,  w: 7, h: 5, type: 'meeting', npcX: 32, npcY: 5,  teamColor: '#10b981', floorStyle: 'executive', wallStyle: 'closed' },
+  // ═══════════════════════════════════════════════════════════════════════
+  // 오피스 영역 (x:1~49) — 방 사이 2~3타일 간격, 여유 있는 레이아웃
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // ── Row 2 (y=10~14 or 10~13): pod 2개 + closed 1개 + pod 2개 + closed 1개
-  { id: 'library',     entityId: 'library',     name: '라이브러리', emoji: '📖', description: '전사 지식 베이스 프론트엔드. 기록팀 RAG 인덱스(12만+ 청크) + 오너 메모리 검색·탐색 허브. 오픈 서재.',                             x: 2,  y: 10, w: 5, h: 4, type: 'team',    npcX: 4,  npcY: 12, teamColor: '#0ea5e9', floorStyle: 'open',  wallStyle: 'pod' },
-  { id: 'brand-lead',  entityId: 'brand-lead',  name: '브랜드팀',   emoji: '🎨', description: 'OSS·블로그·GitHub 활동 관리 (오픈 오피스). 매주 화 08:00 브랜딩 리포트.',                                                         x: 7,  y: 10, w: 5, h: 4, type: 'team',    npcX: 9,  npcY: 12, teamColor: '#ea580c', floorStyle: 'open',  wallStyle: 'pod' },
-  { id: 'standup',     entityId: 'standup',     name: '회의실',     emoji: '🎤', description: '매일 09:15 KST 전사 모닝 브리핑 + 임시 미팅. 시스템 상태·오늘 예정 크론·주요 이슈를 자동 요약해 Discord로 전송.',               x: 12, y: 10, w: 7, h: 5, type: 'meeting', npcX: 15, npcY: 12, teamColor: '#eab308', floorStyle: 'stage', wallStyle: 'closed' },
-  { id: 'growth-lead', entityId: 'growth-lead', name: '성장실',     emoji: '🌱', description: '커리어 + 학습 통합 (오픈 오피스). 기술 학습 + 이직 준비.',                                                                         x: 19, y: 10, w: 5, h: 4, type: 'team',    npcX: 21, npcY: 12, teamColor: '#14b8a6', floorStyle: 'open',  wallStyle: 'pod' },
-  { id: 'secretary',   entityId: 'bot-system',  name: '비서실',     emoji: '🤵', description: '비서실장(자비스 Sonnet). Discord 메인 채널 24/7 대기. 오픈 리셉션 데스크.',                                                       x: 24, y: 10, w: 5, h: 4, type: 'team',    npcX: 26, npcY: 12, teamColor: '#8b5cf6', floorStyle: 'open',  wallStyle: 'pod' },
-  { id: 'server-room', entityId: 'cron-engine', name: '서버룸',     emoji: '🖥️', description: 'Mac Mini 서버 인프라. 디스크·메모리·봇 프로세스 모니터링. 자비스 90개+ 크론과 Discord 봇 실행.',                                 x: 29, y: 10, w: 7, h: 5, type: 'server',  npcX: 32, npcY: 12, teamColor: '#475569', floorStyle: 'metal', wallStyle: 'closed' },
+  // ── Row 1 (y=2~7): 임원실 2개 + 팀 Pod 4개 ────────────────────────────
+  { id: 'president',   entityId: 'president',   name: '대표실',     emoji: '🏛️', description: '이정우(실 대표)의 공간. 자비스 AI 경영 데이터(이사회·KPI·경영 점검) + 오너 개인 데이터(Discord 약속·Claude 세션·메모리)를 하나로 통합.',   x: 2,  y: 2,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 4,  teamColor: '#c9a227', floorStyle: 'executive', wallStyle: 'closed' },
+  { id: 'infra-lead',  entityId: 'infra-lead',  name: '인프라팀',   emoji: '🖥️', description: '서버·봇·크론·디스크 안정성 관리 (오픈 오피스). 매일 09:00 자동 자가진단.',                                                       x: 11, y: 2,  w: 6, h: 5, type: 'team',    npcX: 14, npcY: 4,  teamColor: '#22c55e', floorStyle: 'open',      wallStyle: 'pod' },
+  { id: 'trend-lead',  entityId: 'trend-lead',  name: '정보팀',     emoji: '📡', description: '뉴스·기술 트렌드 인텔리전스 (오픈 오피스). 평일 07:30 글로벌 동향 분석 리포트.',                                                 x: 19, y: 2,  w: 6, h: 5, type: 'team',    npcX: 22, npcY: 4,  teamColor: '#3b82f6', floorStyle: 'open',      wallStyle: 'pod' },
+  { id: 'record-lead', entityId: 'record-lead', name: '기록팀',     emoji: '📁', description: '메모리·기록·RAG 아카이빙 백엔드 (오픈 오피스). 12만 청크 관리.',                                                                 x: 27, y: 2,  w: 6, h: 5, type: 'team',    npcX: 30, npcY: 4,  teamColor: '#92702a', floorStyle: 'open',      wallStyle: 'pod' },
+  { id: 'audit-lead',  entityId: 'audit-lead',  name: '감사팀',     emoji: '🔒', description: '내부감사·KPI 평가·크론 성과 추적 (오픈 오피스). 매일 23:00 집계.',                                                               x: 35, y: 2,  w: 6, h: 5, type: 'team',    npcX: 38, npcY: 4,  teamColor: '#dc2626', floorStyle: 'open',      wallStyle: 'pod' },
+  { id: 'finance',     entityId: 'finance',     name: '재무실',     emoji: '💰', description: '자비스 AI 운영 비용 + TQQQ·시장 포지션 + 오너 개인 수입(Preply) 통합. 이번 주/월 얼마 벌고 얼마 썼는지 한 곳에서.',               x: 43, y: 2,  w: 7, h: 5, type: 'meeting', npcX: 46, npcY: 4,  teamColor: '#10b981', floorStyle: 'executive', wallStyle: 'closed' },
 
-  // ── 복도 (y=15~16, 2타일) ─────────────────────────────────────────────
+  // ── Row 2 (y=10~15): Pod 4개 + 회의실 + 서버룸 ─────────────────────────
+  { id: 'library',     entityId: 'library',     name: '라이브러리', emoji: '📖', description: '전사 지식 베이스 프론트엔드. 기록팀 RAG 인덱스(12만+ 청크) + 오너 메모리 검색·탐색 허브. 오픈 서재.',                             x: 2,  y: 10, w: 6, h: 5, type: 'team',    npcX: 5,  npcY: 12, teamColor: '#0ea5e9', floorStyle: 'open',  wallStyle: 'pod' },
+  { id: 'brand-lead',  entityId: 'brand-lead',  name: '브랜드팀',   emoji: '🎨', description: 'OSS·블로그·GitHub 활동 관리 (오픈 오피스). 매주 화 08:00 브랜딩 리포트.',                                                         x: 10, y: 10, w: 6, h: 5, type: 'team',    npcX: 13, npcY: 12, teamColor: '#ea580c', floorStyle: 'open',  wallStyle: 'pod' },
+  { id: 'standup',     entityId: 'standup',     name: '회의실',     emoji: '🎤', description: '매일 09:15 KST 전사 모닝 브리핑 + 임시 미팅. 시스템 상태·오늘 예정 크론·주요 이슈를 자동 요약해 Discord로 전송.',               x: 18, y: 10, w: 8, h: 5, type: 'meeting', npcX: 22, npcY: 12, teamColor: '#eab308', floorStyle: 'stage', wallStyle: 'closed' },
+  { id: 'growth-lead', entityId: 'growth-lead', name: '성장실',     emoji: '🌱', description: '커리어 + 학습 통합 (오픈 오피스). 기술 학습 + 이직 준비.',                                                                         x: 28, y: 10, w: 6, h: 5, type: 'team',    npcX: 31, npcY: 12, teamColor: '#14b8a6', floorStyle: 'open',  wallStyle: 'pod' },
+  { id: 'secretary',   entityId: 'bot-system',  name: '비서실',     emoji: '🤵', description: '비서실장(자비스 Sonnet). Discord 메인 채널 24/7 대기. 오픈 리셉션 데스크.',                                                       x: 36, y: 10, w: 6, h: 5, type: 'team',    npcX: 39, npcY: 12, teamColor: '#8b5cf6', floorStyle: 'open',  wallStyle: 'pod' },
+  { id: 'server-room', entityId: 'cron-engine', name: '서버룸',     emoji: '🖥️', description: 'Mac Mini 서버 인프라. 디스크·메모리·봇 프로세스 모니터링.',                                                                       x: 44, y: 10, w: 6, h: 5, type: 'server',  npcX: 47, npcY: 12, teamColor: '#475569', floorStyle: 'metal', wallStyle: 'closed' },
 
-  // ── 크론 센터 (y=17~) — 기존 크기 유지 ────────────────────────────────
-  { id: 'cron-center', entityId: '',             name: '크론 센터',  emoji: '⏰', description: '자비스 컴퍼니 자동화 허브. 90개+ 크론잡의 실시간 실행 상태를 모니터링합니다. 각 워크스테이션이 하나의 자동화 태스크를 나타냅니다.', x: 1,  y: 17, w: 36, h: 8, type: 'cron',    npcX: 18, npcY: 20, teamColor: '#6366f1', floorStyle: 'metal' },
+  // ═══════════════════════════════════════════════════════════════════════
+  // 대형 서버실 / 크론센터 (x:55~79) — 연결 통로(x:50~53)를 통해 진입
+  // ═══════════════════════════════════════════════════════════════════════
+  { id: 'cron-center', entityId: '',             name: '크론 센터',  emoji: '⏰', description: '자비스 컴퍼니 자동화 허브. 72개 크론잡의 실시간 실행 상태를 모니터링합니다. 각 워크스테이션이 하나의 자동화 태스크를 나타냅니다.', x: 55, y: 2,  w: 25, h: 22, type: 'cron',   npcX: 67, npcY: 12, teamColor: '#6366f1', floorStyle: 'metal' },
 ];
 
 // agent-live teamId -> room id mapping
@@ -90,10 +94,10 @@ export const ROOM_TO_CRON_TEAM: Record<string, string> = {
 
 // ── 크론센터 그리드 배치 상수 ──────────────────────────────────
 export const CRON_COLS = 12;
-export const CRON_ROWS = 3;
-export const CRON_COL_SPACING = 2.75; // tiles
-export const CRON_ROW_SPACING = 2.0;  // tiles
-export const CRON_COL_START = 1.5;    // room-relative start x
+export const CRON_ROWS = 6;
+export const CRON_COL_SPACING = 2.0;  // tiles
+export const CRON_ROW_SPACING = 3.3;  // tiles (넓은 서버실에서 이름 표시 여유)
+export const CRON_COL_START = 1.0;    // room-relative start x
 export const CRON_ROW_START = 1.5;    // room-relative start y
 
 export function getCronTilePos(cronRoom: RoomDef, i: number): { tx: number; ty: number } {
@@ -106,12 +110,46 @@ export function getCronTilePos(cronRoom: RoomDef, i: number): { tx: number; ty: 
 }
 
 // ── 벽 타일 맵 생성 ────────────────────────────────────────────
+// ── 연결 통로 (오피스 → 서버실) ────────────────────────────────
+export const CORRIDOR_BRIDGE = { x: 50, y: 6, w: 5, h: 12 };
+
 export function buildCollisionMap(): boolean[][] {
   const map = Array.from({ length: ROWS }, () => Array(COLS).fill(false) as boolean[]);
+  // 외벽
   for (let x = 0; x < COLS; x++) { map[0][x] = true; map[ROWS - 1][x] = true; }
   for (let y = 0; y < ROWS; y++) { map[y][0] = true; map[y][COLS - 1] = true; }
+
+  // 오피스↔서버실 사이 벽 (통로 제외 구간)
+  for (let y = 1; y < ROWS - 1; y++) {
+    const inBridge = y >= CORRIDOR_BRIDGE.y && y < CORRIDOR_BRIDGE.y + CORRIDOR_BRIDGE.h;
+    if (!inBridge) {
+      // 통로 범위 밖은 벽으로 막음
+      for (let x = CORRIDOR_BRIDGE.x; x < CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w; x++) {
+        map[y][x] = true;
+      }
+    } else {
+      // 통로 내부: 좌우 벽
+      map[y][CORRIDOR_BRIDGE.x] = true;
+      map[y][CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w - 1] = true;
+    }
+  }
+  // 통로 상하 벽
+  for (let x = CORRIDOR_BRIDGE.x; x < CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w; x++) {
+    map[CORRIDOR_BRIDGE.y][x] = true;
+    map[CORRIDOR_BRIDGE.y + CORRIDOR_BRIDGE.h - 1][x] = true;
+  }
+  // 통로 입구 (좌측 — 오피스 쪽)
+  const bridgeMidY = CORRIDOR_BRIDGE.y + Math.floor(CORRIDOR_BRIDGE.h / 2);
+  map[bridgeMidY][CORRIDOR_BRIDGE.x] = false;
+  map[bridgeMidY - 1][CORRIDOR_BRIDGE.x] = false;
+  map[bridgeMidY + 1][CORRIDOR_BRIDGE.x] = false;
+  // 통로 입구 (우측 — 서버실 쪽)
+  map[bridgeMidY][CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w - 1] = false;
+  map[bridgeMidY - 1][CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w - 1] = false;
+  map[bridgeMidY + 1][CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w - 1] = false;
+
+  // 각 방 벽 + 문
   for (const r of ROOMS) {
-    // pod = 오픈 오피스 데스크 파드는 벽 없음 (플레이어 자유 통행)
     if (r.wallStyle === 'pod') continue;
     for (let x = r.x; x < r.x + r.w; x++) {
       map[r.y][x] = true;
@@ -122,12 +160,14 @@ export function buildCollisionMap(): boolean[][] {
       map[y][r.x + r.w - 1] = true;
     }
     const doorX = r.x + Math.floor(r.w / 2);
-    // 크론센터는 위쪽 문, 나머지는 아래쪽 문
     if (r.type === 'cron') {
-      map[r.y][doorX] = false;
-      map[r.y][doorX - 1] = false;
-      map[r.y][doorX + 1] = false;
+      // 크론센터: 좌측 문 (연결 통로 쪽)
+      const doorY = r.y + Math.floor(r.h / 2);
+      map[doorY][r.x] = false;
+      map[doorY - 1][r.x] = false;
+      map[doorY + 1][r.x] = false;
     } else {
+      // 일반 방: 하단 문
       map[r.y + r.h - 1][doorX] = false;
       map[r.y + r.h - 1][doorX - 1] = false;
     }
@@ -182,7 +222,7 @@ export function aStarPath(
     }
 
     // 탐색 한계 (큰 맵에서 무한 루프 방지)
-    if (closed.size > 2000) break;
+    if (closed.size > 4000) break;
   }
 
   if (!best) return [];

@@ -3,10 +3,12 @@ import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { addClient, removeClient } from '@/lib/sse';
 import { ensureAutoPosterRunning } from '@/lib/auto-poster';
+import { ensureCronTailRunning } from '@/lib/cron-tail';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   ensureAutoPosterRunning();
+  ensureCronTailRunning();
 
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE)?.value;

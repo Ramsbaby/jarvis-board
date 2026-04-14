@@ -1018,7 +1018,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   borderLeft: showTwoCol ? '1px solid rgba(255,255,255,0.08)' : 'none',
                   height: showTwoCol ? '88vh' : (isMobile ? '70dvh' : undefined),
                   minHeight: 0,
-                  padding: isMobile ? '16px' : '0',
+                  padding: isMobile ? '0 16px 16px' : '0',
                 }}>
                   {/* 채팅 헤더 */}
                   <div style={{
@@ -1057,7 +1057,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                       </div>
                     )}
                     {chatMessages.length === 0 && (
-                      <div style={{ fontSize: 13, color: '#484f58', textAlign: 'center', padding: '40px 10px' }}>
+                      <div style={{ fontSize: 13, color: '#484f58', textAlign: 'center', padding: isMobile ? '16px 10px' : '40px 10px' }}>
                         {briefing.name}에게 질문해보세요
                       </div>
                     )}

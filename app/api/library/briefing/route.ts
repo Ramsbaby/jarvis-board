@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
+import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
 
 /**
  * 라이브러리(library) 브리핑 — 전사 지식 베이스 프론트엔드.
@@ -131,6 +132,7 @@ interface LibraryBriefing {
     recentIndexingCount: number;
   };
   updatedAt: string;
+  systemMetrics?: Array<{ label: string; value: number; icon: string; type: 'disk' | 'memory' | 'cpu' }>;
 }
 
 let cache: { data: LibraryBriefing; ts: number } | null = null;
@@ -209,6 +211,8 @@ export async function GET() {
       recentIndexingCount: indexing.length,
     },
     updatedAt: new Date().toISOString(),
+    // 시스템 건강 드릴다운 — 모든 방 공통.
+    systemMetrics: getBriefingSystemMetrics(),
   };
 
   cache = { data, ts: Date.now() };

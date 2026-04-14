@@ -226,6 +226,13 @@ export interface BriefingData {
   discordChannel?: string;
   roomDescription?: string;
   kpi?: Array<{ label: string; value: number; target: number; unit: string; icon: string; direction: 'higher' | 'lower' }>;
+  /**
+   * 구조화 시스템 리소스 메트릭 — 팀 브리핑 팝업의 "리소스 현황" 섹션이 소비.
+   * 이전엔 summary 텍스트에서 regex 로 파싱했는데 메모리/CPU 수치가 텍스트에
+   * 들어가지 않아 드릴다운이 디스크 한 종류만 떴다. 이제 briefing API 가
+   * 구조화 형태로 반환한다 (lib/map/system-metrics.ts 가 생성).
+   */
+  systemMetrics?: Array<{ label: string; value: number; icon: string; type: 'disk' | 'memory' | 'cpu' }>;
 }
 
 // ── 크론 아이템 (api/crons) ───────────────────────────────────

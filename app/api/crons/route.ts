@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
+import { readFileSync, statSync, readdirSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
@@ -8,6 +8,8 @@ import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 const HOME = homedir();
 const TASKS_FILE = path.join(HOME, '.jarvis', 'config', 'tasks.json');
 const CRON_LOG = path.join(HOME, '.jarvis', 'logs', 'cron.log');
+const LOG_DIR = path.join(HOME, '.jarvis', 'logs');
+const MAX_LOG_READ_BYTES = 8000;
 
 let cache: { data: CronsResponse; ts: number } | null = null;
 
@@ -284,6 +286,126 @@ function parseLatestRuns(): Map<string, { latest: LastRun; history: RecentRun[] 
   return result;
 }
 
+// ── 개별 로그 파일 폴백 ───────────────────────────────────────────
+// 중앙 cron.log에 기록되지 않는 태스크(약 24개)가 있다. 이들은 태스크별
+// 독립 로그(`~/.jarvis/logs/{id}.log` + `{id}-err.log`)에 기록된다.
+// parseLatestRuns()가 놓친 태스크에 한해 개별 로그 파일의 mtime/내용을
+// 읽어 상태를 보강한다. 실패한 태스크는 stderr 꼬리를 lastMessage로 노출.
+function formatKstTimestamp(d: Date): string {
+  // KST = UTC+9 — Intl API 사용해 "YYYY-MM-DD HH:mm:ss" 형식 생성
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(d);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+    const hour = get('hour') === '24' ? '00' : get('hour');
+    return `${get('year')}-${get('month')}-${get('day')} ${hour}:${get('minute')}:${get('second')}`;
+  } catch {
+    // Fallback: 수동 +9h
+    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+    return kst.toISOString().replace('T', ' ').slice(0, 19);
+  }
+}
+
+function safeStat(p: string): { size: number; mtime: Date } | null {
+  try {
+    const s = statSync(p);
+    return { size: s.size, mtime: s.mtime };
+  } catch {
+    return null;
+  }
+}
+
+function safeReadTail(p: string, maxBytes: number = MAX_LOG_READ_BYTES): string {
+  try {
+    const raw = readFileSync(p, 'utf8');
+    if (raw.length <= maxBytes) return raw;
+    return raw.slice(raw.length - maxBytes);
+  } catch {
+    return '';
+  }
+}
+
+function buildFallbackFromIndividualLogs(taskId: string): LastRun | null {
+  const outPath = path.join(LOG_DIR, `${taskId}.log`);
+  const errPath = path.join(LOG_DIR, `${taskId}-err.log`);
+  const outStat = safeStat(outPath);
+  const errStat = safeStat(errPath);
+
+  // 둘 다 없거나 zero-byte → 실행된 적 없음 (legitimate unknown)
+  const outUsable = outStat && outStat.size > 0;
+  const errUsable = errStat && errStat.size > 0;
+  if (!outUsable && !errUsable) return null;
+
+  const now = Date.now();
+  const DAY_MS = 24 * 3600 * 1000;
+  const errRecent = errUsable && now - errStat!.mtime.getTime() < DAY_MS;
+
+  // 최근 24h 내 err 로그 non-empty → failed
+  if (errRecent) {
+    const tail = safeReadTail(errPath, 500);
+    const excerpt = tail.trim().slice(-400);
+    return {
+      status: 'failed',
+      timestamp: formatKstTimestamp(errStat!.mtime),
+      message: `stderr: ${excerpt}`.slice(0, 500),
+      duration: '',
+    };
+  }
+
+  // .log만 non-empty → success 추정
+  if (outUsable) {
+    return {
+      status: 'success',
+      timestamp: formatKstTimestamp(outStat!.mtime),
+      message: '최근 실행 감지 (개별 로그)',
+      duration: '',
+    };
+  }
+
+  return null;
+}
+
+// 실패한 태스크의 stderr 꼬리를 읽어 lastMessage/outputSummary 보강
+function readStderrExcerpt(taskId: string): string {
+  // 1차: 전용 -err.log (대부분의 script 태스크 — 재시작 스크립트가 2> 로 리다이렉트)
+  const errPath = path.join(LOG_DIR, `${taskId}-err.log`);
+  const stat = safeStat(errPath);
+  if (stat && stat.size > 0) {
+    const tail = safeReadTail(errPath, 500);
+    if (tail.trim()) return tail.trim().slice(-400);
+  }
+
+  // 2차: LLM 태스크는 ask-claude.sh 가 날짜별로 분리된 claude-stderr 로그를 쓴다.
+  //   파일명: claude-stderr-<taskId>-<YYYY-MM-DD>.log 또는 claude-stderr-<taskId>.log
+  //   가장 최근 (mtime 기준) 파일을 찾아 tail. 48h 이내만 신뢰해서 옛 로그가
+  //   현재 상태처럼 오해되는 것을 방지.
+  try {
+    const files = readdirSync(LOG_DIR).filter((f) =>
+      f.startsWith(`claude-stderr-${taskId}`) && f.endsWith('.log'),
+    );
+    if (files.length === 0) return '';
+    const sorted = files
+      .map((f) => ({ f, m: safeStat(path.join(LOG_DIR, f))?.mtime.getTime() ?? 0 }))
+      .sort((a, b) => b.m - a.m);
+    const latest = sorted[0];
+    if (!latest || latest.m === 0) return '';
+    if (Date.now() - latest.m > 48 * 3600_000) return '';
+    const tail = safeReadTail(path.join(LOG_DIR, latest.f), 500);
+    return tail.trim().slice(-400);
+  } catch {
+    return '';
+  }
+}
+
 // ── 메인 ─────────────────────────────────────────────────────────
 function buildCrons(): CronsResponse {
   let tasksData: { tasks: TaskDef[] } = { tasks: [] };
@@ -299,8 +421,32 @@ function buildCrons(): CronsResponse {
   const crons: CronItem[] = scheduled.map(task => {
     const team = classifyTeam(task.id);
     const entry = runs.get(task.id);
-    const last = entry?.latest;
+    let last: LastRun | undefined = entry?.latest;
     const schedule = task.schedule || '';
+
+    // Fallback 1: 중앙 cron.log에 없으면 개별 로그 파일에서 mtime/내용으로 추론
+    if (!last) {
+      const fb = buildFallbackFromIndividualLogs(task.id);
+      if (fb) {
+        last = fb;
+      }
+    }
+
+    // Fallback 2: status==='failed' 이면 stderr 꼬리를 읽어 lastMessage 보강
+    //   (중앙 log에서 "FAILED (exit: 1)"만 나오는 경우 실제 원인 노출)
+    let lastMessage = last?.message || '';
+    let outputSummary = extractOutput(last?.message || '');
+    if (last?.status === 'failed') {
+      const stderrExcerpt = readStderrExcerpt(task.id);
+      if (stderrExcerpt) {
+        // 이미 fallback에서 stderr 포함되었을 수 있으므로 중복 방지
+        if (!lastMessage.includes(stderrExcerpt.slice(0, 60))) {
+          lastMessage = `${lastMessage} | stderr: ${stderrExcerpt}`.slice(0, 600);
+        }
+        outputSummary = `stderr: ${stderrExcerpt}`.slice(0, 300);
+      }
+    }
+
     return {
       id: task.id,
       name: task.name || task.id,
@@ -310,9 +456,9 @@ function buildCrons(): CronsResponse {
       status: last?.status || 'unknown',
       lastRun: last ? last.timestamp : null,
       lastResult: last?.status || '',
-      lastMessage: last?.message || '',
-      lastDuration: (last as LastRun | undefined)?.duration || '',
-      outputSummary: extractOutput(last?.message || ''),
+      lastMessage,
+      lastDuration: last?.duration || '',
+      outputSummary,
       nextRun: nextRunTime(schedule),
       team: team.label,
       teamEmoji: team.emoji,

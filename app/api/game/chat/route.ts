@@ -11,6 +11,8 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const CLAUDE_CLI = '/Users/ramsbaby/.local/bin/claude';
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
+import { TEAM_REGISTRY, TEAM_KEYWORDS as REGISTRY_KEYWORDS } from '@/lib/map/team-registry';
+import { computeCronStats24h } from '@/lib/map/cron-stats';
 
 // 공통 NPC 행동 규칙 — 캐릭터 몰입 유지 + 적극적 대응
 const NPC_RULES = `
@@ -22,20 +24,15 @@ const NPC_RULES = `
 - "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 시스템 용어는 쓰지 않는다.
 - 답변 톤: 보고하는 팀장처럼. 간결하고 구조화해서. 핵심 결론 → 근거 → 다음 액션.`;
 
-const TEAM_PROMPTS: Record<string, string> = {
-  president: `나는 자비스 컴퍼니의 대표 이정우입니다. AI 경영 현황(이사회·KPI·경영 점검)과 개인 데이터(약속·Claude 세션·메모리)를 통합 관리하는 이정우 본인의 공간이라 답변합니다.${NPC_RULES}`,
-  finance: `나는 재무실장 장원석입니다. 자비스 AI 운영 비용, TQQQ·시장 포지션, 오너 Preply 수입, 손익 추적을 담당합니다. 숫자와 통화는 정확하게 전달합니다.${NPC_RULES}`,
-  'infra-lead': `나는 SRE실장 이준혁입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 예방적 신뢰성 엔지니어링을 추구하며, 장애 발생 전에 선제 조치를 취합니다. 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.${NPC_RULES}`,
-  'trend-lead': `나는 전략기획실장 강나연입니다. 뉴스, 기술 트렌드, GitHub 동향을 분석합니다. 시장/주식 지표는 재무실 소관이라 다루지 않습니다.${NPC_RULES}`,
-  'record-lead': `나는 데이터실장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 백엔드 업무를 담당합니다. 사용자 검색 UI는 자료실(문지아) 소관입니다.${NPC_RULES}`,
-  library: `나는 자료실 사서 문지아입니다. 데이터실이 쌓은 RAG 인덱스와 오너 메모리 파일을 사용자가 검색·탐색할 수 있도록 돕는 프론트엔드를 담당합니다.${NPC_RULES}`,
-  'growth-lead': `나는 인재개발실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다.${NPC_RULES}`,
-  'brand-lead': `나는 마케팅실장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.${NPC_RULES}`,
-  'audit-lead': `나는 QA실장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.${NPC_RULES}`,
-  'cron-engine': `나는 크론 엔진 총괄입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.${NPC_RULES}`,
-  'discord-bot': `나는 Discord 봇 담당입니다. 봇 프로세스 상태와 채팅 시스템을 관리합니다.${NPC_RULES}`,
-  'disk-storage': `나는 디스크 스토리지 담당입니다. 로컬 스토리지 사용량과 정리 상태를 관리합니다.${NPC_RULES}`,
-};
+const TEAM_PROMPTS: Record<string, string> = Object.fromEntries(
+  Object.entries(TEAM_REGISTRY)
+    .filter(([, e]) => !!e.persona)
+    .map(([id, e]) => [id, `${e.persona}${NPC_RULES}`]),
+);
+// ^^^ SSoT: lib/map/team-registry.ts 의 `persona` + 공통 NPC_RULES 조합.
+//     이전에는 이 리터럴에 secretary / standup 누락이 있어 해당 팀이
+//     generic fallback 페르소나로 떨어졌다. 이제 registry 에 entry 만
+//     추가하면 chat 에도 자동 반영된다.;
 
 // --- Team context gathering ---
 
@@ -150,25 +147,8 @@ function teamOwnedTasks(keywords: string[]): TaskDefFull[] {
 }
 
 function cronStats24h(keywords: string[], cronLog: string): { total: number; success: number; failed: number; skipped: number; rate: number } {
-  if (!cronLog || keywords.length === 0) return { total: 0, success: 0, failed: 0, skipped: 0, rate: 0 };
-  const re = new RegExp(keywords.join('|'), 'i');
-  const cutoffMs = Date.now() - 24 * 3600_000;
-  const lines = cronLog.split('\n').filter(Boolean).slice(-3000);
-  let success = 0, failed = 0, skipped = 0;
-  for (const line of lines) {
-    const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\]/);
-    if (!m) continue;
-    const [, ts, task] = m;
-    if (/^task_\d+_/.test(task)) continue;
-    if (!re.test(task)) continue;
-    const tsMs = Date.parse(ts + '+09:00');
-    if (!isNaN(tsMs) && tsMs < cutoffMs) continue;
-    if (/\bSUCCESS\b|\bDONE\b/.test(line)) success++;
-    else if (/FAILED|ERROR|CRITICAL/.test(line)) failed++;
-    else if (/\bSKIPPED\b/.test(line)) skipped++;
-  }
-  const total = success + failed;
-  return { total, success, failed, skipped, rate: total > 0 ? Math.round((success / total) * 100) : 0 };
+  // SSoT: lib/map/cron-stats.ts — briefing/route.ts 와 동일한 계산.
+  return computeCronStats24h(cronLog, keywords);
 }
 
 function cronStats7d(keywords: string[], cronLog: string): { days: number; success: number; failed: number; rate: number; dailyAvg: number } {
@@ -404,18 +384,12 @@ function gatherFailureDetails(keywords: string[], cronLog: string, maxTasks = 3)
 }
 
 // 팀별 cron 키워드 — 브리핑 라우트의 ENTITIES와 동기화
-const TEAM_KEYWORDS: Record<string, string[]> = {
-  'infra-lead': ['infra-daily', 'system-doctor', 'system-health', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics', 'memory-cleanup', 'memory-expire', 'memory-sync', 'rate-limit-check'],
-  'trend-lead': ['trend', 'news', 'calendar-alert', 'github-monitor', 'recon'],
-  'finance': ['tqqq', 'market-alert', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule'],
-  'record-lead': ['record-daily', 'memory', 'session-sum', 'compact', 'rag-index'],
-  'library': ['rag-index', 'rag-bench'],
-  'growth-lead': ['career', 'commitment', 'growth', 'job', 'resume', 'interview', 'academy', 'learning', 'study', 'lecture'],
-  'brand-lead': ['brand', 'openclaw', 'blog', 'oss', 'github-star'],
-  'audit-lead': ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'],
-  'secretary': ['bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval', 'ask-claude', 'weekly-usage-stats'],
-  'president': ['board-meeting', 'ceo-daily-digest', 'council', 'scorecard', 'connections', 'weekly-kpi', 'monthly-review'],
-};
+const TEAM_KEYWORDS: Record<string, string[]> = REGISTRY_KEYWORDS;
+// ^^^ SSoT: lib/map/team-registry.ts 에서 파생.
+//     예전에는 이 파일에 keyword 를 재정의해서 briefing/route.ts 의
+//     ENTITIES.keywords 와 드리프트가 생겼다 (예: finance 분리 후
+//     trend-lead 의 오래된 list 가 남아 trend-lead 채팅이 잘못된 통계를
+//     보고했다). 이제 한 곳만 고치면 양쪽이 일치한다.;
 
 function gatherTeamContext(teamId: string): string {
   const cached = contextCache.get(teamId);

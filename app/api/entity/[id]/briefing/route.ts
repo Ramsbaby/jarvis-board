@@ -9,6 +9,9 @@ import { GET as presidentBriefingGET } from '@/app/api/president/briefing/route'
 import { GET as standupBriefingGET } from '@/app/api/standup/briefing/route';
 import { GET as financeBriefingGET } from '@/app/api/finance/briefing/route';
 import { GET as libraryBriefingGET } from '@/app/api/library/briefing/route';
+import { TEAM_REGISTRY, type TeamEntityDef } from '@/lib/map/team-registry';
+import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
+import { computeCronStats24h } from '@/lib/map/cron-stats';
 
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
@@ -126,104 +129,20 @@ function taskFriendlyDescription(taskId: string): string | null {
 
 // ── 엔티티 레지스트리 ────────────────────────────────────────────────────────
 
-interface TeamLeadEntity {
+interface TeamLeadEntity extends TeamEntityDef {
   type: 'team-lead';
-  name: string;
-  title: string;
-  avatar: string;
-  keywords: string[];
-  discordChannel: string;
-  schedule: string;
 }
 
-interface SystemMetricEntity {
+interface SystemMetricEntity extends TeamEntityDef {
   type: 'system-metric';
-  name: string;
-  icon: string;
-  description: string;
 }
 
 type EntityDef = TeamLeadEntity | SystemMetricEntity;
 
-const ENTITIES: Record<string, EntityDef> = {
-  // ── 팀장 엔티티 ──
-  // 'ceo' ENTITY 삭제됨 — 대표실(president)이 AI 경영 데이터까지 통합 흡수
-  'infra-lead': {
-    type: 'team-lead', name: 'SRE실 · 이준혁', title: '신뢰성 엔지니어링 · 예방적 시스템 운영',
-    avatar: '🛡️', keywords: ['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics', 'memory-cleanup', 'memory-expire', 'memory-sync', 'rate-limit-check'],
-    discordChannel: 'jarvis-system', schedule: '매일 09:00',
-  },
-  'trend-lead': {
-    type: 'team-lead', name: '전략기획실 · 강나연', title: '뉴스·기술 트렌드 분석',
-    avatar: '📡', keywords: ['trend', 'news', 'calendar-alert', 'github-monitor', 'recon'],
-    discordChannel: 'jarvis', schedule: '평일 07:30',
-  },
-  // 재무실 — market/tqqq/cost/preply 등 돈 관련 크론 전담 (정보팀에서 분리)
-  'finance': {
-    type: 'team-lead', name: '재무실 · 장원석', title: 'AI 운영 비용 + 시장 포지션 + 개인 수입 통합',
-    avatar: '💰', keywords: ['tqqq', 'market-alert', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule'],
-    discordChannel: 'jarvis-ceo', schedule: '매일',
-  },
-  'record-lead': {
-    type: 'team-lead', name: '데이터실 · 한소희', title: '메모리·RAG 아카이빙',
-    avatar: '🗄️', keywords: ['record-daily', 'memory', 'session-sum', 'compact', 'rag-index'],
-    discordChannel: 'jarvis-system', schedule: '매일 22:30',
-  },
-  // 자료실 — 데이터실 백엔드의 프론트엔드. RAG/메모리 사용자 접근
-  'library': {
-    type: 'team-lead', name: '자료실 · 문지아', title: '전사 지식 베이스 프론트엔드',
-    avatar: '📖', keywords: ['rag-index', 'rag-bench'],
-    discordChannel: 'jarvis-system', schedule: '상시',
-  },
-  // 인재개발실 — 구 학습팀 + 구 커리어팀 통합
-  'growth-lead': {
-    type: 'team-lead', name: '인재개발실 · 김서연', title: '커리어·면접·기술 학습 통합',
-    avatar: '🌱', keywords: ['career', 'commitment', 'growth', 'job', 'resume', 'interview', 'academy', 'learning', 'study', 'lecture'],
-    discordChannel: 'jarvis-ceo', schedule: '매주',
-  },
-  'brand-lead': {
-    type: 'team-lead', name: '마케팅실 · 정하은', title: 'OSS·블로그·콘텐츠 전략',
-    avatar: '📣', keywords: ['brand', 'openclaw', 'blog', 'oss', 'github-star'],
-    discordChannel: 'jarvis-blog', schedule: '매주 화 08:00',
-  },
-  'audit-lead': {
-    type: 'team-lead', name: 'QA실 · 류태환', title: '품질·감사·E2E 테스트',
-    avatar: '🔍', keywords: ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'],
-    discordChannel: 'jarvis-system', schedule: '매일 23:00',
-  },
-  // 컨시어지 — Discord 봇 24/7 운영. 봇 품질 자가 점검, /ask 응답, auto-diagnose 포함
-  'secretary': {
-    type: 'team-lead', name: '컨시어지 · 자비스 봇', title: 'Discord 24/7 대응 · 봇 품질 자가 점검',
-    avatar: '🤵', keywords: ['bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval', 'ask-claude', 'weekly-usage-stats'],
-    discordChannel: 'jarvis', schedule: '상시',
-  },
-
-  // ── 시스템 메트릭 엔티티 ──
-  'cron-engine': {
-    type: 'system-metric', name: '크론 엔진', icon: '📊',
-    description: '자동화 태스크 실행 엔진',
-  },
-  'rag-memory': {
-    type: 'system-metric', name: 'RAG 장기기억', icon: '🧠',
-    description: 'LanceDB 벡터 검색 + BM25 하이브리드',
-  },
-  'discord-bot': {
-    type: 'system-metric', name: 'Discord 봇', icon: '🤖',
-    description: '24/7 대화형 인터페이스',
-  },
-  'disk-storage': {
-    type: 'system-metric', name: '디스크 스토리지', icon: '💾',
-    description: '로컬 스토리지 사용량',
-  },
-  'circuit-breaker': {
-    type: 'system-metric', name: '서킷 브레이커', icon: '🛡️',
-    description: '연속 실패 태스크 격리 시스템',
-  },
-  'dev-queue': {
-    type: 'system-metric', name: '개발 큐', icon: '📋',
-    description: 'AI 자동 코딩 태스크 대기열',
-  },
-};
+const ENTITIES: Record<string, EntityDef> = TEAM_REGISTRY as Record<string, EntityDef>;
+// ^^^ SSoT: lib/map/team-registry.ts 가 모든 팀 정의의 단일 원본.
+//     이 route 는 그 레지스트리에서 읽기만 한다. 새 팀 추가/분리 시
+//     registry 만 수정하면 briefing + chat 양쪽이 자동 동기화된다.;
 
 // ── 유틸리티 ─────────────────────────────────────────────────────────────────
 
@@ -271,25 +190,10 @@ function parseCronLog(keywords: string[], limit = 20): CronEntry[] {
 }
 
 function getCronStats24h(keywords: string[]): { total: number; success: number; failed: number; rate: number } {
+  // SSoT: lib/map/cron-stats.ts
   const raw = readSafe(CRON_LOG);
-  if (!raw) return { total: 0, success: 0, failed: 0, rate: 0 };
-  const lines = raw.split('\n').filter(Boolean).slice(-3000);
-  // cron.log는 KST 타임스탬프 사용 → 비교 기준도 KST로 맞춤
-  const KST_OFFSET = 9 * 3600_000;
-  const cutoff = new Date(Date.now() - 24 * 3600_000 + KST_OFFSET).toISOString().replace('T', ' ').slice(0, 19);
-  let success = 0, failed = 0;
-
-  for (const line of lines) {
-    const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\]/);
-    if (!m || m[1] < cutoff) continue;
-    if (/^task_\d+_/.test(m[2])) continue;
-    const lower = m[2].toLowerCase();
-    if (keywords.length > 0 && !keywords.some(kw => lower.includes(kw))) continue;
-    if (/\bSUCCESS\b|\bDONE\b/.test(line)) success++;
-    else if (/FAILED|ERROR|CRITICAL/.test(line)) failed++;
-  }
-  const total = success + failed;
-  return { total, success, failed, rate: total > 0 ? Math.round((success / total) * 100) : 0 };
+  const s = computeCronStats24h(raw, keywords);
+  return { total: s.total, success: s.success, failed: s.failed, rate: s.rate };
 }
 
 function getFailedTaskNames(keywords: string[]): string[] {
@@ -506,11 +410,22 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
     return '오늘은 아직 예정된 작업이 없어요.';
   }
 
+  // SSoT: 모든 실패 태스크 이름은 호출자가 넘긴 `keywords` 기반으로 뽑는다.
+  // 이전에는 각 case 안에서 하드코딩된 키워드 리스트를 재정의했는데,
+  // 팀 분리(예: finance 분리) 후 업데이트가 누락되어 trend-lead 가
+  // "대부분 완료했지만, 에서 문제가 있었어요." 처럼 빈 태스크 이름으로
+  // 문장이 깨지는 버그가 발생했다. keywords 단일 소스만 쓰면 재발 불가.
+  const failedNamesAll = stats.failed > 0
+    ? getFailedTaskNames(keywords).map(taskDisplayName)
+    : [];
+  const failedDisplay = failedNamesAll.length > 0
+    ? failedNamesAll.slice(0, 3).join(', ')
+    : '';
+
   const disk = getDiskUsage();
   const bot = getDiscordBotStatus();
 
   switch (id) {
-    // 'ceo' case 제거 — ENTITIES에서 삭제됨. 대표실(president)은 전용 라우트(/api/president/briefing)가 직접 처리
     case 'infra-lead': {
       const parts: string[] = [];
       if (disk.percent >= 90) {
@@ -522,53 +437,66 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
       }
       parts.push(bot.running ? '봇은 정상 실행중' : '봇이 멈춰 있어요, 재시작이 필요해요');
       if (stats.failed > 0) {
-        const failedNames = getFailedTaskNames(['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'memory-cleanup', 'memory-expire', 'memory-sync', 'rate-limit-check']);
-        parts.push(`${failedNames.map(taskDisplayName).join(', ')}에서 문제가 생겼어요`);
+        parts.push(failedDisplay
+          ? `${failedDisplay}에서 문제가 생겼어요`
+          : `${stats.failed}건에서 문제가 생겼어요 (세부 태스크 식별 불가)`);
       } else {
         parts.push('자동 점검은 모두 통과했어요');
       }
       return parts.join('. ') + '.';
     }
+
     case 'trend-lead': {
       if (stats.failed === 0) {
-        return '오늘 시장과 트렌드 분석을 모두 마쳤어요. 정상 전송됐습니다.';
+        return '오늘 트렌드·뉴스·GitHub 동향 분석을 모두 마쳤어요. 정상 전송됐습니다.';
       }
-      const failedNames = getFailedTaskNames(['trend', 'market-alert', 'news', 'tqqq', 'stock', 'macro']);
-      return `대부분 완료했지만, ${failedNames.map(taskDisplayName).join(', ')}에서 문제가 있었어요.`;
+      return failedDisplay
+        ? `대부분 완료했지만, ${failedDisplay}에서 문제가 있었어요.`
+        : `오늘 ${stats.failed}건에서 문제가 있었어요. 세부 태스크는 크론 센터에서 확인 부탁드려요.`;
     }
+
     case 'record-lead': {
       if (stats.failed === 0) {
         return '오늘 대화 기록 정리와 아카이빙을 마쳤어요. 정상입니다.';
       }
-      return '기록 정리 중 일부 문제가 있었어요. 확인이 필요합니다.';
+      return failedDisplay
+        ? `기록 정리 중 ${failedDisplay}에서 문제가 있었어요. 확인이 필요합니다.`
+        : `기록 정리 중 ${stats.failed}건에서 문제가 있었어요. 확인이 필요합니다.`;
     }
-    case 'career-lead': {
-      if (stats.failed === 0) return '커리어 관련 분석을 마쳤어요. 정상입니다.';
-      return '커리어 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
-    }
+
     case 'brand-lead': {
       if (stats.failed === 0) return '브랜드와 콘텐츠 작업을 마쳤어요. 정상입니다.';
-      return '브랜드 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
+      return failedDisplay
+        ? `브랜드 작업 중 ${failedDisplay}에서 문제가 있었어요.`
+        : `브랜드 작업 중 ${stats.failed}건에서 문제가 있었어요.`;
     }
+
+    case 'growth-lead': {
+      if (stats.failed === 0) {
+        return '커리어와 학습 관련 작업을 마쳤어요. 정상입니다.';
+      }
+      return failedDisplay
+        ? `${failedDisplay}에서 문제가 있었어요. 확인이 필요합니다.`
+        : `오늘 ${stats.failed}건에서 문제가 있었어요. 확인이 필요합니다.`;
+    }
+
     case 'audit-lead': {
       const cbs = getCircuitBreakerStatus();
       const parts: string[] = [];
       if (stats.failed === 0) {
         parts.push('감사와 품질 점검을 마쳤어요. 모두 정상');
       } else {
-        parts.push(`품질 점검 중 ${stats.failed}건에서 문제를 발견했어요`);
+        parts.push(failedDisplay
+          ? `품질 점검 중 ${failedDisplay}에서 문제를 발견했어요`
+          : `품질 점검 중 ${stats.failed}건에서 문제를 발견했어요`);
       }
       if (cbs.length > 0) {
         parts.push(`${cbs.length}개 작업이 반복 실패로 일시 중단됐어요`);
       }
       return parts.join('. ') + '.';
     }
-    case 'academy-lead': {
-      if (stats.failed === 0) return '학습 지원 작업을 마쳤어요. 정상입니다.';
-      return '학습 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
-    }
+
     case 'secretary': {
-      const bot = getDiscordBotStatus();
       const parts: string[] = [];
       if (!bot.running) {
         parts.push('🚨 Discord 봇이 멈춰 있어요. 지금 즉시 재시작이 필요합니다');
@@ -580,15 +508,19 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
       } else if (stats.failed === 0) {
         parts.push(`봇 품질 자가 점검 ${stats.total}건 모두 통과`);
       } else {
-        const failedNames = getFailedTaskNames(['bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval']);
-        parts.push(`${stats.failed}건에서 품질 이슈 발견 (${failedNames.slice(0, 3).map(taskDisplayName).join(', ')})`);
+        parts.push(failedDisplay
+          ? `${stats.failed}건에서 품질 이슈 발견 (${failedDisplay})`
+          : `${stats.failed}건에서 품질 이슈 발견`);
       }
       parts.push('/ask, /logs, /brief 슬래시 명령으로 언제든 호출 가능');
       return parts.join('. ') + '.';
     }
+
     default: {
       if (stats.failed === 0) return '오늘 맡은 작업을 모두 마쳤어요. 정상입니다.';
-      return `오늘 작업 중 ${stats.failed}건에서 문제가 있었어요. 확인이 필요합니다.`;
+      return failedDisplay
+        ? `${failedDisplay}에서 문제가 있었어요 (${stats.failed}건). 확인이 필요합니다.`
+        : `오늘 작업 중 ${stats.failed}건에서 문제가 있었어요. 확인이 필요합니다.`;
     }
   }
 }
@@ -631,6 +563,12 @@ function buildTeamLeadBriefing(id: string, entity: TeamLeadEntity) {
     ...(stats.failed > 0 && failedTaskNames.length > 0 ? [`최근 실패: ${failedTaskNames.join(', ')}`] : []),
   ];
 
+  // 구조화 시스템 메트릭 — 모든 팀장 브리핑에 공통 포함.
+  // 이전에는 TeamBriefingPopup 이 summary 텍스트에서 regex 로 퍼센트를 파싱
+  // 했는데 (`/디스크\s*(\d+)%/`) 메모리/CPU 는 summary 에 문자열로 없어서
+  // 드릴다운이 디스크 한 종류만 떴다. 이제 구조화 필드로 항상 3종 제공.
+  const systemMetrics = getBriefingSystemMetrics();
+
   return {
     type: 'team-lead',
     id,
@@ -652,6 +590,7 @@ function buildTeamLeadBriefing(id: string, entity: TeamLeadEntity) {
       totalToday: stats.total,
       failedToday: stats.failed,
     },
+    systemMetrics,
     alerts: alertsList,
     upcoming,
     lastBoardMinutes: boardMinutes,
@@ -840,6 +779,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const data = entity.type === 'team-lead'
     ? buildTeamLeadBriefing(id, entity)
     : buildSystemMetricBriefing(id, entity);
+
+  // 시스템 메트릭 엔티티에도 systemMetrics 를 추가해서 어느 방을 클릭하든
+  // CEO 가 동일한 시스템 건강 지표(디스크/메모리/CPU) 드릴다운을 볼 수 있게 한다.
+  if ((data as Record<string, unknown>).systemMetrics === undefined) {
+    (data as Record<string, unknown>).systemMetrics = getBriefingSystemMetrics();
+  }
 
   // 인프라팀 신임 팀장 KPI (이준혁 — 예방적 시스템 운영)
   if (id === 'infra-lead') {

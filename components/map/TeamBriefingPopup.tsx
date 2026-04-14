@@ -466,27 +466,45 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 </div>
               )}
 
-              {/* ① 리소스 KPI 시각화 — summary 텍스트에서 % 수치 파싱 + 클릭 드릴다운 */}
-              {briefing.summary && (() => {
+              {/* ① 리소스 KPI 시각화 — briefing.systemMetrics(구조화) 우선, 레거시 summary regex 는 fallback
+                   이전에는 summary 문자열에서 regex 로 `디스크 N%` 만 뽑아서 메모리/CPU 드릴다운이
+                   아예 뜨지 않았다. 이제 briefing API 가 구조화 systemMetrics 배열을 제공하므로
+                   그것을 직접 소비한다. 구 API(구조화 필드 없음)를 맞은 경우를 위해 regex fallback 유지. */}
+              {(() => {
                 const metrics: MetricItem[] = [];
-                const diskM = briefing.summary.match(/디스크\s*(\d+)%/);
-                if (diskM) {
-                  const v = parseInt(diskM[1]);
-                  metrics.push({ label: '디스크 사용률', value: v, icon: '\uD83D\uDCBE', type: 'disk',
-                    color: v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950' });
+                const colorFor = (v: number) =>
+                  v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950';
+
+                // 1) 구조화 경로 (권장)
+                if (briefing.systemMetrics && briefing.systemMetrics.length > 0) {
+                  for (const m of briefing.systemMetrics) {
+                    metrics.push({
+                      label: m.label,
+                      value: m.value,
+                      icon: m.icon,
+                      type: m.type as 'disk' | 'memory' | 'cpu',
+                      color: colorFor(m.value),
+                    });
+                  }
+                } else if (briefing.summary) {
+                  // 2) 레거시 regex fallback — 구 API 호환
+                  const diskM = briefing.summary.match(/디스크\s*(\d+)%/);
+                  if (diskM) {
+                    const v = parseInt(diskM[1]);
+                    metrics.push({ label: '디스크 사용률', value: v, icon: '\uD83D\uDCBE', type: 'disk', color: colorFor(v) });
+                  }
+                  const memM = briefing.summary.match(/메모리\s*(\d+)%/);
+                  if (memM) {
+                    const v = parseInt(memM[1]);
+                    metrics.push({ label: '메모리 사용률', value: v, icon: '\uD83E\uDDE0', type: 'memory', color: colorFor(v) });
+                  }
+                  const cpuM = briefing.summary.match(/CPU\s*(\d+)%/i);
+                  if (cpuM) {
+                    const v = parseInt(cpuM[1]);
+                    metrics.push({ label: 'CPU 사용률', value: v, icon: '\u26A1', type: 'cpu', color: colorFor(v) });
+                  }
                 }
-                const memM = briefing.summary.match(/메모리\s*(\d+)%/);
-                if (memM) {
-                  const v = parseInt(memM[1]);
-                  metrics.push({ label: '메모리 사용률', value: v, icon: '\uD83E\uDDE0', type: 'memory',
-                    color: v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950' });
-                }
-                const cpuM = briefing.summary.match(/CPU\s*(\d+)%/i);
-                if (cpuM) {
-                  const v = parseInt(cpuM[1]);
-                  metrics.push({ label: 'CPU 사용률', value: v, icon: '\u26A1', type: 'cpu',
-                    color: v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950' });
-                }
+
                 if (metrics.length === 0) return null;
                 return (
                   <div style={{ marginBottom: 18 }}>

@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
+import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
 
 /**
  * 대표실(president) 브리핑 — 이정우(실인)의 통합 공간.
@@ -213,6 +214,7 @@ interface PresidentBriefing {
     aiExecCrons: { successCount: number; failedCount: number; recent: ExecCronEntry[] };
   };
   updatedAt: string;
+  systemMetrics?: Array<{ label: string; value: number; icon: string; type: 'disk' | 'memory' | 'cpu' }>;
 }
 
 let cache: { data: PresidentBriefing; ts: number } | null = null;
@@ -351,6 +353,8 @@ export async function GET() {
       },
     },
     updatedAt: new Date().toISOString(),
+    // 시스템 건강 드릴다운 — 다른 팀장 방과 동일한 UI 제공.
+    systemMetrics: getBriefingSystemMetrics(),
   };
 
   cache = { data, ts: Date.now() };

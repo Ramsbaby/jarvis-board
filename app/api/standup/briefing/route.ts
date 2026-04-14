@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
+import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
 
 /**
  * 스탠드업홀(standup) 브리핑 — 전사 모닝 브리핑
@@ -122,6 +123,10 @@ interface StandupBriefing {
   schedule: string;
   nextRunKst: string | null;
   updatedAt: string;
+  // 다른 팀장 브리핑과의 UI 일관성을 위한 stats + systemMetrics.
+  // 이전엔 standup 만 이 필드가 없어서 팝업의 "24시간 지표" 섹션이 비었다.
+  stats?: { total: number; success: number; failed: number; rate: number };
+  systemMetrics?: Array<{ label: string; value: number; icon: string; type: 'disk' | 'memory' | 'cpu' }>;
 }
 
 let cache: { data: StandupBriefing; ts: number } | null = null;
@@ -174,6 +179,9 @@ export async function GET() {
     return { time: timeOnly, task: e.task, result: resultLower, description, icon };
   });
 
+  const totalRuns = successCount + failedCount + skippedCount;
+  const statsRate = totalRuns > 0 ? Math.round((successCount / totalRuns) * 100) : 0;
+
   const data: StandupBriefing = {
     type: 'standup',
     id: 'standup',
@@ -189,6 +197,9 @@ export async function GET() {
     schedule: next.schedule,
     nextRunKst: next.nextRunKst,
     updatedAt: new Date().toISOString(),
+    // 다른 팀장과의 일관성 — 24h 지표 섹션이 팝업에 노출되도록.
+    stats: { total: totalRuns, success: successCount, failed: failedCount, rate: statsRate },
+    systemMetrics: getBriefingSystemMetrics(),
   };
 
   cache = { data, ts: Date.now() };

@@ -6,6 +6,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { getTodayCost, getMonthCost, getDailyCap } from '@/lib/chat-cost';
+import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
 
 /**
  * 재무실(finance) 브리핑 — 돈 관련 데이터 통합 공간.
@@ -157,6 +158,7 @@ interface FinanceBriefing {
     marketCronFailed: number;
   };
   updatedAt: string;
+  systemMetrics?: Array<{ label: string; value: number; icon: string; type: 'disk' | 'memory' | 'cpu' }>;
 }
 
 let cache: { data: FinanceBriefing; ts: number } | null = null;
@@ -254,6 +256,8 @@ export async function GET() {
         marketCronFailed: market.failedCount,
       },
       updatedAt: new Date().toISOString(),
+      // 시스템 건강 드릴다운 — 모든 방 공통.
+      systemMetrics: getBriefingSystemMetrics(),
     };
 
     cache = { data, ts: Date.now() };

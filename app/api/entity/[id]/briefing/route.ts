@@ -10,8 +10,9 @@ import { GET as standupBriefingGET } from '@/app/api/standup/briefing/route';
 import { GET as financeBriefingGET } from '@/app/api/finance/briefing/route';
 import { GET as libraryBriefingGET } from '@/app/api/library/briefing/route';
 import { TEAM_REGISTRY, type TeamEntityDef } from '@/lib/map/team-registry';
-import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
+import { getBriefingSystemMetrics, getDiskUsage as getDiskUsageShared } from '@/lib/map/system-metrics';
 import { computeCronStats24h } from '@/lib/map/cron-stats';
+import { parseCronLog as parseCronLogShared } from '@/lib/map/cron-log-parser';
 
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
@@ -162,31 +163,16 @@ interface CronEntry {
 }
 
 function parseCronLog(keywords: string[], limit = 20): CronEntry[] {
+  // SSoT: lib/map/cron-log-parser.ts
   const raw = readSafe(CRON_LOG);
-  if (!raw) return [];
-  const lines = raw.split('\n').filter(Boolean).slice(-3000);
-  const LOG_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] (.+)$/;
-  const entries: CronEntry[] = [];
-
-  for (const line of lines) {
-    const m = line.match(LOG_RE);
-    if (!m) continue;
-    const [, ts, task, msg] = m;
-    if (/^task_\d+_/.test(task)) continue;
-    const lower = task.toLowerCase();
-    if (keywords.length > 0 && !keywords.some(kw => lower.includes(kw))) continue;
-
-    let result = 'unknown';
-    if (/\bDONE\b|\bSUCCESS\b/.test(line)) result = 'SUCCESS';
-    else if (/FAILED|ERROR|CRITICAL/.test(line)) result = 'FAILED';
-    else if (/\bSKIPPED\b/.test(line)) result = 'SKIPPED';
-    else if (/\bSTARTED?\b|\bRUNNING\b/.test(line)) result = 'RUNNING';
-
-    if (result !== 'unknown') {
-      entries.push({ time: ts, task, result, message: msg.slice(0, 120) });
-    }
-  }
-  return entries.reverse().slice(0, limit);
+  const entries = parseCronLogShared(raw, keywords, { limit });
+  // 기존 CronEntry 필드 호환을 위해 message 길이를 120자로 trim
+  return entries.map(e => ({
+    time: e.time,
+    task: e.task,
+    result: e.result,
+    message: e.message.slice(0, 120),
+  }));
 }
 
 function getCronStats24h(keywords: string[]): { total: number; success: number; failed: number; rate: number } {
@@ -287,11 +273,8 @@ function getCircuitBreakerStatus(): Array<{ task: string; taskKo: string; failur
 }
 
 function getDiskUsage(): { percent: number; used: string; total: string } {
-  try {
-    const out = execSync("df -h / | awk 'NR==2{print $3,$2,$5}'", { timeout: 3000 }).toString().trim();
-    const [used, total, pct] = out.split(/\s+/);
-    return { percent: parseInt(pct) || 0, used: used || '?', total: total || '?' };
-  } catch { return { percent: 0, used: '?', total: '?' }; }
+  // SSoT: lib/map/system-metrics.ts
+  return getDiskUsageShared();
 }
 
 function getDiscordBotStatus(): { running: boolean; pid: string | null } {

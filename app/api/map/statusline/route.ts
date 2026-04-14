@@ -1,9 +1,9 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
+import { getDiskUsage, getMemoryUsage, getCpuUsage } from '@/lib/map/system-metrics';
 /**
  * 자비스맵 통합 statusline — 좌상단에 붙는 Claude Code statusline 스타일.
  *
@@ -34,49 +34,8 @@ interface StatuslineResponse {
   updatedAt: string;
 }
 
-// ── 시스템 메트릭 수집 ────────────────────────────────────────────────
-
-function safeExec(cmd: string, timeoutMs = 2000): string {
-  try {
-    return execSync(cmd, { timeout: timeoutMs, encoding: 'utf8' }).trim();
-  } catch {
-    return '';
-  }
-}
-
-function getCpuUsage(): { usage: number; loadAvg: number } {
-  // top -l 1 -n 0 single sample, no process table
-  const out = safeExec('top -l 1 -n 0');
-  if (!out) return { usage: 0, loadAvg: 0 };
-  const cpuMatch = out.match(/CPU usage:\s+([\d.]+)%\s+user,\s+([\d.]+)%\s+sys,\s+([\d.]+)%\s+idle/);
-  const loadMatch = out.match(/Load Avg:\s+([\d.]+)/);
-  const idle = cpuMatch ? parseFloat(cpuMatch[3]) : 100;
-  const usage = Math.round(100 - idle);
-  const loadAvg = loadMatch ? parseFloat(loadMatch[1]) : 0;
-  return { usage, loadAvg };
-}
-
-function getMemoryUsage(): { percent: number; usedGb: number; totalGb: number } {
-  // top 출력에서 PhysMem 파싱
-  const out = safeExec('top -l 1 -n 0');
-  if (!out) return { percent: 0, usedGb: 0, totalGb: 0 };
-  // PhysMem: 14G used (2001M wired, 1555M compressor), 1958M unused.
-  const m = out.match(/PhysMem:\s+(\d+)([GM])\s+used.*?(\d+)([GM])\s+unused/);
-  if (!m) return { percent: 0, usedGb: 0, totalGb: 0 };
-  const toGb = (n: string, u: string) => u === 'G' ? parseFloat(n) : parseFloat(n) / 1024;
-  const used = toGb(m[1], m[2]);
-  const unused = toGb(m[3], m[4]);
-  const total = used + unused;
-  const percent = total > 0 ? Math.round((used / total) * 100) : 0;
-  return { percent, usedGb: used, totalGb: total };
-}
-
-function getDiskUsage(): { percent: number; used: string; total: string } {
-  const out = safeExec("df -h / | awk 'NR==2{print $3,$2,$5}'");
-  if (!out) return { percent: 0, used: '?', total: '?' };
-  const [used, total, pct] = out.split(/\s+/);
-  return { percent: parseInt(pct) || 0, used: used || '?', total: total || '?' };
-}
+// 시스템 메트릭(디스크/메모리/CPU)은 lib/map/system-metrics.ts 가 SSoT.
+// 이 파일은 값만 소비하고 자체 구현을 두지 않는다.
 
 // ── Claude Code 구독 사용량 (~/.claude/usage-cache.json) ───────────────
 interface ClaudeUsageCache {

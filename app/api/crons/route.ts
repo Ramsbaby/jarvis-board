@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync, statSync, readdirSync } from 'fs';
+import { CRON_LOG_LINE_RE, SKIP_TASK_RE } from '@/lib/map/cron-log-parser';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
@@ -254,13 +255,13 @@ function parseLatestRuns(): Map<string, { latest: LastRun; history: RecentRun[] 
   const lines = raw.split('\n').filter(Boolean);
   // 최근 5000줄로 늘려 이력 확보
   const recent = lines.slice(-5000);
-  const LOG_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] (.+)$/;
-  const SKIP_TASK_RE = /^task_[0-9]+_/;
+  // SSoT: lib/map/cron-log-parser.ts 가 라인 정규식과 스킵 패턴을 보유.
+  // 이 함수는 "역순 + 태스크별 이력 누적" 이 고유 로직이라 직접 해석이 필요함.
 
   // 역순 순회로 최신부터 수집
   for (let i = recent.length - 1; i >= 0; i--) {
     const line = recent[i];
-    const m = line.match(LOG_RE);
+    const m = line.match(CRON_LOG_LINE_RE);
     if (!m) continue;
     const [, ts, task, msg] = m;
     if (SKIP_TASK_RE.test(task)) continue;

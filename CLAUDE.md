@@ -1,5 +1,15 @@
 @AGENTS.md
 
+## 📚 AI 네비게이션 (시작점)
+
+이 레포에서 작업하는 모든 에이전트는 **가장 먼저** 다음 문서를 읽는다.
+
+1. **[docs/INDEX.md](./docs/INDEX.md)** — 문서 지도 (1화면 요약)
+2. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 디렉터리 구조 + 서브시스템 + SSoT 파일
+3. [docs/API-INDEX.md](./docs/API-INDEX.md) — 69개 API 라우트 목록 (자동 생성, `scripts/gen-api-index.mjs`)
+
+그 다음 이 파일의 Serena 워크플로우를 따라 코드를 탐색한다.
+
 ## 🔍 Serena 토큰 절약 — 자비스맵 필수 워크플로우
 
 ### 원칙

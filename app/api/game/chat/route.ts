@@ -23,6 +23,7 @@ const NPC_RULES = `
 - "데이터가 없어서 모른다"로 도망치지 않는다. 브리핑 화면에 실패가 보이면 인정하고, 가능한 원인을 추론하고, 구체적 조치를 제안한다.
 - 다른 팀 소관이면 어느 팀장에게 물어봐야 하는지 안내한다.
 - "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 시스템 용어는 쓰지 않는다.
+- 파일 읽기 권한이 있다. ~/.jarvis/ 하위 로그·결과·설정에 직접 접근 가능하다. 로그가 필요하면 직접 읽어서 분석한 결과를 보고한다. "오너가 직접 실행해 달라"고 요청하지 않는다.
 - 답변 톤: 보고하는 팀장처럼. 간결하고 구조화해서. 핵심 결론 → 근거 → 다음 액션.`;
 
 const TEAM_PROMPTS: Record<string, string> = Object.fromEntries(
@@ -531,6 +532,32 @@ function gatherTeamContext(teamId: string): string {
     value += `\n\n=== 공통 시스템 스냅샷 ===\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}`;
   }
 
+  // LLM Wiki 컨텍스트 주입 — 팀별 도메인 매핑
+  const TEAM_WIKI_MAP: Record<string, string[]> = {
+    'infra-lead': ['ops'], 'qa-lead': ['ops'], 'concierge': ['ops'],
+    'finance': ['trading'], 'hr-dev': ['career'], 'marketing': ['knowledge'],
+    'strategy': ['knowledge'], 'data-team': ['ops', 'knowledge'],
+    'president': ['career', 'ops', 'trading'], 'meeting-room': ['ops'],
+  };
+  const wikiDomains = TEAM_WIKI_MAP[teamId] || [];
+  const wikiDir = path.join(JARVIS_HOME, 'wiki');
+  if (wikiDomains.length > 0 && existsSync(wikiDir)) {
+    const wikiParts: string[] = [];
+    for (const domain of wikiDomains) {
+      const summaryPath = path.join(wikiDir, domain, '_summary.md');
+      if (!existsSync(summaryPath)) continue;
+      let summary = readFileSync(summaryPath, 'utf-8');
+      summary = summary.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
+      summary = summary.replace(/^---[\s\S]*?---\n*/m, '');
+      if (summary.trim().length > 50) {
+        wikiParts.push(summary.trim().slice(0, 800));
+      }
+    }
+    if (wikiParts.length > 0) {
+      value += `\n\n=== 위키 지식 (자동 주입) ===\n${wikiParts.join('\n---\n')}`;
+    }
+  }
+
   contextCache.set(teamId, { value, ts: Date.now() });
   return value;
 }
@@ -704,7 +731,8 @@ ${teamContext || '(수집된 데이터 없음)'}
                 '--model', 'sonnet',
                 '--output-format', 'text',
                 '--no-session-persistence',
-              ], { stdio: 'pipe', env: cliEnv, cwd: '/tmp' });
+                '--add-dir', JARVIS_HOME,
+              ], { stdio: 'pipe', env: cliEnv, cwd: JARVIS_HOME });
               let out = '';
               let errOut = '';
               if (proc.stdin) {

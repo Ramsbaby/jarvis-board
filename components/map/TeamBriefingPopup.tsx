@@ -192,7 +192,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
           return (
             <>
               {/* ── 좌측: 브리핑 컬럼 ── */}
-              <div style={{
+              <div className="briefing-scroll-col" style={{
                 flex: showTwoCol ? '0 0 55%' : '1 1 auto',
                 overflowY: 'auto',
                 minHeight: 0,

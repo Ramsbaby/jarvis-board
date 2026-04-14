@@ -325,3 +325,21 @@ html {
 .animate-slide-in-right {
   animation: slideInRight 0.5s ease-out;
 }
+
+/* 브리핑 좌측 컬럼 — 오버레이 스크롤바 (콘텐츠 너비 침범 방지) */
+.briefing-scroll-col {
+  overflow-y: overlay !important; /* WebKit/Blink: 스크롤바가 콘텐츠 위에 오버레이 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+.briefing-scroll-col::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+.briefing-scroll-col::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+.briefing-scroll-col::-webkit-scrollbar-track {
+  background: transparent;
+}

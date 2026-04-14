@@ -732,8 +732,13 @@ export default function VirtualOffice() {
         ctx!.textAlign = 'center';
         ctx!.fillText(tagText, rx + rw / 2, tagY + 11);
 
-        // 5. 가구
+        // 5. 가구 (clip: 방 경계 밖으로 절대 삐져나오지 않음)
+        ctx!.save();
+        ctx!.beginPath();
+        ctx!.rect(rx + 1, ry + 1, rw - 2, rh - 2);
+        ctx!.clip();
         drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
+        ctx!.restore();
         return;
       }
 
@@ -1126,8 +1131,13 @@ export default function VirtualOffice() {
         ctx!.fillRect(rx + 4, ry + 2, rw - 8, 2);
       }
 
-      // Draw furniture
+      // Draw furniture (clip: 방 경계 밖 절대 불가)
+      ctx!.save();
+      ctx!.beginPath();
+      ctx!.rect(rx + 1, ry + 1, rw - 2, rh - 2);
+      ctx!.clip();
       drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
+      ctx!.restore();
 
       // Room name plate (밝은 오피스)
       ctx!.font = 'bold 11px monospace';
@@ -2121,8 +2131,8 @@ export default function VirtualOffice() {
         if (!cached) {
           const isClosed = r.wallStyle === 'closed';
           const sdGrd = ctx!.createLinearGradient(0, 0, 0, T * 1.2);
-          sdGrd.addColorStop(0, isClosed ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.05)');
-          sdGrd.addColorStop(0.5, isClosed ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.02)');
+          sdGrd.addColorStop(0, isClosed ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.10)');
+          sdGrd.addColorStop(0.5, isClosed ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.03)');
           sdGrd.addColorStop(1, 'transparent');
           const seGrd = ctx!.createLinearGradient(0, 0, T * 0.5, 0);
           seGrd.addColorStop(0, 'rgba(0,0,0,0.04)');
@@ -2293,18 +2303,28 @@ export default function VirtualOffice() {
         }
       }
 
-      // ── Vignette overlay (다크 테마) ──
-      const vigSize = 40;
+      // ── Vignette overlay (4방향 — 테두리 깊이감) ──
+      const vigSize = 72;
       const vigTop = ctx!.createLinearGradient(0, 0, 0, vigSize);
-      vigTop.addColorStop(0, 'rgba(0,0,0,0.04)');
+      vigTop.addColorStop(0, 'rgba(0,0,0,0.18)');
       vigTop.addColorStop(1, 'transparent');
       ctx!.fillStyle = vigTop;
       ctx!.fillRect(0, 0, w, vigSize);
       const vigBot = ctx!.createLinearGradient(0, h - vigSize, 0, h);
       vigBot.addColorStop(0, 'transparent');
-      vigBot.addColorStop(1, 'rgba(0,0,0,0.04)');
+      vigBot.addColorStop(1, 'rgba(0,0,0,0.18)');
       ctx!.fillStyle = vigBot;
       ctx!.fillRect(0, h - vigSize, w, vigSize);
+      const vigLeft = ctx!.createLinearGradient(0, 0, vigSize, 0);
+      vigLeft.addColorStop(0, 'rgba(0,0,0,0.12)');
+      vigLeft.addColorStop(1, 'transparent');
+      ctx!.fillStyle = vigLeft;
+      ctx!.fillRect(0, 0, vigSize, h);
+      const vigRight = ctx!.createLinearGradient(w - vigSize, 0, w, 0);
+      vigRight.addColorStop(0, 'transparent');
+      vigRight.addColorStop(1, 'rgba(0,0,0,0.12)');
+      ctx!.fillStyle = vigRight;
+      ctx!.fillRect(w - vigSize, 0, vigSize, h);
 
       animId = requestAnimationFrame(gameLoop);
     }

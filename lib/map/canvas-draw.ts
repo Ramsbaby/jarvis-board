@@ -168,11 +168,12 @@ function drawStandardFurniture(
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 2;
 
-  // 일자 데스크
+  // 일자 데스크 (방 너비에 맞게 동적 — T*1.5 시작, 오른쪽 T*0.8 여백)
+  const deskW = _rw - T * 2.3; // 어떤 방 크기든 벽 안에 수납
   ctx.fillStyle = '#4a5060';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, T * 5, T * 0.5);
+  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, T * 0.5);
   ctx.fillStyle = '#3a4050';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, T * 5, 2); // 상단 엣지
+  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, 2); // 상단 엣지
 
   // 모니터
   drawMonitor(ctx, rx + T * 2.5, ry + T * 1, T * 1, T * 0.6, teamColor + '28', '#4a5060');

@@ -6,9 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { readWikiPage, searchWiki } from '@/lib/wiki';
+import { readWikiPage } from '@/lib/wiki';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 export async function GET(req: NextRequest) {
+  const { isAnon } = getRequestAuth(req);
+  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const pagePath = req.nextUrl.searchParams.get('path');
 
   if (!pagePath) {

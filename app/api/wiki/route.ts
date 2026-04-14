@@ -7,8 +7,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { searchWiki, listPages, wikiStats } from '@/lib/wiki';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 export async function GET(req: NextRequest) {
+  const { isAnon } = getRequestAuth(req);
+  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const q = req.nextUrl.searchParams.get('q');
   const domain = req.nextUrl.searchParams.get('domain') || undefined;
   const type = req.nextUrl.searchParams.get('type') || undefined;

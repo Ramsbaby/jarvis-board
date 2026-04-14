@@ -69,8 +69,10 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
         onClick={e => e.stopPropagation()}
         style={{
           width: isMobile ? '100%' : '92vw',
-          maxWidth: isMobile ? '100%' : (showTwoCol ? 1080 : 680),
-          height: isMobile ? 'auto' : (showTwoCol ? '88vh' : 'auto'),
+          // 폭 고정 — 채팅 열림/닫힘으로 팝업 크기가 변하면 좌측 콘텐츠가
+          // 중앙 정렬 기준에서 왼쪽으로 쏠려 보이는 현상 방지
+          maxWidth: isMobile ? '100%' : 1080,
+          height: isMobile ? 'auto' : '88vh',
           maxHeight: isMobile ? '92dvh' : '92vh',
           background: isMobile
             ? 'linear-gradient(180deg, #0e1225 0%, #090c18 100%)'
@@ -80,10 +82,10 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
           boxShadow: isMobile
             ? '0 -8px 40px rgba(0,0,0,0.8)'
             : '0 0 0 1px rgba(255,255,255,0.02), 0 32px 100px rgba(0,0,0,0.95)',
-          overflow: showTwoCol ? 'hidden' : 'hidden auto',
+          overflow: 'hidden',
           padding: 0,
-          display: showTwoCol ? 'flex' : 'block',
-          transition: 'max-width 0.3s ease',
+          display: isMobile && !chatPanelOpen ? 'block' : 'flex',
+          transition: 'none',
           color: '#e6edf3',
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
           WebkitOverflowScrolling: 'touch',
@@ -192,7 +194,8 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
             <>
               {/* ── 좌측: 브리핑 컬럼 ── */}
               <div className="briefing-scroll-col" style={{
-                flex: showTwoCol ? '0 0 55%' : '1 1 auto',
+                // 2열 모드 고정: 데스크톱은 항상 55%, 모바일만 전체 폭
+                flex: isMobile ? '1 1 auto' : '0 0 55%',
                 overflowY: 'auto',
                 minHeight: 0,
                 display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
@@ -1010,14 +1013,16 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               </div>{/* 콘텐츠 패딩 래퍼 끝 */}
               </div>{/* 좌측 브리핑 컬럼 끝 */}
 
-              {/* ── 우측: 채팅 컬럼 (데스크톱 2컬럼 / 모바일 탭) ── */}
-              {chatPanelOpen && (
+              {/* ── 우측: 채팅 컬럼 (데스크톱 항상 표시, 모바일은 탭) ── */}
+              {/* 데스크톱: chatPanelOpen 여부와 무관하게 45% 자리 유지 → 좌측 밀림 방지 */}
+              {/* 모바일: 기존대로 조건부 렌더 */}
+              {(!isMobile || chatPanelOpen) && (
                 <div style={{
-                  flex: showTwoCol ? '0 0 45%' : '1 1 auto',
+                  flex: isMobile ? '1 1 auto' : '0 0 45%',
                   display: (isMobile && mobileTab === 'briefing') ? 'none' : 'flex',
                   flexDirection: 'column',
-                  borderLeft: showTwoCol ? '1px solid rgba(255,255,255,0.08)' : 'none',
-                  height: showTwoCol ? '88vh' : (isMobile ? '70dvh' : undefined),
+                  borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                  height: isMobile ? '70dvh' : '88vh',
                   minHeight: 0,
                   padding: isMobile ? '0 16px 16px' : '0',
                 }}>

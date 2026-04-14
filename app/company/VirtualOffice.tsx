@@ -2392,9 +2392,21 @@ export default function VirtualOffice() {
     }
   }, [briefing, loadChatHistory]);
 
-  // Chat auto-scroll
+  // Chat auto-scroll — 팝업 밀림 방지 위해 scrollIntoView 대신
+  // chatMessages 컨테이너의 scrollTop을 직접 조정 (부모 스크롤 영향 차단)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const endEl = chatEndRef.current;
+    if (!endEl) return;
+    // chatEndRef의 가장 가까운 overflow 스크롤 컨테이너 찾아서 직접 scrollTop 변경
+    let parent: HTMLElement | null = endEl.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+        parent.scrollTop = parent.scrollHeight;
+        break;
+      }
+      parent = parent.parentElement;
+    }
   }, [chatMessages, chatLoading]);
 
   // ── 메시지 전송 (인앱 대화, Groq SSE 스트리밍) ─────────────

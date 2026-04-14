@@ -615,7 +615,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'GROQ_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
   }
 
-  const systemPrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
+  const basePrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
   const db = getDb();
 
   db.prepare('INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)').run(teamId, 'user', message);
@@ -629,24 +629,22 @@ export async function POST(req: NextRequest) {
     .join('\n');
 
   const teamContext = gatherTeamContext(teamId);
-  const persona = systemPrompt.split('입니다')[0] + '입니다';
+  const persona = basePrompt.split('입니다')[0] + '입니다';
 
-  const userContent = `=== 오늘 팀의 실제 활동 데이터 ===
+  // 핵심: 팀 실제 데이터를 system 프롬프트에 포함 — LLM이 데이터 기반 답변하도록 강제
+  const systemPrompt = `${basePrompt}
+
+=== 오늘 팀의 실제 활동 데이터 (내가 관리하는 시스템에서 수집됨) ===
 ${teamContext || '(수집된 데이터 없음)'}
-
-=== 이전 대화 ===
-${conversationContext || '(첫 대화)'}
-
-=== 사용자 질문 ===
-${message}
 
 답변 규칙 (엄수):
 1. 위 실제 데이터를 근거로 ${persona}의 입장에서 한국어로 답변한다.
-2. 데이터에 없는 내용은 지어내지 않는다.
-3. 실패 원인을 물으면 **"=== 최근 24h 실패 원인 상세 ==="** 섹션의 stderr/로그를 그대로 인용해서 원인 분석한다. "데이터가 없다"는 답변은 섹션이 실제로 비어있을 때만.
+2. 데이터에 없는 내용은 지어내지 않는다. "모르겠다"가 거짓보다 낫다.
+3. 실패 원인을 물으면 "현재 실패 중인 작업" 섹션의 stderr/로그를 그대로 인용해서 원인 분석한다.
 4. 상태 질문에는 숫자(실행 건수, 실패 건수, 디스크%, 시간)를 구체적으로 포함한다.
-5. 답변은 짧고 구조화해서: 핵심 결론 → 근거 데이터 → 다음 액션 제안.
-6. 절대 "이전 세션" 같은 말 하지 마라.`;
+5. 답변은 짧고 구조화해서: 핵심 결론 → 근거 데이터 → 다음 액션 제안.`;
+
+  const userContent = `${conversationContext ? `=== 이전 대화 ===\n${conversationContext}\n\n` : ''}${message}`;
 
   const stream = new ReadableStream({
     async start(controller) {

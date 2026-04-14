@@ -194,8 +194,8 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               {/* ── 좌측: 브리핑 컬럼 ── */}
               <div style={{
                 flex: showTwoCol ? '0 0 55%' : '1 1 auto',
-                overflowY: 'auto',
-                maxHeight: showTwoCol ? '88vh' : undefined,
+                overflow: 'hidden auto',
+                minHeight: 0,
                 padding: isMobile ? '20px 16px 24px' : '28px 32px',
                 display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
               }}>

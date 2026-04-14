@@ -202,7 +202,11 @@ export default function VirtualOffice() {
         if (cronsRes.ok) {
           const cronsJson = await cronsRes.json();
           const crons = (cronsJson.crons || []) as CronItem[];
-          setCronData(crons);
+          // 데이터가 실제 변경된 경우에만 setState — 불필요한 리렌더(화면 지지직) 방지
+          const prev = cronDataRef.current;
+          const changed = prev.length !== crons.length
+            || crons.some((c, i) => c.id !== prev[i]?.id || c.status !== prev[i]?.status);
+          if (changed) setCronData(crons);
           // cron-center 상태 계산 → npcStatesRef에 반영 (states는 이미 commit됐으므로 직접 patch)
           const cronTotal = crons.length;
           const cronFailed = crons.filter(c => c.status === 'failed').length;

@@ -194,11 +194,12 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               {/* ── 좌측: 브리핑 컬럼 ── */}
               <div style={{
                 flex: showTwoCol ? '0 0 55%' : '1 1 auto',
-                overflow: 'hidden auto',
+                overflowY: 'auto',
                 minHeight: 0,
-                padding: isMobile ? '20px 16px 24px' : '28px 32px',
                 display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
               }}>
+              {/* 내부 패딩 래퍼 — hero banner negative margin이 clipping 없이 풀 블리드 가능 */}
+              <div style={{ padding: isMobile ? '20px 16px 24px' : '28px 32px' }}>
               {/* Header — hero banner with team color */}
               <div style={{
                 margin: isMobile ? '-16px -16px 20px' : '-28px -32px 20px',
@@ -988,6 +989,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   <span>{chatPanelOpen ? '질문 닫기' : `${briefing.name}에게 질문`}</span>
                 </button>
               </div>
+              </div>{/* 패딩 래퍼 끝 */}
               </div>{/* 좌측 브리핑 컬럼 끝 */}
 
               {/* ── 우측: 채팅 컬럼 (데스크톱 2컬럼 / 모바일 탭) ── */}

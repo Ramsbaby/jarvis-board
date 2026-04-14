@@ -1028,7 +1028,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 }}>
                   {/* 채팅 헤더 */}
                   <div style={{
-                    padding: isMobile ? '0 0 8px' : '20px 24px 12px',
+                    padding: isMobile ? '8px 0' : '20px 24px 12px',
                     borderBottom: '1px solid rgba(255,255,255,0.06)',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     flexShrink: 0,
@@ -1086,7 +1086,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                         }}>
                           {m.role === 'user'
                             ? m.content
-                            : <MarkdownContent content={m.content} variant="dark" />}
+                            : <MarkdownContent content={m.content} variant="chat" />}
                         </div>
                         <span style={{ fontSize: 9, color: '#484f58', marginTop: 2, marginLeft: 4, marginRight: 4 }}>
                           {new Date(m.created_at * 1000).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}

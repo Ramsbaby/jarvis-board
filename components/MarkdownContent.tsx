@@ -10,7 +10,7 @@ import type { Element } from 'hast';
 interface MarkdownContentProps {
   content: string;
   className?: string;
-  variant?: 'light' | 'dark';
+  variant?: 'light' | 'dark' | 'chat';
 }
 
 // Copy button component for code blocks
@@ -161,7 +161,29 @@ export default function MarkdownContent({ content, className = '', variant = 'li
     [&_th]:text-left [&_th]:text-slate-400 [&_th]:font-medium [&_th]:py-1.5 [&_th]:border-b [&_th]:border-slate-700
     [&_td]:py-1.5 [&_td]:border-b [&_td]:border-slate-800 [&_td]:text-slate-300`;
 
-  const themeClasses = variant === 'dark' ? darkTheme : lightTheme;
+  // 채팅 말풍선 전용 — 단락 간격 최소화
+  const chatTheme = `text-slate-200 text-[13px] leading-snug
+    [&>*+*]:mt-1
+    [&_h1]:text-white [&_h1]:text-sm [&_h1]:font-bold [&_h1]:mt-2 [&_h1]:mb-1
+    [&_h2]:text-slate-100 [&_h2]:text-xs [&_h2]:font-semibold [&_h2]:mt-2 [&_h2]:mb-0.5
+    [&_h3]:text-slate-200 [&_h3]:text-xs [&_h3]:font-medium [&_h3]:mt-1.5
+    [&_p]:text-slate-200 [&_p]:leading-snug [&_p]:my-0.5
+    [&_strong]:text-white [&_strong]:font-semibold
+    [&_em]:text-slate-300 [&_em]:italic
+    [&_code]:text-indigo-300 [&_code]:bg-indigo-950/60 [&_code]:px-1 [&_code]:py-0 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+    [&_pre]:bg-black/60 [&_pre]:border [&_pre]:border-slate-700 [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:my-1.5 [&_pre]:text-xs
+    [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-slate-200
+    [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-0.5
+    [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:space-y-0.5
+    [&_li]:text-slate-200
+    [&_hr]:border-slate-700 [&_hr]:my-2
+    [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-2 [&_blockquote]:text-slate-400 [&_blockquote]:italic
+    [&_a]:text-indigo-300
+    [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse
+    [&_th]:text-left [&_th]:text-slate-400 [&_th]:font-medium [&_th]:py-1 [&_th]:border-b [&_th]:border-slate-700
+    [&_td]:py-1 [&_td]:border-b [&_td]:border-slate-800 [&_td]:text-slate-300`;
+
+  const themeClasses = variant === 'chat' ? chatTheme : variant === 'dark' ? darkTheme : lightTheme;
 
   return (
     <div className={`${themeClasses} ${className}`}>

@@ -99,8 +99,11 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
             background: 'rgba(14,18,37,0.95)', position: 'sticky', top: 0, zIndex: 10,
           }}>
             {(['briefing', 'chat'] as const).map(tab => (
-              <button key={tab} onClick={() => setMobileTab(tab)} style={{
-                flex: 1, padding: '14px 0', fontSize: 13, fontWeight: mobileTab === tab ? 800 : 500,
+              <button key={tab} onClick={() => {
+                if (tab === 'briefing') { setChatPanelOpen(false); setMobileTab('briefing'); }
+                else setMobileTab(tab);
+              }} style={{
+                flex: 1, padding: '12px 0', fontSize: 13, fontWeight: mobileTab === tab ? 800 : 500,
                 color: mobileTab === tab ? '#e6edf3' : '#6e7681',
                 background: mobileTab === tab ? 'rgba(255,255,255,0.04)' : 'transparent',
                 border: 'none', borderBottom: mobileTab === tab ? '2px solid #58a6ff' : '2px solid transparent',
@@ -1026,11 +1029,11 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   minHeight: 0,
                   padding: isMobile ? '0 16px 16px' : '0',
                 }}>
-                  {/* 채팅 헤더 */}
+                  {/* 채팅 헤더 — 모바일은 탭바가 대체하므로 숨김 */}
                   <div style={{
-                    padding: isMobile ? '8px 0' : '20px 24px 12px',
-                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: isMobile ? '0' : '20px 24px 12px',
+                    borderBottom: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                    display: isMobile ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between',
                     flexShrink: 0,
                   }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3' }}>

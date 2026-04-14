@@ -38,3 +38,21 @@
 
 ### 예외
 CLAUDE.md, README.md, package.json 같은 문서/설정은 Read OK.
+
+## 개발 규칙
+
+### 빌드 검증 (코드 변경 후 필수)
+```bash
+npx tsc --noEmit          # 타입 체크
+npx next build            # 빌드 (타입 에러 + 런타임 에러 모두 잡음)
+```
+
+### 커밋
+- conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
+- Co-Authored-By 줄 포함
+
+### 파일 크기 주의
+VirtualOffice.tsx(2,780줄)는 이미 한계. 새 기능은 components/map/ 또는 lib/map/에 분리.
+
+### API 라우트 (69개)
+변경 전 반드시 관련 라우트 확인. Serena `find_referencing_symbols`로 호출자 추적.

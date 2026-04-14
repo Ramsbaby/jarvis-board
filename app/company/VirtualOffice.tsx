@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   T, COLS, ROWS, MOVE_SPEED,
-  ROOMS, AGENT_TEAM_TO_ROOM,
+  ROOMS, AGENT_TEAM_TO_ROOM, statusExplanation,
   CRON_COLS, CRON_ROWS,
   CRON_COL_START, CRON_ROW_START, CRON_COL_SPACING, CRON_ROW_SPACING,
   buildCollisionMap, aStarPath,
@@ -2412,7 +2412,20 @@ export default function VirtualOffice() {
       const res = await fetch('/api/game/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId, message: msg }),
+        body: JSON.stringify({
+          teamId,
+          message: msg,
+          // 사용자가 보고 있는 브리핑 요약을 NPC에게 전달 — 좌우 정보 동기화
+          briefingSummary: briefing ? [
+            `상태: ${briefing.status}`,
+            briefing.summary && `요약: ${briefing.summary}`,
+            briefing.stats && `24h 통계: 성공률 ${briefing.stats.rate}% (전체 ${briefing.stats.total}건, 실패 ${briefing.stats.failed}건)`,
+            briefing.alerts?.length && `경보: ${briefing.alerts.join(', ')}`,
+            briefing.recentActivity?.filter(a => a.result === 'failed').length
+              && `최근 실패 활동: ${briefing.recentActivity!.filter(a => a.result === 'failed').map(a => `${a.task}(${a.time})`).join(', ')}`,
+            `화면 표시 현황: ${statusExplanation(briefing)}`,
+          ].filter(Boolean).join('\n') : undefined,
+        }),
         signal: ac.signal,
       });
 

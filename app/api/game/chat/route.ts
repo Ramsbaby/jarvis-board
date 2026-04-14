@@ -571,10 +571,12 @@ function sseHeaders(): HeadersInit {
 export async function POST(req: NextRequest) {
   let teamId: string;
   let message: string;
+  let briefingSummary: string | undefined;
   try {
     const body = await req.json();
     teamId = body.teamId;
     message = body.message;
+    briefingSummary = body.briefingSummary;
   } catch {
     return NextResponse.json({ error: '잘못된 요청 본문입니다.' }, { status: 400 });
   }
@@ -632,15 +634,19 @@ export async function POST(req: NextRequest) {
   const persona = basePrompt.split('입니다')[0] + '입니다';
 
   // 핵심: 팀 실제 데이터를 system 프롬프트에 포함 — LLM이 데이터 기반 답변하도록 강제
+  // briefingSummary: 사용자가 화면 왼쪽에서 보고 있는 브리핑 요약 (프론트엔드에서 전달)
   const systemPrompt = `${basePrompt}
+
+=== 사용자가 현재 보고 있는 브리핑 화면 요약 ===
+${briefingSummary || '(브리핑 요약 없음)'}
 
 === 오늘 팀의 실제 활동 데이터 (내가 관리하는 시스템에서 수집됨) ===
 ${teamContext || '(수집된 데이터 없음)'}
 
 답변 규칙 (엄수):
 1. 위 실제 데이터를 근거로 ${persona}의 입장에서 한국어로 답변한다.
-2. 데이터에 없는 내용은 지어내지 않는다. "모르겠다"가 거짓보다 낫다.
-3. 실패 원인을 물으면 "현재 실패 중인 작업" 섹션의 stderr/로그를 그대로 인용해서 원인 분석한다.
+2. "사용자가 현재 보고 있는 브리핑 화면 요약"에 나온 내용은 사실로 간주한다. 사용자가 화면에서 실패를 봤다면 인정하고 분석한다.
+3. 실패 원인을 물으면 "현재 실패 중인 작업" 섹션의 stderr/로그를 인용해서 원인 분석. 로그가 없더라도 브리핑 화면에 실패가 표시됐다면 "브리핑에서 감지된 실패"로 인정하고 가능한 원인을 추론한다.
 4. 상태 질문에는 숫자(실행 건수, 실패 건수, 디스크%, 시간)를 구체적으로 포함한다.
 5. 답변은 짧고 구조화해서: 핵심 결론 → 근거 데이터 → 다음 액션 제안.`;
 

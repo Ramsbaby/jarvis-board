@@ -76,8 +76,9 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
           // 폭 고정 — 채팅 열림/닫힘으로 팝업 크기가 변하면 좌측 콘텐츠가
           // 중앙 정렬 기준에서 왼쪽으로 쏠려 보이는 현상 방지
           maxWidth: isMobile ? '100%' : 1080,
-          height: isMobile ? 'auto' : '88vh',
-          maxHeight: isMobile ? '92dvh' : '92vh',
+          // 모바일: 88dvh 고정 — 내부 자식은 flex: 1로 공간 분배 (높이 SSoT)
+          height: isMobile ? '88dvh' : '88vh',
+          maxHeight: isMobile ? '88dvh' : '92vh',
           background: isMobile
             ? 'linear-gradient(180deg, #0e1225 0%, #090c18 100%)'
             : 'linear-gradient(160deg, #0e1225 0%, #090c18 100%)',
@@ -88,8 +89,8 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
             : '0 0 0 1px rgba(255,255,255,0.02), 0 32px 100px rgba(0,0,0,0.95)',
           overflow: 'hidden',
           padding: 0,
-          display: isMobile && !chatPanelOpen ? 'block' : 'flex',
-          flexWrap: 'wrap', // 모바일 탭바가 full-width 첫 행을 차지하게
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row', // 모바일: 열(탭바+콘텐츠), 데스크톱: 행(좌우 2열)
           transition: 'none',
           color: '#e6edf3',
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
@@ -148,8 +149,8 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
         {isMobile && chatPanelOpen && briefing && (
           <div style={{
             display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(14,18,37,0.95)', position: 'sticky', top: 0, zIndex: 10,
-            flex: '0 0 100%', width: '100%', // flex wrap 환경에서 첫 행 전체 차지
+            background: 'rgba(14,18,37,0.95)', zIndex: 10,
+            flexShrink: 0, width: '100%', // column flex에서 고정 높이 유지
           }}>
             {(['briefing', 'chat'] as const).map(tab => (
               <button key={tab} onClick={() => {
@@ -231,10 +232,10 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
             <>
               {/* ── 좌측: 브리핑 컬럼 ── */}
               <div className="briefing-scroll-col" style={{
-                // 2열 모드 고정: 데스크톱은 항상 55%, 모바일만 전체 폭
-                flex: isMobile ? '1 1 auto' : '0 0 55%',
-                // 데스크톱: 명시적 height 필수 — 없으면 콘텐츠 높이로 팽창해 overflowY 무효화
-                height: isMobile ? 'auto' : '88vh',
+                // 모바일: flex: 1로 부모(88dvh)에서 탭바 제외 나머지 공간 채움
+                // 데스크톱: 고정 55% 열
+                flex: isMobile ? 1 : '0 0 55%',
+                height: isMobile ? undefined : '88vh', // 모바일은 flex가 높이 결정
                 overflowY: 'auto',
                 minHeight: 0,
                 minWidth: 0,
@@ -1169,12 +1170,12 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               {/* 모바일: 기존대로 조건부 렌더 */}
               {(!isMobile || chatPanelOpen) && (
                 <div style={{
-                  flex: isMobile ? '1 1 auto' : '0 0 45%',
-                  minWidth: 0, // min-width:auto 기본값이 flex-basis 초과하면 wrap 발생 방지
+                  flex: isMobile ? 1 : '0 0 45%',
+                  minWidth: 0,
                   display: (isMobile && mobileTab === 'briefing') ? 'none' : 'flex',
                   flexDirection: 'column',
                   borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                  height: isMobile ? 'calc(88dvh - 48px)' : '88vh',
+                  height: isMobile ? undefined : '88vh', // 모바일은 flex: 1이 높이 결정
                   minHeight: 0,
                   padding: isMobile ? '0 16px 16px' : '0',
                 }}>

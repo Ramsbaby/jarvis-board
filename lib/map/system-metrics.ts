@@ -11,13 +11,14 @@
 
 import { execSync } from 'child_process';
 
-function safeExec(cmd: string, timeoutMs = 3000): string {
+function safeExec(cmd: string, timeoutMs = 2000): string {
   try {
     return execSync(cmd, { timeout: timeoutMs, encoding: 'utf8' }).trim();
   } catch {
     return '';
   }
 }
+
 
 export interface DiskUsage {
   percent: number;
@@ -44,28 +45,44 @@ export function getDiskUsage(): DiskUsage {
 }
 
 export function getMemoryUsage(): MemoryUsage {
-  const out = safeExec('top -l 1 -n 0');
-  if (!out) return { percent: 0, usedGb: 0, totalGb: 0 };
-  // PhysMem: 14G used (2001M wired, 1555M compressor), 1958M unused.
-  const m = out.match(/PhysMem:\s+(\d+)([GM])\s+used.*?(\d+)([GM])\s+unused/);
-  if (!m) return { percent: 0, usedGb: 0, totalGb: 0 };
-  const toGb = (n: string, u: string) => u === 'G' ? parseFloat(n) : parseFloat(n) / 1024;
-  const used = toGb(m[1], m[2]);
-  const unused = toGb(m[3], m[4]);
-  const total = used + unused;
-  const percent = total > 0 ? Math.round((used / total) * 100) : 0;
-  return { percent, usedGb: used, totalGb: total };
+  try {
+    // Total memory via sysctl (bytes) — instant, no TTY needed
+    const totalBytes = parseInt(safeExec('sysctl -n hw.memsize')) || 0;
+    if (!totalBytes) return { percent: 0, usedGb: 0, totalGb: 0 };
+    const totalGb = totalBytes / (1024 ** 3);
+
+    // Used memory: sum active + wired + compressed pages via vm_stat
+    const vmOut = safeExec('vm_stat');
+    const pageSize = 16384; // macOS default 16KB page
+    const getPages = (label: string) => {
+      const m = vmOut.match(new RegExp(label + '[^:]*:\\s+(\\d+)'));
+      return m ? parseInt(m[1]) : 0;
+    };
+    const usedPages = getPages('Pages active') + getPages('Pages wired down') + getPages('Pages occupied by compressor');
+    const usedGb = (usedPages * pageSize) / (1024 ** 3);
+    const percent = Math.round((usedGb / totalGb) * 100);
+    return { percent, usedGb, totalGb };
+  } catch {
+    return { percent: 0, usedGb: 0, totalGb: 0 };
+  }
 }
 
 export function getCpuUsage(): CpuUsage {
-  const out = safeExec('top -l 1 -n 0');
-  if (!out) return { usage: 0, loadAvg: 0 };
-  const cpuMatch = out.match(/CPU usage:\s+([\d.]+)%\s+user,\s+([\d.]+)%\s+sys,\s+([\d.]+)%\s+idle/);
-  const loadMatch = out.match(/Load Avg:\s+([\d.]+)/);
-  const idle = cpuMatch ? parseFloat(cpuMatch[3]) : 100;
-  const usage = Math.round(100 - idle);
-  const loadAvg = loadMatch ? parseFloat(loadMatch[1]) : 0;
-  return { usage, loadAvg };
+  try {
+    // Load average via sysctl — instant
+    const loadOut = safeExec('sysctl -n vm.loadavg');
+    const loadAvg = parseFloat(loadOut.replace(/[{}]/g, '').trim().split(/\s+/)[0]) || 0;
+
+    // CPU usage: sum all process %cpu / logical cores
+    const psOut = safeExec('ps -A -o %cpu', 2000);
+    const nCores = parseInt(safeExec('sysctl -n hw.logicalcpu')) || 1;
+    const totalCpu = psOut.trim().split('\n').slice(1).reduce((s, l) => s + (parseFloat(l) || 0), 0);
+    const usage = Math.min(100, Math.round(totalCpu / nCores));
+
+    return { usage, loadAvg };
+  } catch {
+    return { usage: 0, loadAvg: 0 };
+  }
 }
 
 /**

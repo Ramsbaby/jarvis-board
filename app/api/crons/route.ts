@@ -240,12 +240,9 @@ interface LastRun {
 // 최근 실행 이력 (최대 N건) 포함하는 Map
 function parseLatestRuns(): Map<string, { latest: LastRun; history: RecentRun[] }> {
   const result = new Map<string, { latest: LastRun; history: RecentRun[] }>();
-  let raw = '';
-  try {
-    raw = readFileSync(CRON_LOG, 'utf8');
-  } catch {
-    return result;
-  }
+  // cron.log 전체(2MB+) 대신 마지막 500KB만 읽어 파싱 시간 단축
+  const raw = safeReadTail(CRON_LOG, 500_000);
+  if (!raw) return result;
 
   const lines = raw.split('\n').filter(Boolean);
   // 최근 5000줄로 늘려 이력 확보
@@ -330,7 +327,7 @@ function safeReadTail(p: string, maxBytes: number = MAX_LOG_READ_BYTES): string 
   }
 }
 
-function buildFallbackFromIndividualLogs(taskId: string): LastRun | null {
+function buildFallbackFromIndividualLogs(taskId: string, logDirFiles?: string[]): LastRun | null {
   const outPath = path.join(LOG_DIR, `${taskId}.log`);
   const errPath = path.join(LOG_DIR, `${taskId}-err.log`);
   const outStat = safeStat(outPath);
@@ -339,7 +336,7 @@ function buildFallbackFromIndividualLogs(taskId: string): LastRun | null {
   const outUsable = outStat && outStat.size > 0;
   const errUsable = errStat && errStat.size > 0;
   // 3차: LLM 전용 태스크는 `claude-stderr-{id}-YYYY-MM-DD.log` 를 쓴다.
-  const claudeStderr = readStderrExcerpt(taskId);
+  const claudeStderr = readStderrExcerpt(taskId, logDirFiles);
 
   // 아무 로그도 없고 claude-stderr 도 없음 → 실행된 적 없음
   if (!outUsable && !errUsable && !claudeStderr) return null;
@@ -399,7 +396,8 @@ function buildFallbackFromIndividualLogs(taskId: string): LastRun | null {
 }
 
 // 실패한 태스크의 stderr 꼬리를 읽어 lastMessage/outputSummary 보강
-function readStderrExcerpt(taskId: string): string {
+// logDir 파일 목록을 buildCrons() 에서 1회만 읽어 전달 — readdirSync 반복 호출 방지
+function readStderrExcerpt(taskId: string, logDirFiles?: string[]): string {
   // 1차: 전용 -err.log (대부분의 script 태스크 — 재시작 스크립트가 2> 로 리다이렉트)
   const errPath = path.join(LOG_DIR, `${taskId}-err.log`);
   const stat = safeStat(errPath);
@@ -410,10 +408,10 @@ function readStderrExcerpt(taskId: string): string {
 
   // 2차: LLM 태스크는 ask-claude.sh 가 날짜별로 분리된 claude-stderr 로그를 쓴다.
   //   파일명: claude-stderr-<taskId>-<YYYY-MM-DD>.log 또는 claude-stderr-<taskId>.log
-  //   가장 최근 (mtime 기준) 파일을 찾아 tail. 48h 이내만 신뢰해서 옛 로그가
-  //   현재 상태처럼 오해되는 것을 방지.
+  //   logDirFiles 가 전달된 경우(buildCrons 경로) 재사용 — readdirSync 중복 방지.
   try {
-    const files = readdirSync(LOG_DIR).filter((f) =>
+    const allFiles = logDirFiles ?? readdirSync(LOG_DIR);
+    const files = allFiles.filter((f) =>
       f.startsWith(`claude-stderr-${taskId}`) && f.endsWith('.log'),
     );
     if (files.length === 0) return '';
@@ -441,6 +439,9 @@ function buildCrons(): CronsResponse {
   const allTasks = tasksData.tasks || [];
   const scheduled = allTasks.filter(t => t.enabled !== false && t.schedule);
   const runs = parseLatestRuns();
+  // 로그 디렉토리 목록을 1회만 읽어 각 태스크 처리에 재사용 — readdirSync O(n) 방지
+  let logDirFiles: string[] | undefined;
+  try { logDirFiles = readdirSync(LOG_DIR); } catch { /* ignore */ }
 
   const crons: CronItem[] = scheduled.map(task => {
     const team = classifyTeam(task.id);
@@ -450,7 +451,7 @@ function buildCrons(): CronsResponse {
 
     // Fallback 1: 중앙 cron.log에 없으면 개별 로그 파일에서 mtime/내용으로 추론
     if (!last) {
-      const fb = buildFallbackFromIndividualLogs(task.id);
+      const fb = buildFallbackFromIndividualLogs(task.id, logDirFiles);
       if (fb) {
         last = fb;
       }
@@ -461,7 +462,7 @@ function buildCrons(): CronsResponse {
     let lastMessage = last?.message || '';
     let outputSummary = extractOutput(last?.message || '');
     if (last?.status === 'failed') {
-      const stderrExcerpt = readStderrExcerpt(task.id);
+      const stderrExcerpt = readStderrExcerpt(task.id, logDirFiles);
       if (stderrExcerpt) {
         // 이미 fallback에서 stderr 포함되었을 수 있으므로 중복 방지
         if (!lastMessage.includes(stderrExcerpt.slice(0, 60))) {

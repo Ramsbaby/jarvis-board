@@ -2402,7 +2402,8 @@ export default function VirtualOffice() {
       setChatHistoryOffset(0);
       setChatHasMore(false);
       loadChatHistory(teamId, 0, false);
-      setChatPanelOpen(true); // 브리핑 로드 시 채팅 패널 자동 오픈
+      // 자동 오픈 제거 — 사용자가 명시적으로 "NPC에게 질문" 클릭 시에만 열림
+      // (자동 오픈은 모바일에서 toggle 충돌로 채팅이 열렸다 바로 닫히는 버그 유발)
     } else {
       setChatMessages([]);
       setChatHasMore(false);

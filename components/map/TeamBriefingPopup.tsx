@@ -87,6 +87,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
           overflow: 'hidden',
           padding: 0,
           display: isMobile && !chatPanelOpen ? 'block' : 'flex',
+          flexWrap: 'wrap', // 모바일 탭바가 full-width 첫 행을 차지하게
           transition: 'none',
           color: '#e6edf3',
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
@@ -99,6 +100,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
           <div style={{
             display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)',
             background: 'rgba(14,18,37,0.95)', position: 'sticky', top: 0, zIndex: 10,
+            flex: '0 0 100%', width: '100%', // flex wrap 환경에서 첫 행 전체 차지
           }}>
             {(['briefing', 'chat'] as const).map(tab => (
               <button key={tab} onClick={() => {
@@ -575,7 +577,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                             <span style={{ fontSize: 12, color: '#b8c2d8', fontWeight: 600 }}>{m.icon} {m.label}</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontSize: 18, fontWeight: 900, color: m.color, letterSpacing: -0.5 }}>{m.value}%</span>
-                              <span style={{ fontSize: 10, color: '#5a6480' }}>\u203A</span>
+                              <span style={{ fontSize: 10, color: '#5a6480' }}>›</span>
                             </div>
                           </div>
                           <div style={{ height: 7, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
@@ -1045,7 +1047,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   {briefing.schedule ? `다음 실행: ${briefing.schedule}` : ''}
                 </span>
                 <button
-                  onClick={() => { setChatPanelOpen(v => !v); if (isMobile) setMobileTab('chat'); }}
+                  onClick={() => { setChatPanelOpen(true); if (isMobile) setMobileTab('chat'); }}
                   style={{
                     background: teamColorHex + '15', border: `1px solid ${teamColorHex}30`,
                     borderRadius: 8, padding: '7px 14px',

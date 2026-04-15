@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 
 interface UpcomingItem {
   id: string;
@@ -18,7 +19,23 @@ interface Commit {
   repo: 'jarvis' | 'jarvis-board';
 }
 
+interface FeedItem {
+  cronId: string;
+  status: 'success' | 'failed' | 'skipped' | 'running';
+  time: string;
+  message: string;
+}
+
+interface AlertTeam {
+  teamId: string;
+  teamLabel: string;
+  failCount: number;
+  failingCronIds: string[];
+  topError: string;
+}
+
 const REFRESH_MS = 60_000;
+const FEED_REFRESH_MS = 30_000;
 
 interface RightInfoPanelsProps {
   isMobile: boolean;
@@ -36,7 +53,10 @@ interface RightInfoPanelsProps {
 export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }: RightInfoPanelsProps) {
   const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
-  const [expanded, setExpanded] = useState<'upcoming' | 'commits' | null>(null);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [alertTeams, setAlertTeams] = useState<AlertTeam[]>([]);
+  const [expanded, setExpanded] = useState<'upcoming' | 'commits' | 'feed' | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null); // cronId being retried
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +81,42 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
+  // 활동 피드 + 긴급 알림 (30초 주기)
+  useEffect(() => {
+    let cancelled = false;
+    const loadFeed = async () => {
+      const result = await apiFetch<{ feed?: FeedItem[]; alertTeams?: AlertTeam[] }>('/api/map/activity-feed');
+      if (result.ok && !cancelled) {
+        setFeed(result.data.feed || []);
+        setAlertTeams(result.data.alertTeams || []);
+      }
+    };
+    loadFeed();
+    const id = setInterval(loadFeed, FEED_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleRetry = async (cronId: string) => {
+    setRetrying(cronId);
+    try {
+      await apiFetch('/api/crons/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cronId }),
+      });
+    } finally {
+      setRetrying(null);
+      // 피드 갱신
+      setTimeout(async () => {
+        const result = await apiFetch<{ feed?: FeedItem[]; alertTeams?: AlertTeam[] }>('/api/map/activity-feed');
+        if (result.ok) {
+          setFeed(result.data.feed || []);
+          setAlertTeams(result.data.alertTeams || []);
+        }
+      }, 3000);
+    }
+  };
+
   // 모바일에선 숨김 (화면 좁아서)
   if (isMobile) return null;
 
@@ -83,17 +139,76 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }
         top: 82,
         right: 4,
         zIndex: 450,
-        width: 180,
-        maxHeight: '40vh',
+        width: 200,
+        maxHeight: '80vh',
         overflowY: 'auto',
-        opacity: 0.9,
+        opacity: 0.95,
         display: 'flex',
-        flexDirection: 'column',  // 위에서 아래 방향 확장
-        gap: 10,
+        flexDirection: 'column',
+        gap: 8,
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
         pointerEvents: 'none',
       }}
     >
+      {/* 🚨 긴급 알림 트레이 — RED 팀 실시간 노출 */}
+      {alertTeams.length > 0 && (
+        <div style={{
+          background: 'rgba(30, 8, 8, 0.95)',
+          border: '1px solid rgba(248,81,73,0.45)',
+          borderTop: '2px solid #f85149',
+          borderRadius: 10,
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 20px rgba(248,81,73,0.25)',
+          overflow: 'hidden',
+          pointerEvents: 'auto',
+        }}>
+          <div style={{
+            padding: '9px 12px 7px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#f85149', letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              🚨 장애 알림 {alertTeams.length}팀
+            </span>
+            <span style={{
+              fontSize: 9, color: '#f85149', background: 'rgba(248,81,73,0.15)',
+              border: '1px solid rgba(248,81,73,0.3)', borderRadius: 6, padding: '2px 6px',
+            }}>
+              24h
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 8px 8px' }}>
+            {alertTeams.slice(0, 4).map((team) => (
+              <div key={team.teamId} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 8px',
+                background: 'rgba(248,81,73,0.06)',
+                border: '1px solid rgba(248,81,73,0.18)',
+                borderRadius: 7,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {team.teamLabel}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#6e4040', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+                    실패 {team.failCount}건
+                  </div>
+                </div>
+                <button
+                  onClick={() => team.failingCronIds.length > 0 && handleRetry(team.failingCronIds[0])}
+                  disabled={retrying === team.failingCronIds[0]}
+                  style={{
+                    flexShrink: 0, padding: '3px 7px', borderRadius: 5, cursor: 'pointer',
+                    fontSize: 9, fontWeight: 700, border: 'none',
+                    background: 'rgba(248,81,73,0.25)', color: '#fca5a5',
+                    opacity: retrying === team.failingCronIds[0] ? 0.5 : 1,
+                  }}
+                >{retrying === team.failingCronIds[0] ? '…' : '▶ 재시도'}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 오늘 예정 크론 카드 */}
       {upcoming.length > 0 && (
         <div
@@ -283,6 +398,100 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }
                     </div>
                     <div style={{ color: '#4a5370', fontSize: 9, marginTop: 2 }}>→ GitHub 열기</div>
                   </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      {/* ⚡ 실시간 활동 피드 */}
+      {feed.length > 0 && (
+        <div
+          style={{
+            background: 'rgba(13, 17, 23, 0.88)',
+            border: '1px solid rgba(255, 255, 255, 0.09)',
+            borderRadius: 10,
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
+            overflow: 'hidden',
+            pointerEvents: 'auto',
+          }}
+        >
+          <button
+            onClick={() => setExpanded(expanded === 'feed' ? null : 'feed')}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: '10px 14px',
+              color: '#c9d1d9',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.4,
+              textTransform: 'uppercase',
+            }}
+          >
+            <span>
+              <span style={{ marginRight: 6 }}>⚡</span>
+              최근 실행
+            </span>
+            <span style={{ fontSize: 10, color: '#484f58' }}>
+              {feed.filter(f => f.status === 'failed').length > 0
+                ? <span style={{ color: '#f85149' }}>❌ {feed.filter(f => f.status === 'failed').length}건 실패</span>
+                : <span style={{ color: '#3fb950' }}>✅ 정상</span>
+              }
+            </span>
+          </button>
+          {expanded === 'feed' && (
+            <div style={{
+              padding: '4px 10px 10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              maxHeight: 240,
+              overflowY: 'auto',
+            }}>
+              {feed.slice(0, 15).map((item, i) => {
+                const sc = item.status === 'success' ? '#3fb950'
+                  : item.status === 'failed' ? '#f85149'
+                  : item.status === 'running' ? '#58a6ff' : '#6e7681';
+                const icon = item.status === 'success' ? '✅' : item.status === 'failed' ? '❌' : item.status === 'running' ? '🔄' : '○';
+                return (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 6,
+                    padding: '5px 8px',
+                    background: item.status === 'failed' ? 'rgba(248,81,73,0.07)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${sc}18`,
+                    borderLeft: `2px solid ${sc}`,
+                    borderRadius: 6,
+                    fontSize: 10,
+                  }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                        {item.cronId.replace(/-/g, ' ')}
+                      </div>
+                      <div style={{ color: '#484f58', fontFamily: 'monospace', fontSize: 9, marginTop: 1 }}>
+                        {item.time}
+                      </div>
+                    </div>
+                    {item.status === 'failed' && (
+                      <button
+                        onClick={() => handleRetry(item.cronId)}
+                        disabled={retrying === item.cronId}
+                        style={{
+                          flexShrink: 0, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
+                          fontSize: 9, fontWeight: 700, border: 'none',
+                          background: 'rgba(248,81,73,0.2)', color: '#fca5a5',
+                          opacity: retrying === item.cronId ? 0.5 : 1,
+                        }}
+                      >{retrying === item.cronId ? '…' : '▶'}</button>
+                    )}
+                  </div>
                 );
               })}
             </div>

@@ -4,6 +4,7 @@
    Extracted from app/company/VirtualOffice.tsx
    ═══════════════════════════════════════════════════════════════════ */
 import React, { useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import { ROOMS, ROOM_TO_CRON_TEAM, statusExplanation, activityIcon } from '@/lib/map/rooms';
 import type { BriefingData, CronItem, RoomDef } from '@/lib/map/rooms';
 import { cronToHuman } from '@/lib/map/cron-human';
@@ -52,6 +53,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
   const [metricDetail, setMetricDetail] = useState<MetricItem | null>(null);
   const [activityDetail, setActivityDetail] = useState<{ task: string; result: string; latestTime?: string; description?: string; matchedCron: CronItem | null } | null>(null);
   const [mobileTab, setMobileTab] = useState<'briefing' | 'chat'>('briefing');
+  const [activeTab, setActiveTab] = useState<'overview' | 'crons'>('overview');
   if (!popupOpen) return null;
   const showTwoCol = !isMobile && chatPanelOpen;
   return (
@@ -275,8 +277,51 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 </div>
               </div>
 
+              {/* ── 탭 네비게이션 ── */}
+              {(() => {
+                const teamLabel = ROOM_TO_CRON_TEAM[briefing.id] || ROOM_TO_CRON_TEAM[activeRoom?.id || ''];
+                const teamCrons = teamLabel ? cronData.filter(c => c.team === teamLabel) : cronData.filter(c => c.id.includes(briefing.id));
+                const failCount = teamCrons.filter(c => c.status === 'failed').length;
+                const tabs: Array<{ id: 'overview' | 'crons'; label: string; badge?: number }> = [
+                  { id: 'overview', label: '📋 개요' },
+                  { id: 'crons', label: '⚙️ 크론잡', badge: failCount > 0 ? failCount : undefined },
+                ];
+                return (
+                  <div style={{
+                    display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    padding: isMobile ? '0 16px' : '0 32px',
+                    background: 'rgba(0,0,0,0.15)',
+                    flexShrink: 0,
+                  }}>
+                    {tabs.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        style={{
+                          padding: '10px 14px', fontSize: 12, fontWeight: activeTab === tab.id ? 800 : 500,
+                          color: activeTab === tab.id ? '#e6edf3' : '#6e7681',
+                          background: 'transparent', border: 'none',
+                          borderBottom: activeTab === tab.id ? `2px solid ${teamColorHex}` : '2px solid transparent',
+                          cursor: 'pointer', transition: 'all 0.15s',
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          marginBottom: -1,
+                        }}
+                      >
+                        {tab.label}
+                        {tab.badge !== undefined && (
+                          <span style={{
+                            background: '#f85149', color: '#fff', fontSize: 9, fontWeight: 900,
+                            borderRadius: 8, padding: '1px 5px', minWidth: 14, textAlign: 'center',
+                          }}>{tab.badge}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+
               {/* 콘텐츠 패딩 래퍼 — hero banner 아래 콘텐츠에 좌우 균일 패딩 */}
-              <div style={{ padding: isMobile ? '20px 16px 24px' : '20px 32px 28px' }}>
+              <div style={{ padding: isMobile ? '20px 16px 24px' : '20px 32px 28px', display: activeTab === 'overview' ? 'block' : 'none' }}>
 
               {/* ── ⚡ 팀 역할 — GREEN이면 헤더에 이미 표시됨 → 숨김. RED/YELLOW만 표시 ── */}
               {(() => {
@@ -1014,6 +1059,74 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 </button>
               </div>
               </div>{/* 콘텐츠 패딩 래퍼 끝 */}
+
+              {/* ── 크론잡 탭 콘텐츠 ── */}
+              {activeTab === 'crons' && (() => {
+                const teamLabel = ROOM_TO_CRON_TEAM[briefing.id] || ROOM_TO_CRON_TEAM[activeRoom?.id || ''];
+                const teamCrons = teamLabel
+                  ? cronData.filter(c => c.team === teamLabel)
+                  : cronData.filter(c => c.id.includes(briefing.id));
+                const failed = teamCrons.filter(c => c.status === 'failed');
+                const ok = teamCrons.filter(c => c.status === 'success');
+                const others = teamCrons.filter(c => c.status !== 'failed' && c.status !== 'success');
+                const sorted = [...failed, ...others, ...ok];
+                const stC = (s: string) => s === 'success' ? '#3fb950' : s === 'failed' ? '#f85149' : s === 'running' ? '#58a6ff' : '#6e7681';
+                const stIcon = (s: string) => s === 'success' ? '✅' : s === 'failed' ? '❌' : s === 'running' ? '🔄' : '○';
+                return (
+                  <div style={{ padding: isMobile ? '16px 16px 24px' : '16px 32px 28px', overflowY: 'auto', flex: 1 }}>
+                    {failed.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <BulkRetryButton cronIds={failed.map(c => c.id)} count={failed.length} />
+                      </div>
+                    )}
+                    {sorted.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: '#6e7681', fontSize: 13, padding: '32px 0' }}>
+                        이 팀에 등록된 크론잡이 없습니다.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {sorted.map((c, i) => {
+                          const sc = stC(c.status);
+                          return (
+                            <div key={i} style={{
+                              padding: '11px 14px', borderRadius: 10,
+                              background: c.status === 'failed' ? 'rgba(248,81,73,0.07)' : 'rgba(255,255,255,0.03)',
+                              border: `1px solid ${sc}25`,
+                              borderLeft: `3px solid ${sc}`,
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: c.outputSummary || c.lastMessage ? 6 : 0 }}>
+                                <span style={{ fontSize: 13 }}>{stIcon(c.status)}</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                                  <div style={{ fontSize: 10, color: '#5a6480', marginTop: 1 }}>
+                                    {c.id}
+                                    {c.scheduleHuman && <span style={{ marginLeft: 8 }}>· {c.scheduleHuman}</span>}
+                                  </div>
+                                </div>
+                                {c.lastRun && (
+                                  <span style={{ fontSize: 10, color: '#4a5370', flexShrink: 0, fontFamily: 'monospace' }}>
+                                    {c.lastRun.slice(11, 16)}
+                                  </span>
+                                )}
+                                <CronRetryInline cronId={c.id} status={c.status} />
+                              </div>
+                              {c.status === 'failed' && (c.outputSummary || c.lastMessage) && (
+                                <div style={{
+                                  fontSize: 11, color: '#fca5a5', lineHeight: 1.5, marginLeft: 21,
+                                  fontFamily: 'monospace', wordBreak: 'break-word',
+                                }}>
+                                  {(c.outputSummary || c.lastMessage || '').slice(0, 120)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               </div>{/* 좌측 브리핑 컬럼 끝 */}
 
               {/* ── 우측: 채팅 컬럼 (데스크톱 항상 표시, 모바일은 탭) ── */}
@@ -1198,17 +1311,25 @@ function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: Activity
   const [retryResult, setRetryResult] = useState<{ success: boolean; message: string; stdout?: string; stderr?: string } | null>(null);
 
   const handleRetry = async () => {
-    if (!detail.matchedCron) return;
+    // matchedCron이 없으면 task 이름을 cronId 폴백으로 사용 — silent return 제거
+    const cronId = detail.matchedCron?.id ?? detail.task;
+    if (!cronId) {
+      setRetryResult({ success: false, message: '크론 ID를 찾을 수 없습니다. tasks.json에 등록된 이름인지 확인하세요.' });
+      return;
+    }
     setRetrying(true);
     setRetryResult(null);
     try {
-      const res = await fetch('/api/crons/retry', {
+      const result = await apiFetch<{ success: boolean; message: string; stdout?: string; stderr?: string }>('/api/crons/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cronId: detail.matchedCron.id }),
+        body: JSON.stringify({ cronId }),
       });
-      const data = await res.json();
-      setRetryResult(data);
+      if (result.ok) {
+        setRetryResult(result.data);
+      } else {
+        setRetryResult({ success: false, message: result.message });
+      }
     } catch (e) {
       setRetryResult({ success: false, message: `요청 실패: ${String(e)}` });
     } finally {
@@ -1218,6 +1339,8 @@ function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: Activity
 
   const accent = detail.result === 'success' ? '#22c55e' : detail.result === 'failed' ? '#f85149' : '#d29922';
   const cron = detail.matchedCron;
+  // matchedCron 없어도 재실행 가능 (task 이름 폴백)
+  const retryId = cron?.id ?? detail.task;
   const timeFmt = (s?: string) => {
     if (!s) return '—';
     try { return new Date(s).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return s; }
@@ -1292,6 +1415,7 @@ function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: Activity
             fontSize: 12, color: '#fbbf24', lineHeight: 1.6,
           }}>
             ⚠️ 이 활동과 매칭되는 크론을 찾을 수 없습니다. cron.log에만 흔적이 있거나 태스크 이름이 변경됐을 수 있어요.
+            태스크 이름(<code style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>{detail.task}</code>)으로 재실행을 시도할 수 있습니다.
           </div>
         )}
 
@@ -1436,7 +1560,7 @@ function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: Activity
               </div>
             )}
 
-            {/* Action buttons */}
+            {/* Action buttons — cron 매칭 됐을 때만 표시 */}
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={handleRetry}
@@ -1450,7 +1574,7 @@ function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: Activity
               >{retrying ? '⏳ 실행 중...' : '🔄 재실행'}</button>
               <button
                 onClick={() => {
-                  navigator.clipboard?.writeText(`tail -n 100 ~/.jarvis/logs/cron.log | grep "\\[${cron.id}\\]"`);
+                  navigator.clipboard?.writeText(`tail -n 100 ~/.jarvis/logs/cron.log | grep "\\[${retryId}\\]"`);
                 }}
                 style={{
                   padding: '11px 16px', borderRadius: 10, cursor: 'pointer',
@@ -1471,14 +1595,50 @@ function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: Activity
         )}
 
         {!cron && (
-          <button
-            onClick={onClose}
-            style={{
-              width: '100%', padding: '11px 0', borderRadius: 10, cursor: 'pointer',
-              fontSize: 13, fontWeight: 700, marginTop: 10,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#c9d1d9',
-            }}
-          >닫기</button>
+          <>
+            {/* 재실행 결과 — cron 미매칭에서도 표시 */}
+            {retryResult && (
+              <div style={{
+                marginBottom: 12, padding: '10px 13px', borderRadius: 10,
+                background: retryResult.success ? 'rgba(34,197,94,0.08)' : 'rgba(248,81,73,0.08)',
+                border: `1px solid ${retryResult.success ? '#22c55e40' : '#f8514940'}`,
+                borderLeft: `3px solid ${retryResult.success ? '#22c55e' : '#f85149'}`,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: retryResult.success ? '#22c55e' : '#f85149', marginBottom: retryResult.stdout ? 6 : 0 }}>
+                  {retryResult.message}
+                </div>
+                {retryResult.stdout && (
+                  <pre style={{
+                    margin: 0, padding: '6px 8px', borderRadius: 5,
+                    fontSize: 10, lineHeight: 1.5, color: '#a3b1c6',
+                    background: 'rgba(0,0,0,0.28)',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    maxHeight: 120, overflowY: 'auto', fontFamily: 'ui-monospace, monospace',
+                  }}>{retryResult.stdout}</pre>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 700, border: 'none',
+                  background: '#d29922', color: '#fff',
+                  opacity: retrying ? 0.5 : 1,
+                }}
+              >{retrying ? '⏳ 실행 중...' : `🔄 태스크명으로 재실행 시도`}</button>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: '11px 16px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 700,
+                  background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#6b7280',
+                }}
+              >닫기</button>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -1495,13 +1655,12 @@ function BulkRetryButton({ cronIds, count }: { cronIds: string[]; count: number 
     let ok = 0, fail = 0;
     for (const id of cronIds) {
       try {
-        const res = await fetch('/api/crons/retry', {
+        const result = await apiFetch<{ success: boolean }>('/api/crons/retry', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cronId: id }),
         });
-        const data = await res.json();
-        if (data.success) ok++; else fail++;
+        if (result.ok && result.data.success) ok++; else fail++;
       } catch { fail++; }
     }
     setResult({ ok, fail });
@@ -1526,5 +1685,60 @@ function BulkRetryButton({ cronIds, count }: { cronIds: string[]; count: number 
         }}
       >{retrying ? '⏳ 재실행 중...' : `🔄 실패 크론 일괄 재실행 (${count}건)`}</button>
     </div>
+  );
+}
+
+
+/* ── 크론잡 탭: 개별 재시도 인라인 버튼 ── */
+function CronRetryInline({ cronId, status }: { cronId: string; status: string }) {
+  const [retrying, setRetrying] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleRetry = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRetrying(true);
+    setResult(null);
+    try {
+      const result = await apiFetch<{ success: boolean; message: string }>('/api/crons/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cronId }),
+      });
+      if (result.ok) {
+        setResult(result.data);
+      } else {
+        setResult({ success: false, message: result.message });
+      }
+    } catch (err) {
+      setResult({ success: false, message: `요청 실패: ${String(err)}` });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  if (result) {
+    return (
+      <span style={{
+        fontSize: 10, color: result.success ? '#22c55e' : '#f85149',
+        fontWeight: 700, flexShrink: 0, maxWidth: 100,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }} title={result.message}>
+        {result.success ? '✅ 시작' : '❌ 실패'}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleRetry}
+      disabled={retrying}
+      style={{
+        flexShrink: 0, padding: '4px 9px', borderRadius: 7, cursor: retrying ? 'default' : 'pointer',
+        fontSize: 10, fontWeight: 700, border: 'none',
+        background: status === 'failed' ? 'rgba(248,81,73,0.2)' : 'rgba(255,255,255,0.07)',
+        color: status === 'failed' ? '#fca5a5' : '#8b949e',
+        opacity: retrying ? 0.5 : 1,
+      }}
+    >{retrying ? '…' : '▶ 재실행'}</button>
   );
 }

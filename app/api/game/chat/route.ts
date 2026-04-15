@@ -578,7 +578,9 @@ function gatherTeamContext(teamId: string): string {
 // Groq OpenAI 호환 SSE 스트리밍
 // 환경변수 GAME_CHAT_MODEL로 모델 오버라이드 가능. 기본은 llama-3.3-70b.
 // 더 강력한 답변을 원하면 env에 다음 중 하나 설정: moonshotai/kimi-k2-instruct, openai/gpt-oss-120b
-const MODEL = process.env.GAME_CHAT_MODEL || GROQ_LLAMA_70B;
+// Claude Sonnet이 기본값 — ANTHROPIC_API_KEY 있으면 Claude, 없으면 Groq 폴백
+const MODEL = process.env.GAME_CHAT_MODEL ||
+  (process.env.ANTHROPIC_API_KEY ? 'claude-sonnet-4-6' : GROQ_LLAMA_70B);
 const MAX_TOKENS = 2500;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -636,7 +638,7 @@ export async function POST(req: NextRequest) {
 
   // Groq API 키는 Claude CLI/SDK 경로일 때는 불필요 — Groq 경로에서만 검증
   const groqApiKey = process.env.GROQ_API_KEY;
-  const isClaudeModelEarly = (process.env.GAME_CHAT_MODEL || '').startsWith('claude-');
+  const isClaudeModelEarly = MODEL.startsWith('claude-');
   const claudeCliExists = existsSync(CLAUDE_CLI);
   if (!isClaudeModelEarly && !groqApiKey) {
     return NextResponse.json({ error: 'GROQ_API_KEY가 설정되지 않았습니다.' }, { status: 500 });

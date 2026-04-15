@@ -233,10 +233,12 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               <div className="briefing-scroll-col" style={{
                 // 2열 모드 고정: 데스크톱은 항상 55%, 모바일만 전체 폭
                 flex: isMobile ? '1 1 auto' : '0 0 55%',
+                // 데스크톱: 명시적 height 필수 — 없으면 콘텐츠 높이로 팽창해 overflowY 무효화
+                height: isMobile ? 'auto' : '88vh',
                 overflowY: 'auto',
                 minHeight: 0,
+                minWidth: 0,
                 display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
-                scrollbarGutter: 'stable',
               }}>
               {/* Header — hero banner (풀 블리드, 패딩 자체 관리) */}
               <div style={{
@@ -1168,6 +1170,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               {(!isMobile || chatPanelOpen) && (
                 <div style={{
                   flex: isMobile ? '1 1 auto' : '0 0 45%',
+                  minWidth: 0, // min-width:auto 기본값이 flex-basis 초과하면 wrap 발생 방지
                   display: (isMobile && mobileTab === 'briefing') ? 'none' : 'flex',
                   flexDirection: 'column',
                   borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',

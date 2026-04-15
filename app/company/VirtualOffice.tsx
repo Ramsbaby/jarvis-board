@@ -615,15 +615,18 @@ export default function VirtualOffice() {
 
       // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분 (실제 오피스 카펫 느낌)
       if (r.wallStyle === 'pod') {
-        // 바닥 베이스 (오피스 카펫 타일)
+        // ── 1) 바닥 플랫폼 드롭섀도 (방이 바닥에서 떠 있는 느낌) ──
         ctx!.save();
-        ctx!.shadowBlur = 10;
-        ctx!.shadowColor = 'rgba(20,30,50,0.10)';
-        ctx!.shadowOffsetY = 2;
-        ctx!.fillStyle = '#f4f3ee';
-        ctx!.fillRect(rx, ry, rw, rh);
+        ctx!.shadowBlur = 22;
+        ctx!.shadowColor = 'rgba(0,0,0,0.72)';
+        ctx!.shadowOffsetY = 6;
+        ctx!.fillStyle = '#0e141f';
+        ctx!.beginPath();
+        ctx!.roundRect(rx, ry, rw, rh, 3);
+        ctx!.fill();
         ctx!.restore();
-        // 베이스 카펫 직조 패턴
+
+        // ── 2) 베이스 카펫 직조 패턴 ──
         ctx!.save();
         ctx!.beginPath();
         ctx!.rect(rx, ry, rw, rh);
@@ -632,16 +635,47 @@ export default function VirtualOffice() {
           for (let gx = 0; gx < r.w; gx++) {
             const tx = rx + gx * T;
             const ty = ry + gy * T;
-            ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#f1efe8' : '#edebe2';
+            ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#151e2e' : '#111826';
             ctx!.fillRect(tx, ty, T, T);
-            ctx!.fillStyle = 'rgba(180,170,140,0.10)';
+            ctx!.fillStyle = 'rgba(60,80,130,0.15)';
             for (let i = 4; i < T; i += 8) {
               ctx!.fillRect(tx, ty + i, T, 1);
               ctx!.fillRect(tx + i, ty, 1, T);
             }
           }
         }
+
+        // ── 3) 천장 조명 라디얼 (방 중앙 상단에서 워밍) ──
+        const podLight = ctx!.createRadialGradient(
+          rx + rw / 2, ry + rh * 0.25, 0,
+          rx + rw / 2, ry + rh * 0.25, Math.max(rw, rh) * 0.75
+        );
+        podLight.addColorStop(0, 'rgba(255,220,160,0.10)');
+        podLight.addColorStop(0.5, 'rgba(255,200,130,0.04)');
+        podLight.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx!.fillStyle = podLight;
+        ctx!.fillRect(rx, ry, rw, rh);
+
+        // ── 4) 하단 그림자 그라디언트 (방바닥 심도) ──
+        const floorDepth = ctx!.createLinearGradient(rx, ry + rh * 0.5, rx, ry + rh);
+        floorDepth.addColorStop(0, 'rgba(0,0,0,0)');
+        floorDepth.addColorStop(1, 'rgba(0,0,0,0.28)');
+        ctx!.fillStyle = floorDepth;
+        ctx!.fillRect(rx, ry + rh * 0.5, rw, rh * 0.5);
         ctx!.restore();
+
+        // ── 5) 림 라이트 (상단/좌측 — 플랫폼 엣지 하이라이트) ──
+        ctx!.fillStyle = 'rgba(140,165,210,0.22)';
+        ctx!.fillRect(rx, ry, rw, 1);
+        ctx!.fillStyle = 'rgba(90,110,150,0.14)';
+        ctx!.fillRect(rx, ry + 1, rw, 1);
+        ctx!.fillStyle = 'rgba(110,130,170,0.14)';
+        ctx!.fillRect(rx, ry, 1, rh);
+        // 하단/우측 — 더 어두운 엣지 (심도)
+        ctx!.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx!.fillRect(rx, ry + rh - 1, rw, 1);
+        ctx!.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx!.fillRect(rx + rw - 1, ry, 1, rh);
 
         // ── 팀 컬러 러그 (오피스 데스크 존 표시) ──
         const rugMarginX = rw * 0.12;
@@ -705,19 +739,24 @@ export default function VirtualOffice() {
           ctx!.restore();
         }
 
-        // 팀 태그 (밝은 pill)
+        // 팀 태그 (다크 pill)
         const tagText = `${r.emoji} ${r.name}`;
         ctx!.font = 'bold 10px -apple-system, monospace';
         const tagW = ctx!.measureText(tagText).width + 14;
         const tagX = rx + rw / 2 - tagW / 2;
         const tagY = ry + 4;
-        ctx!.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx!.fillStyle = 'rgba(10,14,23,0.90)';
         ctx!.beginPath();
         ctx!.roundRect(tagX, tagY, tagW, 16, 8);
         ctx!.fill();
+        ctx!.strokeStyle = r.teamColor + '60';
+        ctx!.lineWidth = 1;
+        ctx!.beginPath();
+        ctx!.roundRect(tagX, tagY, tagW, 16, 8);
+        ctx!.stroke();
         ctx!.fillStyle = r.teamColor;
         ctx!.fillRect(tagX, tagY + 2, 2, 12);
-        ctx!.fillStyle = '#2d3340';
+        ctx!.fillStyle = '#c9d1d9';
         ctx!.textAlign = 'center';
         ctx!.fillText(tagText, rx + rw / 2, tagY + 11);
 
@@ -734,27 +773,27 @@ export default function VirtualOffice() {
       // ── Closed room (다크 테마) ──────────────────────────────────
       // 방 드롭 섀도
       ctx!.save();
-      ctx!.shadowBlur = 12;
-      ctx!.shadowColor = 'rgba(0,0,0,0.08)';
-      ctx!.fillStyle = '#ffffff';
+      ctx!.shadowBlur = 16;
+      ctx!.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx!.fillStyle = '#21262d';
       ctx!.fillRect(rx, ry, rw, rh);
       ctx!.restore();
 
       // Floor based on floorStyle (실제 회사처럼 — 게더타운 스타일 디테일)
       switch (r.floorStyle) {
         case 'executive': {
-          // 원목 플랭크 바닥 (오피스 임원실 느낌)
+          // 원목 플랭크 바닥 (다크 임원실 — 고급 원목)
           ctx!.save();
           ctx!.beginPath();
           ctx!.rect(rx, ry, rw, rh);
           ctx!.clip();
-          // 베이스
-          ctx!.fillStyle = '#e4cd9a';
+          // 베이스 (어두운 마호가니)
+          ctx!.fillStyle = '#1a140a';
           ctx!.fillRect(rx, ry, rw, rh);
           // 플랭크 — 2열마다 절반 오프셋
           const plankW = T * 2.2;
           const plankH = T * 0.85;
-          const woodTones = ['#e3cc98', '#d9bf86', '#cfb378', '#d6ba84'];
+          const woodTones = ['#2a1e0e', '#24180a', '#2e2210', '#261a0c'];
           for (let py = 0; py < rh; py += plankH) {
             const rowIdx = Math.floor(py / plankH);
             const offset = (rowIdx % 2) * (plankW / 2);
@@ -765,13 +804,13 @@ export default function VirtualOffice() {
               ctx!.fillStyle = tone;
               ctx!.fillRect(x, y, plankW - 1, plankH - 1);
               // 판재 하단 그림자
-              ctx!.fillStyle = 'rgba(90,60,20,0.18)';
+              ctx!.fillStyle = 'rgba(0,0,0,0.5)';
               ctx!.fillRect(x, y + plankH - 1, plankW, 1);
               // 우측 엣지 라인
-              ctx!.fillStyle = 'rgba(90,60,20,0.12)';
+              ctx!.fillStyle = 'rgba(0,0,0,0.35)';
               ctx!.fillRect(x + plankW - 1, y, 1, plankH);
-              // 결(grain) 2줄 — 부드러운 곡선
-              ctx!.strokeStyle = 'rgba(140,90,30,0.20)';
+              // 결(grain) 2줄 — warm highlight on dark wood
+              ctx!.strokeStyle = 'rgba(200,150,80,0.18)';
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
               ctx!.moveTo(x + 2, y + plankH * 0.35);
@@ -794,14 +833,14 @@ export default function VirtualOffice() {
           break;
         }
         case 'metal': {
-          // 서버룸/크론센터 — 레이즈드 플로어 타일 + LED 스트립
+          // 서버룸/크론센터 — 레이즈드 플로어 타일 + LED 스트립 (다크)
           const isCronCenter = r.id === 'cron-center';
           ctx!.save();
           ctx!.beginPath();
           ctx!.rect(rx, ry, rw, rh);
           ctx!.clip();
           // 어두운 베이스 (데이터센터 분위기)
-          ctx!.fillStyle = isCronCenter ? '#e0e5ee' : '#dde2eb';
+          ctx!.fillStyle = isCronCenter ? '#0a0e17' : '#0d1117';
           ctx!.fillRect(rx, ry, rw, rh);
           // 60cm × 60cm 타일 (T 단위)
           for (let gy = 0; gy < r.h; gy++) {
@@ -810,14 +849,14 @@ export default function VirtualOffice() {
               const ty = ry + gy * T;
               const checker = (gx + gy) % 2 === 0;
               // 타일 본체
-              ctx!.fillStyle = checker ? '#e6ebf3' : '#dce2eb';
+              ctx!.fillStyle = checker ? '#161c26' : '#121820';
               ctx!.fillRect(tx + 1, ty + 1, T - 2, T - 2);
-              // 타일 하이라이트 (좌상)
-              ctx!.fillStyle = 'rgba(255,255,255,0.6)';
+              // 타일 하이라이트 (좌상 — 빛 반사)
+              ctx!.fillStyle = 'rgba(255,255,255,0.06)';
               ctx!.fillRect(tx + 1, ty + 1, T - 2, 1);
               ctx!.fillRect(tx + 1, ty + 1, 1, T - 2);
               // 타일 그림자 (우하)
-              ctx!.fillStyle = 'rgba(90,100,115,0.25)';
+              ctx!.fillStyle = 'rgba(0,0,0,0.5)';
               ctx!.fillRect(tx + 1, ty + T - 2, T - 2, 1);
               ctx!.fillRect(tx + T - 2, ty + 1, 1, T - 2);
               // 타일 중앙 4개 나사 (perforation)
@@ -845,13 +884,13 @@ export default function VirtualOffice() {
           break;
         }
         case 'stage': {
-          // 마블 바닥 (회의실 로비 느낌)
+          // 마블 바닥 (다크 대리석 — 무대/프레젠테이션 느낌)
           ctx!.save();
           ctx!.beginPath();
           ctx!.rect(rx, ry, rw, rh);
           ctx!.clip();
-          // 크림 베이스
-          ctx!.fillStyle = '#f5f1e8';
+          // 다크 마블 베이스
+          ctx!.fillStyle = '#0e1420';
           ctx!.fillRect(rx, ry, rw, rh);
           // 큰 마블 타일 (2×2)
           const mTile = T * 2;
@@ -859,11 +898,11 @@ export default function VirtualOffice() {
             for (let gx = 0; gx < r.w; gx += 2) {
               const tx = rx + gx * T;
               const ty = ry + gy * T;
-              ctx!.fillStyle = (gx / 2 + gy / 2) % 2 === 0 ? '#f2ede1' : '#ebe5d5';
+              ctx!.fillStyle = (gx / 2 + gy / 2) % 2 === 0 ? '#16202e' : '#121a28';
               ctx!.fillRect(tx + 2, ty + 2, mTile - 4, mTile - 4);
-              // 마블 정맥 (veining) — 랜덤이지만 deterministic
+              // 마블 정맥 (veining) — 랜덤이지만 deterministic (블루 계열)
               const seed = (gx * 7 + gy * 13) % 100;
-              ctx!.strokeStyle = `rgba(180,165,130,${0.12 + (seed % 3) * 0.04})`;
+              ctx!.strokeStyle = `rgba(100,140,210,${0.10 + (seed % 3) * 0.04})`;
               ctx!.lineWidth = 0.6;
               ctx!.beginPath();
               ctx!.moveTo(tx + 4 + (seed % 12), ty + 6);
@@ -874,7 +913,7 @@ export default function VirtualOffice() {
               );
               ctx!.stroke();
               // 타일 그림자
-              ctx!.fillStyle = 'rgba(170,150,110,0.15)';
+              ctx!.fillStyle = 'rgba(0,0,0,0.5)';
               ctx!.fillRect(tx + 2, ty + mTile - 3, mTile - 4, 1);
               ctx!.fillRect(tx + mTile - 3, ty + 2, 1, mTile - 4);
             }
@@ -890,22 +929,22 @@ export default function VirtualOffice() {
           break;
         }
         default: {
-          // 일반 카펫 타일 (코지한 오피스 카펫)
+          // 일반 카펫 타일 (다크 오피스 카펫)
           ctx!.save();
           ctx!.beginPath();
           ctx!.rect(rx, ry, rw, rh);
           ctx!.clip();
-          ctx!.fillStyle = '#f5f4ef';
+          ctx!.fillStyle = '#111826';
           ctx!.fillRect(rx, ry, rw, rh);
           // 직조(weave) 패턴 — 체커
           for (let gy = 0; gy < r.h; gy++) {
             for (let gx = 0; gx < r.w; gx++) {
               const tx = rx + gx * T;
               const ty = ry + gy * T;
-              ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#eeede8' : '#f0efea';
+              ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#1a2436' : '#151e2e';
               ctx!.fillRect(tx, ty, T, T);
               // 직조 라인 (십자)
-              ctx!.fillStyle = 'rgba(180,170,140,0.08)';
+              ctx!.fillStyle = 'rgba(60,80,130,0.18)';
               for (let i = 4; i < T; i += 8) {
                 ctx!.fillRect(tx, ty + i, T, 1);
                 ctx!.fillRect(tx + i, ty, 1, T);
@@ -957,52 +996,52 @@ export default function VirtualOffice() {
         const WALL = 9; // 두꺼운 벽
         // ── 드롭 섀도 (외부) ──
         ctx!.save();
-        ctx!.shadowColor = 'rgba(20,30,50,0.22)';
-        ctx!.shadowBlur = 18;
+        ctx!.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx!.shadowBlur = 20;
         ctx!.shadowOffsetX = 4;
         ctx!.shadowOffsetY = 6;
-        ctx!.fillStyle = '#e0e4ea';
+        ctx!.fillStyle = '#21262d';
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
 
-        // ── 벽 본체 (3D 베벨 스타일) ──
+        // ── 벽 본체 (3D 베벨 스타일 — 다크) ──
         // Base fill
-        ctx!.fillStyle = '#dde2ea';
+        ctx!.fillStyle = '#21262d';
         ctx!.fillRect(rx, ry, rw, WALL); // top
         ctx!.fillRect(rx, ry + rh - WALL, rw, WALL); // bottom
         ctx!.fillRect(rx, ry, WALL, rh); // left
         ctx!.fillRect(rx + rw - WALL, ry, WALL, rh); // right
 
-        // 천장 표현 — 상단 벽에 더 진한 그림자 그라디언트 (foreground ceiling hint)
+        // 천장 표현 — 상단 벽에 더 진한 그림자 그라디언트
         const ceilingGrd = ctx!.createLinearGradient(rx, ry, rx, ry + WALL + 4);
-        ceilingGrd.addColorStop(0, 'rgba(80,90,110,0.45)');
-        ceilingGrd.addColorStop(0.6, 'rgba(80,90,110,0.18)');
+        ceilingGrd.addColorStop(0, 'rgba(0,0,0,0.75)');
+        ceilingGrd.addColorStop(0.6, 'rgba(0,0,0,0.3)');
         ceilingGrd.addColorStop(1, 'transparent');
         ctx!.fillStyle = ceilingGrd;
         ctx!.fillRect(rx, ry, rw, WALL + 4);
 
-        // Top highlight (밝은 상단 엣지 — 조명 받은 느낌)
-        ctx!.fillStyle = '#ffffff';
+        // Top highlight (상단 엣지 — 조명 반사)
+        ctx!.fillStyle = '#30363d';
         ctx!.fillRect(rx + 1, ry, rw - 2, 1);
-        ctx!.fillStyle = 'rgba(245,248,252,0.85)';
+        ctx!.fillStyle = 'rgba(80,95,115,0.6)';
         ctx!.fillRect(rx + 1, ry + 1, rw - 2, 1);
 
         // Left highlight (조명 왼쪽)
-        ctx!.fillStyle = 'rgba(245,248,252,0.7)';
+        ctx!.fillStyle = 'rgba(80,95,115,0.4)';
         ctx!.fillRect(rx, ry + 1, 1, rh - 2);
-        ctx!.fillStyle = 'rgba(235,240,248,0.5)';
+        ctx!.fillStyle = 'rgba(70,85,105,0.3)';
         ctx!.fillRect(rx + 1, ry + 2, 1, rh - 4);
 
-        // Right/Bottom shadow (반대쪽)
-        ctx!.fillStyle = 'rgba(100,110,130,0.35)';
+        // Right/Bottom shadow
+        ctx!.fillStyle = 'rgba(0,0,0,0.55)';
         ctx!.fillRect(rx + rw - 1, ry + 1, 1, rh - 1);
         ctx!.fillRect(rx + 1, ry + rh - 1, rw - 2, 1);
-        ctx!.fillStyle = 'rgba(120,130,150,0.25)';
+        ctx!.fillStyle = 'rgba(0,0,0,0.4)';
         ctx!.fillRect(rx + rw - 2, ry + 2, 1, rh - 3);
         ctx!.fillRect(rx + 2, ry + rh - 2, rw - 4, 1);
 
-        // 벽 내부 face (인테리어 벽면 — 밝은 톤)
-        ctx!.fillStyle = '#eceff5';
+        // 벽 내부 face (어두운 인테리어 벽면)
+        ctx!.fillStyle = '#161b22';
         ctx!.fillRect(rx + 2, ry + 3, rw - 4, WALL - 5); // top 벽 face
         ctx!.fillRect(rx + 2, ry + rh - WALL + 2, rw - 4, WALL - 5);
         ctx!.fillRect(rx + 2, ry + 3, WALL - 5, rh - 6);
@@ -1026,22 +1065,22 @@ export default function VirtualOffice() {
           const windowH = WALL - 3;
           for (let i = 0; i < windowCount; i++) {
             const wx = rx + T * 1.3 + i * T * 2.4;
-            // 유리창 프레임 (어두운 알루미늄)
-            ctx!.fillStyle = '#5a6370';
+            // 유리창 프레임 (다크 알루미늄)
+            ctx!.fillStyle = '#0d1117';
             ctx!.fillRect(wx - 1, ry + 1, windowW + 2, windowH + 2);
-            // 유리 내부 (하늘 반사)
+            // 유리 내부 (야간/실내 느낌 — 어두운 파란 틴트)
             const glassGrd = ctx!.createLinearGradient(wx, ry + 1, wx, ry + windowH + 1);
-            glassGrd.addColorStop(0, 'rgba(135,206,235,0.9)');
-            glassGrd.addColorStop(0.5, 'rgba(176,224,230,0.7)');
-            glassGrd.addColorStop(1, 'rgba(100,170,210,0.8)');
+            glassGrd.addColorStop(0, 'rgba(30,80,160,0.85)');
+            glassGrd.addColorStop(0.4, 'rgba(20,60,130,0.75)');
+            glassGrd.addColorStop(1, 'rgba(10,40,100,0.90)');
             ctx!.fillStyle = glassGrd;
             ctx!.fillRect(wx, ry + 2, windowW, windowH);
-            // 반사 하이라이트
-            ctx!.fillStyle = 'rgba(255,255,255,0.55)';
-            ctx!.fillRect(wx + 1, ry + 2, windowW * 0.25, 1);
-            ctx!.fillRect(wx + 1, ry + 2, 1, windowH * 0.6);
+            // 반사 하이라이트 (더 선명하게)
+            ctx!.fillStyle = 'rgba(100,160,255,0.40)';
+            ctx!.fillRect(wx + 1, ry + 2, windowW * 0.28, 1);
+            ctx!.fillRect(wx + 1, ry + 2, 1, windowH * 0.65);
             // 유리 분할 (머리부분 가로)
-            ctx!.fillStyle = 'rgba(80,90,105,0.6)';
+            ctx!.fillStyle = 'rgba(0,0,0,0.5)';
             ctx!.fillRect(wx + windowW / 2 - 0.5, ry + 2, 1, windowH);
           }
         }
@@ -1128,20 +1167,26 @@ export default function VirtualOffice() {
       drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
       ctx!.restore();
 
-      // Room name plate (밝은 오피스)
+      // Room name plate (다크 테마)
       ctx!.font = 'bold 11px monospace';
       const plateText = `${r.emoji} ${r.name}`;
       const plateW = ctx!.measureText(plateText).width + 20;
-      ctx!.fillStyle = 'rgba(255,255,255,0.92)';
+      const plateX = rx + rw / 2 - plateW / 2;
+      ctx!.fillStyle = 'rgba(10,14,23,0.88)';
       ctx!.beginPath();
-      ctx!.roundRect(rx + rw / 2 - plateW / 2, ry + 10, plateW, 20, 5);
+      ctx!.roundRect(plateX, ry + 10, plateW, 20, 5);
       ctx!.fill();
-      ctx!.strokeStyle = '#d0d5dd';
+      ctx!.strokeStyle = '#30363d';
       ctx!.lineWidth = 1;
       ctx!.beginPath();
-      ctx!.roundRect(rx + rw / 2 - plateW / 2, ry + 10, plateW, 20, 5);
+      ctx!.roundRect(plateX, ry + 10, plateW, 20, 5);
       ctx!.stroke();
-      ctx!.fillStyle = '#2d3340';
+      // Team color left accent bar
+      ctx!.fillStyle = r.teamColor;
+      ctx!.beginPath();
+      ctx!.roundRect(plateX, ry + 10, 2, 20, [5, 0, 0, 5]);
+      ctx!.fill();
+      ctx!.fillStyle = '#c9d1d9';
       ctx!.textAlign = 'center';
       ctx!.fillText(plateText, rx + rw / 2, ry + 24);
     }
@@ -1770,7 +1815,7 @@ export default function VirtualOffice() {
             ctx!.fill();
           });
           // CRON 레이블은 하단에 작게
-          ctx!.fillStyle = isCurrentRoom ? '#1a202c' : '#4a5568';
+          ctx!.fillStyle = isCurrentRoom ? '#e6edf3' : '#8b949e';
           ctx!.font = isCurrentRoom ? 'bold 7px monospace' : '6px monospace';
           ctx!.textAlign = 'center';
           ctx!.fillText(`CRON (${crons.length})`,
@@ -1781,7 +1826,7 @@ export default function VirtualOffice() {
           // Abbreviated room name (larger font)
           const abbrev = abbrevNames[r.id] || '';
           if (abbrev) {
-            ctx!.fillStyle = isCurrentRoom ? '#1a202c' : '#4a5568';
+            ctx!.fillStyle = isCurrentRoom ? '#e6edf3' : '#8b949e';
             ctx!.font = isCurrentRoom ? 'bold 7px monospace' : '6px monospace';
             ctx!.textAlign = 'center';
             ctx!.fillText(abbrev,
@@ -1941,28 +1986,28 @@ export default function VirtualOffice() {
       const camY = Math.round(cameraRef.current.y);
 
       // Clear (월드 패스 좌표계 — wZ×hZ, 다크)
-      ctx!.fillStyle = '#f0f2f5';
+      ctx!.fillStyle = '#0a0e17';
       ctx!.fillRect(0, 0, wZ, hZ);
 
       // ── Outer wall border (다크 테마) ──
       const wallThick = 6;
-      ctx!.fillStyle = '#d0d5dd';
+      ctx!.fillStyle = '#161b22';
       ctx!.fillRect(0 - camX, 0 - camY, COLS * T, wallThick);
       ctx!.fillRect(0 - camX, ROWS * T - wallThick - camY, COLS * T, wallThick);
       ctx!.fillRect(0 - camX, 0 - camY, wallThick, ROWS * T);
       ctx!.fillRect(COLS * T - wallThick - camX, 0 - camY, wallThick, ROWS * T);
       // Wall top highlight
-      ctx!.fillStyle = '#ffffff';
-      ctx!.fillRect(0 - camX, 0 - camY, COLS * T, 2);
-      ctx!.fillRect(0 - camX, 0 - camY, 2, ROWS * T);
+      ctx!.fillStyle = '#30363d';
+      ctx!.fillRect(0 - camX, 0 - camY, COLS * T, 1);
+      ctx!.fillRect(0 - camX, 0 - camY, 1, ROWS * T);
       // Exterior window pattern on top wall
       for (let wx = 3; wx < COLS - 3; wx += 4) {
-        ctx!.fillStyle = '#58a6ff10';
+        ctx!.fillStyle = '#58a6ff25';
         ctx!.fillRect(wx * T - camX, -camY, T * 2, wallThick);
       }
       // Exterior window pattern on bottom wall
       for (let wx = 3; wx < COLS - 3; wx += 4) {
-        ctx!.fillStyle = '#58a6ff10';
+        ctx!.fillStyle = '#58a6ff25';
         ctx!.fillRect(wx * T - camX, ROWS * T - wallThick - camY, T * 2, wallThick);
       }
 
@@ -1983,36 +2028,73 @@ export default function VirtualOffice() {
             const isLobby = y >= 18 && y <= 19;
             if (isOfficeHCorridor || isLobby) {
               const tileCol = Math.floor(x / 2);
-              fc.fillStyle = (tileCol + y) % 2 === 0 ? '#ebedf0' : '#e8eaed';
+              fc.fillStyle = (tileCol + y) % 2 === 0 ? '#161c26' : '#131820';
               fc.fillRect(sx, sy, T, T);
-              if ((x * 5 + y * 7) % 11 === 0) {
-                fc.strokeStyle = 'rgba(0,0,0,0.03)'; fc.lineWidth = 0.5;
-                fc.beginPath(); fc.moveTo(sx + 5, sy + T - 5); fc.lineTo(sx + T - 5, sy + 5); fc.stroke();
-              }
-              fc.strokeStyle = '#d0d5dd'; fc.lineWidth = 1;
+              // Tile grout
+              fc.strokeStyle = '#0a0d13'; fc.lineWidth = 0.8;
               if (x % 2 === 0) { fc.beginPath(); fc.moveTo(sx, sy); fc.lineTo(sx, sy + T); fc.stroke(); }
               fc.beginPath(); fc.moveTo(sx, sy); fc.lineTo(sx + T, sy); fc.stroke();
+              // Subtle specular highlight
+              fc.fillStyle = 'rgba(255,255,255,0.025)';
+              fc.fillRect(sx, sy, T, 1);
+              fc.fillRect(sx, sy, 1, T);
               if (y === 10 || y === 11 || y === 18) {
                 const refGrd = fc.createLinearGradient(sx, sy, sx, sy + T);
-                refGrd.addColorStop(0, 'rgba(100,120,160,0.06)');
-                refGrd.addColorStop(0.5, 'rgba(100,120,160,0.03)');
+                refGrd.addColorStop(0, 'rgba(88,166,255,0.06)');
+                refGrd.addColorStop(0.5, 'rgba(88,166,255,0.025)');
                 refGrd.addColorStop(1, 'transparent');
                 fc.fillStyle = refGrd; fc.fillRect(sx, sy, T, T);
               }
             } else {
-              fc.fillStyle = (x + y) % 2 === 0 ? '#f5f6f8' : '#f0f1f3';
+              fc.fillStyle = (x + y) % 2 === 0 ? '#0f1520' : '#0d1218';
               fc.fillRect(sx, sy, T, T);
+              // Very subtle grid pattern
+              fc.strokeStyle = 'rgba(255,255,255,0.018)'; fc.lineWidth = 0.4;
+              fc.strokeRect(sx, sy, T, T);
+              // Subtle diagonal grain
               if ((x + y) % 4 === 0) {
-                fc.strokeStyle = 'rgba(0,0,0,0.03)'; fc.lineWidth = 0.5;
+                fc.strokeStyle = 'rgba(255,255,255,0.012)'; fc.lineWidth = 0.4;
                 fc.beginPath(); fc.moveTo(sx + T * 0.2, sy + T * 0.8); fc.lineTo(sx + T * 0.8, sy + T * 0.2); fc.stroke();
-              } else if ((x + y) % 4 === 2) {
-                fc.strokeStyle = 'rgba(0,0,0,0.02)'; fc.lineWidth = 0.5;
-                fc.beginPath(); fc.moveTo(sx + T * 0.2, sy + T * 0.2); fc.lineTo(sx + T * 0.8, sy + T * 0.8); fc.stroke();
               }
-              fc.strokeStyle = '#dde0e630'; fc.lineWidth = 0.3; fc.strokeRect(sx, sy, T, T);
             }
           }
         }
+
+        // ── 복도 라이트 풀 (천장 조명 반사 — 라디얼 그라디언트) ──
+        // Jarvis 맵은 가로 복도(y=10~11)와 로비(y=18~19) 두 라인 복도 구조
+        // 각 복도의 중앙/교차점에 라이트 풀을 배치
+        const lightPools: Array<{ cx: number; cy: number; r: number; color: string }> = [
+          // 상단 복도 (y=10~11) — 5개 라이트
+          { cx: COLS * 0.12 * T, cy: 10.5 * T, r: T * 3.5, color: 'rgba(88,166,255,0.12)' },
+          { cx: COLS * 0.30 * T, cy: 10.5 * T, r: T * 3.5, color: 'rgba(255,200,130,0.08)' },
+          { cx: COLS * 0.50 * T, cy: 10.5 * T, r: T * 4.0, color: 'rgba(88,166,255,0.14)' },
+          { cx: COLS * 0.70 * T, cy: 10.5 * T, r: T * 3.5, color: 'rgba(255,200,130,0.08)' },
+          { cx: COLS * 0.88 * T, cy: 10.5 * T, r: T * 3.5, color: 'rgba(88,166,255,0.12)' },
+          // 로비 (y=18~19) — 3개 큰 라이트
+          { cx: COLS * 0.20 * T, cy: 18.5 * T, r: T * 4.5, color: 'rgba(255,200,130,0.10)' },
+          { cx: COLS * 0.50 * T, cy: 18.5 * T, r: T * 5.5, color: 'rgba(255,220,150,0.14)' },
+          { cx: COLS * 0.80 * T, cy: 18.5 * T, r: T * 4.5, color: 'rgba(255,200,130,0.10)' },
+        ];
+        for (const lp of lightPools) {
+          const grd = fc.createRadialGradient(lp.cx, lp.cy, 0, lp.cx, lp.cy, lp.r);
+          grd.addColorStop(0, lp.color);
+          grd.addColorStop(1, 'rgba(0,0,0,0)');
+          fc.fillStyle = grd;
+          fc.fillRect(lp.cx - lp.r, lp.cy - lp.r, lp.r * 2, lp.r * 2);
+        }
+
+        // ── 창가 haze (외벽 상/하단 근처 — 블루 ambient) ──
+        const topHaze = fc.createLinearGradient(0, 0, 0, T * 2.5);
+        topHaze.addColorStop(0, 'rgba(88,166,255,0.10)');
+        topHaze.addColorStop(1, 'rgba(88,166,255,0)');
+        fc.fillStyle = topHaze;
+        fc.fillRect(0, 0, COLS * T, T * 2.5);
+        const botHaze = fc.createLinearGradient(0, ROWS * T - T * 2.5, 0, ROWS * T);
+        botHaze.addColorStop(0, 'rgba(88,166,255,0)');
+        botHaze.addColorStop(1, 'rgba(88,166,255,0.10)');
+        fc.fillStyle = botHaze;
+        fc.fillRect(0, ROWS * T - T * 2.5, COLS * T, T * 2.5);
+
         floorCacheRef.current = oc;
       }
       ctx!.drawImage(floorCacheRef.current, -camX, -camY);
@@ -2024,7 +2106,7 @@ export default function VirtualOffice() {
         const alpha = (f.life / 28) * 0.5;
         const fx = f.x * T - camX + T / 2;
         const fy = f.y * T - camY + T / 2 + 10;
-        ctx!.fillStyle = `rgba(60,120,220,${alpha})`;
+        ctx!.fillStyle = `rgba(88,166,255,${alpha * 0.6})`;
         ctx!.beginPath();
         ctx!.ellipse(fx - 3, fy, 2.5, 1.5, -0.3, 0, Math.PI * 2);
         ctx!.fill();
@@ -2292,28 +2374,31 @@ export default function VirtualOffice() {
         }
       }
 
-      // ── Vignette overlay (4방향 — 테두리 깊이감) ──
-      const vigSize = 72;
-      const vigTop = ctx!.createLinearGradient(0, 0, 0, vigSize);
-      vigTop.addColorStop(0, 'rgba(0,0,0,0.18)');
-      vigTop.addColorStop(1, 'transparent');
-      ctx!.fillStyle = vigTop;
-      ctx!.fillRect(0, 0, w, vigSize);
-      const vigBot = ctx!.createLinearGradient(0, h - vigSize, 0, h);
-      vigBot.addColorStop(0, 'transparent');
-      vigBot.addColorStop(1, 'rgba(0,0,0,0.18)');
-      ctx!.fillStyle = vigBot;
-      ctx!.fillRect(0, h - vigSize, w, vigSize);
-      const vigLeft = ctx!.createLinearGradient(0, 0, vigSize, 0);
-      vigLeft.addColorStop(0, 'rgba(0,0,0,0.12)');
-      vigLeft.addColorStop(1, 'transparent');
-      ctx!.fillStyle = vigLeft;
-      ctx!.fillRect(0, 0, vigSize, h);
-      const vigRight = ctx!.createLinearGradient(w - vigSize, 0, w, 0);
-      vigRight.addColorStop(0, 'transparent');
-      vigRight.addColorStop(1, 'rgba(0,0,0,0.12)');
-      ctx!.fillStyle = vigRight;
-      ctx!.fillRect(w - vigSize, 0, vigSize, h);
+      // ── Cinematic vignette (radial + warm/cool tint) ──
+      // 화면 중앙은 밝게, 바깥은 어둠 + 상단 쿨(블루)/하단 웜(앰버) 틴트
+      const vCx = w / 2;
+      const vCy = h / 2;
+      const vRadius = Math.max(w, h) * 0.75;
+      const vig = ctx!.createRadialGradient(vCx, vCy, Math.min(w, h) * 0.3, vCx, vCy, vRadius);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(0.55, 'rgba(5,8,16,0.15)');
+      vig.addColorStop(1, 'rgba(3,6,12,0.55)');
+      ctx!.fillStyle = vig;
+      ctx!.fillRect(0, 0, w, h);
+
+      // 상단 쿨 블루 틴트 (아침 창가 느낌)
+      const coolTint = ctx!.createLinearGradient(0, 0, 0, h * 0.4);
+      coolTint.addColorStop(0, 'rgba(88,166,255,0.08)');
+      coolTint.addColorStop(1, 'rgba(88,166,255,0)');
+      ctx!.fillStyle = coolTint;
+      ctx!.fillRect(0, 0, w, h * 0.4);
+
+      // 하단 웜 앰버 틴트 (크론 센터 글로우 연장)
+      const warmTint = ctx!.createLinearGradient(0, h * 0.6, 0, h);
+      warmTint.addColorStop(0, 'rgba(255,180,100,0)');
+      warmTint.addColorStop(1, 'rgba(255,180,100,0.06)');
+      ctx!.fillStyle = warmTint;
+      ctx!.fillRect(0, h * 0.6, w, h * 0.4);
 
       animId = requestAnimationFrame(gameLoop);
     }

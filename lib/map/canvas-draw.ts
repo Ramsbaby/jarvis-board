@@ -16,41 +16,106 @@ import { T, getCronTilePos } from '@/lib/map/rooms';
 
 // ── Helper: draw a small pixel-art chair ──
 export function drawChair(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string) {
-  ctx.fillStyle = color;
+  // Contact shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
-  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 8, 7, 2.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = color + '80';
-  ctx.fillRect(cx - 5, cy - 9, 10, 6);
+  // Legs (4 thin posts)
+  ctx.fillStyle = '#1e2430';
+  ctx.fillRect(cx - 5, cy + 3, 2, 6);
+  ctx.fillRect(cx + 3, cy + 3, 2, 6);
+  // Seat base
+  ctx.fillStyle = '#2d3340';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(cx - 6, cy - 2, 12, 7, 2);
+  else ctx.rect(cx - 6, cy - 2, 12, 7);
+  ctx.fill();
+  // Seat cushion (team color accent)
+  ctx.fillStyle = color + '55';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(cx - 5, cy - 1, 10, 5, 2);
+  else ctx.rect(cx - 5, cy - 1, 10, 5);
+  ctx.fill();
+  // Cushion highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(cx - 5, cy - 1, 10, 1);
+  // Back rest
+  ctx.fillStyle = '#2d3340';
+  ctx.fillRect(cx - 5, cy - 11, 10, 9);
+  ctx.fillStyle = color + '35';
+  ctx.fillRect(cx - 4, cy - 10, 8, 7);
+  // Back highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(cx - 4, cy - 10, 8, 1);
 }
 
 // ── Helper: draw a small monitor ──
 export function drawMonitor(ctx: CanvasRenderingContext2D, mx: number, my: number, screenW: number, screenH: number, screenColor: string, standColor: string) {
-  ctx.fillStyle = '#2d3340';
+  // Stand shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(mx + screenW / 2 - 6, my + screenH + 6, 12, 2);
+  // Outer bezel (dark frame)
+  ctx.fillStyle = '#1a1f2e';
+  ctx.fillRect(mx - 1, my - 1, screenW + 2, screenH + 2);
+  // Screen bezel
+  ctx.fillStyle = '#21262d';
   ctx.fillRect(mx, my, screenW, screenH);
+  // Screen content
   ctx.fillStyle = screenColor;
   ctx.fillRect(mx + 2, my + 2, screenW - 4, screenH - 4);
+  // Screen inner glow
+  const sw2 = screenW / 2, sh2 = screenH / 2;
+  const glowGrd = ctx.createRadialGradient(mx + sw2, my + sh2, 0, mx + sw2, my + sh2, Math.max(sw2, sh2));
+  glowGrd.addColorStop(0, 'rgba(255,255,255,0.08)');
+  glowGrd.addColorStop(1, 'transparent');
+  ctx.fillStyle = glowGrd;
+  ctx.fillRect(mx + 2, my + 2, screenW - 4, screenH - 4);
+  // Reflection streak
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fillRect(mx + 2, my + 2, Math.max(3, screenW * 0.3), 1);
+  ctx.fillRect(mx + 2, my + 2, 1, Math.max(2, screenH * 0.5));
+  // Stand
   ctx.fillStyle = standColor;
   ctx.fillRect(mx + screenW / 2 - 2, my + screenH, 4, 5);
   ctx.fillRect(mx + screenW / 2 - 5, my + screenH + 4, 10, 3);
 }
 
-// ── Helper: draw a potted plant (dark corporate) ──
+// ── Helper: draw a potted plant (dark corporate — vivid on dark bg) ──
 export function drawPlantSmall(ctx: CanvasRenderingContext2D, px: number, py: number) {
-  ctx.fillStyle = '#8B7355';
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 8, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Pot (terracotta)
+  ctx.fillStyle = '#6b3a2a';
   ctx.fillRect(px - 4, py, 8, 7);
-  ctx.fillStyle = '#7a6545';
+  ctx.fillStyle = '#5a2e1f';
   ctx.fillRect(px - 5, py - 1, 10, 3);
-  ctx.fillStyle = '#22804a';
+  // Pot highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(px - 4, py, 2, 5);
+  // Soil top
+  ctx.fillStyle = '#2a1a08';
+  ctx.fillRect(px - 4, py, 8, 2);
+  // Main foliage
+  ctx.fillStyle = '#1a6e36';
   ctx.beginPath();
-  ctx.arc(px, py - 5, 5, 0, Math.PI * 2);
+  ctx.arc(px, py - 6, 6, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#22c55e60';
+  // Highlight leaves
+  ctx.fillStyle = '#22c55e';
   ctx.beginPath();
-  ctx.arc(px - 3, py - 8, 3, 0, Math.PI * 2);
+  ctx.arc(px - 3, py - 9, 3.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(px + 3, py - 7, 4, 0, Math.PI * 2);
+  ctx.arc(px + 3, py - 8, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // Leaf highlight
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  ctx.arc(px + 2, py - 9, 1.5, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -59,32 +124,95 @@ function drawSimplePod(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw
   const cx = rx + rw / 2;
   const cy = ry + rh / 2;
 
+  // ── 오브젝트 그림자 ──
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.08)';
-  ctx.shadowBlur = 6;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 2;
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
 
-  // L자 데스크 (심플)
-  ctx.fillStyle = '#4a5060';
-  ctx.fillRect(cx - T * 1.2, cy - T * 0.3, T * 2.4, T * 0.5);
-  ctx.fillStyle = '#3a4050';
-  ctx.fillRect(cx - T * 1.2, cy - T * 0.3, T * 2.4, 2);  // 상단 엣지
+  // ── L자 데스크 — 수평 바 (3-shade wood) ──
+  const dW = T * 2.3, dH = T * 0.52;
+  const dX = cx - T * 1.15, dY = cy - T * 0.26;
+  // top surface
+  ctx.fillStyle = '#3a2c18';
+  ctx.fillRect(dX, dY, dW, dH);
+  // top highlight (앞쪽 엣지 밝음)
+  ctx.fillStyle = '#5a4428';
+  ctx.fillRect(dX, dY, dW, 2);
+  // front edge face (bottom — 앞쪽 면, 가장 어둠)
+  ctx.fillStyle = '#1a0e04';
+  ctx.fillRect(dX, dY + dH - 3, dW, 4);
+  // right edge
+  ctx.fillStyle = '#2e1e0c';
+  ctx.fillRect(dX + dW - 2, dY, 2, dH);
 
-  // 모니터 (중앙 1개)
-  drawMonitor(ctx, cx - T * 0.4, cy - T * 1, T * 0.9, T * 0.5, teamColor + '30', '#4a5060');
-  // 모니터 화면 내용 (상태 표시등 느낌)
-  ctx.fillStyle = teamColor + '50';
-  ctx.fillRect(cx - T * 0.25, cy - T * 0.85, T * 0.2, T * 0.15);
-  ctx.fillRect(cx + T * 0.1, cy - T * 0.85, T * 0.2, T * 0.15);
-
-  // 의자 (뒤쪽)
-  ctx.fillStyle = '#4a5060';
-  ctx.beginPath();
-  ctx.arc(cx, cy + T * 0.6, 5, 0, Math.PI * 2);
-  ctx.fill();
+  // ── L자 데스크 — 수직 바 (세로 아암) ──
+  const aX = dX, aY = dY + dH - 1;
+  const aW = T * 0.48, aH = T * 1.1;
+  ctx.fillStyle = '#3a2c18';
+  ctx.fillRect(aX, aY, aW, aH);
+  ctx.fillStyle = '#5a4428';
+  ctx.fillRect(aX, aY, aW, 2);
+  ctx.fillStyle = '#1a0e04';
+  ctx.fillRect(aX + aW - 3, aY, 3, aH);
+  ctx.fillStyle = '#2e1e0c';
+  ctx.fillRect(aX, aY + aH - 2, aW, 3);
 
   ctx.restore();
+
+  // ── 메인 모니터 ──
+  drawMonitor(ctx, cx - T * 0.42, cy - T * 1.05, T * 0.9, T * 0.55, teamColor + '28', '#2d3340');
+
+  // ── 모니터 화면: 코드 라인 시뮬레이션 ──
+  for (let li = 0; li < 4; li++) {
+    const lineW = [T * 0.35, T * 0.55, T * 0.28, T * 0.45][li];
+    const lineColor = li === 0 ? teamColor + '70' : li === 1 ? '#22c55e50' : li === 2 ? '#58a6ff50' : '#c9d1d940';
+    ctx.fillStyle = lineColor;
+    ctx.fillRect(cx - T * 0.35, cy - T * 0.94 + li * 5, lineW, 2);
+  }
+
+  // ── 키보드 (데스크 위) ──
+  ctx.fillStyle = '#252d3a';
+  ctx.fillRect(cx - T * 0.38, cy - T * 0.22, T * 0.75, T * 0.2);
+  ctx.fillStyle = '#1a2230';
+  ctx.fillRect(cx - T * 0.38, cy - T * 0.22 + T * 0.17, T * 0.75, 2);
+  // 키캡 rows
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 7; col++) {
+      ctx.fillStyle = '#2d3845';
+      ctx.fillRect(cx - T * 0.35 + col * 5, cy - T * 0.20 + row * 4, 4, 3);
+    }
+  }
+
+  // ── 머그컵 ──
+  const mugX = cx + T * 0.55, mugY = cy - T * 0.14;
+  ctx.fillStyle = '#1a2230';
+  ctx.beginPath();
+  ctx.arc(mugX, mugY, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = teamColor + '80';
+  ctx.beginPath();
+  ctx.arc(mugX, mugY, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // steam
+  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(mugX - 1, mugY - 5); ctx.lineTo(mugX - 1, mugY - 9); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mugX + 1, mugY - 4); ctx.lineTo(mugX + 1, mugY - 8); ctx.stroke();
+
+  // ── 서류 스택 ──
+  ctx.fillStyle = '#2a3040';
+  ctx.fillRect(cx + T * 0.18, cy - T * 0.18, 10, 7);
+  ctx.fillStyle = '#24283a';
+  ctx.fillRect(cx + T * 0.18 + 1, cy - T * 0.18 + 1, 10, 7);
+  // 텍스트 라인 시뮬
+  ctx.fillStyle = '#3a4255';
+  for (let pi = 0; pi < 3; pi++) {
+    ctx.fillRect(cx + T * 0.18 + 2, cy - T * 0.18 + 2 + pi * 2, 6, 1);
+  }
+
+  // ── 의자 (아래쪽 배치) ──
+  drawChair(ctx, cx + T * 0.15, cy + T * 0.75, teamColor);
 }
 
 // ── Executive Module (대표실/재무실): L자 데스크 + 대형 모니터 + 가죽 의자 + 책장 + 소품 1개 ──
@@ -94,66 +222,147 @@ function drawExecutiveFurniture(
   teamColor: string, label: string,
 ) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.08)';
-  ctx.shadowBlur = 6;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 2;
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
 
-  // L자 데스크 (넓은)
-  ctx.fillStyle = '#4a5060';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.2, T * 3.5, T * 0.7);
-  ctx.fillStyle = '#3a4050';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.2, T * 3.5, 3); // 상단 엣지
-  // L자 세로 파트
-  ctx.fillStyle = '#4a5060';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.2, T * 0.4, T * 1.5);
+  // ── 넓은 L자 메인 데스크 ──
+  // 수평 바
+  const mDX = rx + T * 1.2, mDY = ry + T * 1.3;
+  const mDW = T * 3.8, mDH = T * 0.6;
+  ctx.fillStyle = '#3a2c18';
+  ctx.fillRect(mDX, mDY, mDW, mDH);
+  ctx.fillStyle = '#5a4428';  // top highlight
+  ctx.fillRect(mDX, mDY, mDW, 2);
+  ctx.fillStyle = '#1a0e04';  // front edge face
+  ctx.fillRect(mDX, mDY + mDH - 4, mDW, 5);
+  ctx.fillStyle = '#2e1e0c';  // right edge
+  ctx.fillRect(mDX + mDW - 3, mDY, 3, mDH);
 
-  // 대형 모니터 (teamColor tint)
-  drawMonitor(ctx, rx + T * 2.2, ry + T * 0.4, T * 1.5, T * 0.8, teamColor + '28', '#4a5060');
-  // 모니터 화면 내용
+  // 수직 아암
+  const mAX = mDX, mAY = mDY + mDH - 1;
+  ctx.fillStyle = '#3a2c18';
+  ctx.fillRect(mAX, mAY, T * 0.5, T * 1.5);
+  ctx.fillStyle = '#5a4428';
+  ctx.fillRect(mAX, mAY, T * 0.5, 2);
+  ctx.fillStyle = '#1a0e04';
+  ctx.fillRect(mAX + T * 0.47, mAY, 3, T * 1.5);
+  ctx.fillStyle = '#2e1e0c';
+  ctx.fillRect(mAX, mAY + T * 1.47, T * 0.5, 3);
+
+  ctx.restore();
+
+  // ── 울트라와이드 메인 모니터 ──
+  drawMonitor(ctx, mDX + T * 0.7, mDY - T * 0.85, T * 1.8, T * 0.75, teamColor + '25', '#2d3340');
+  // 화면 내용 (차트/대시보드 느낌)
+  const scrX = mDX + T * 0.7 + 4;
+  const scrY = mDY - T * 0.85 + 4;
+  // 상단 메트릭 바
   ctx.fillStyle = teamColor + '50';
-  ctx.fillRect(rx + T * 2.4, ry + T * 0.55, T * 0.5, T * 0.25);
-  ctx.fillRect(rx + T * 3.1, ry + T * 0.55, T * 0.5, T * 0.25);
+  ctx.fillRect(scrX, scrY, T * 0.5, 3);
+  ctx.fillStyle = '#22c55e50';
+  ctx.fillRect(scrX + T * 0.55, scrY, T * 0.4, 3);
+  // 막대 차트
+  const barHeights = [12, 18, 10, 15, 20, 8];
+  for (let bi = 0; bi < 6; bi++) {
+    ctx.fillStyle = bi % 2 === 0 ? teamColor + '45' : '#22c55e45';
+    ctx.fillRect(scrX + bi * 7, scrY + 22 - barHeights[bi], 5, barHeights[bi]);
+  }
 
-  // 가죽 의자 (데스크 뒤)
-  ctx.fillStyle = '#4a5060';
-  ctx.beginPath();
-  ctx.arc(rx + T * 3.2, ry + T * 2.5, 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#4a5060';
-  ctx.fillRect(rx + T * 3.2 - 7, ry + T * 2.5 - 12, 14, 8); // 등받이
+  // ── 사이드 보조 모니터 ──
+  drawMonitor(ctx, mDX + T * 2.7, mDY - T * 0.75, T * 0.9, T * 0.6, teamColor + '20', '#2d3340');
 
-  // 책장 (우측 벽)
-  ctx.fillStyle = '#8B7355';
-  ctx.fillRect(rx + T * 5.5, ry + T * 0.5, T * 1, T * 2.5);
-  for (let j = 0; j < 3; j++) {
-    ctx.fillStyle = '#7a6a50';
-    ctx.fillRect(rx + T * 5.5, ry + T * 0.7 + j * T * 0.8, T * 1, 2); // 선반
-    const bkColors = ['#7a6040', '#8a7050', '#9a8060'];
-    for (let k = 0; k < 2; k++) {
-      ctx.fillStyle = bkColors[k % 3];
-      ctx.fillRect(rx + T * 5.65 + k * 12, ry + T * 0.8 + j * T * 0.8, 8, T * 0.55);
+  // ── 키보드 ──
+  ctx.fillStyle = '#1e2636';
+  ctx.fillRect(mDX + T * 0.9, mDY + 2, T * 1.1, T * 0.22);
+  ctx.fillStyle = '#1a2030';
+  ctx.fillRect(mDX + T * 0.9, mDY + T * 0.19, T * 1.1, 2);
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 12; col++) {
+      ctx.fillStyle = '#2a3548';
+      ctx.fillRect(mDX + T * 0.92 + col * 5, mDY + 3 + row * 4, 4, 3);
     }
   }
 
-  // 방 소품 1개
-  if (label === '대표') {
-    // 금색 명패
-    ctx.fillStyle = '#c9a22760';
-    ctx.fillRect(rx + T * 2.5, ry + T * 1.25, T * 1.5, 6);
-    ctx.fillStyle = '#2d3340';
-    ctx.font = '6px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, rx + T * 3.25, ry + T * 1.25 + 5);
-  } else {
-    // 차트 바 1개 (재무)
-    ctx.fillStyle = '#10b981';
-    ctx.fillRect(rx + T * 2.5, ry + T * 1.0, 3, T * 0.15);
-    ctx.fillRect(rx + T * 2.7, ry + T * 0.9, 3, T * 0.25);
-    ctx.fillRect(rx + T * 2.9, ry + T * 0.75, 3, T * 0.4);
+  // ── 명패 / 이름 플레이트 ──
+  ctx.save();
+  ctx.shadowColor = teamColor + '40';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = '#c9a22730';
+  ctx.fillRect(mDX + T * 1.5, mDY + 3, T * 1.2, 8);
+  ctx.strokeStyle = '#c9a22760';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mDX + T * 1.5, mDY + 3, T * 1.2, 8);
+  ctx.restore();
+  ctx.fillStyle = '#c9a227';
+  ctx.font = '5px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(label === '대표' ? 'CEO' : 'CFO', mDX + T * 2.1, mDY + 9);
+
+  // ── 책장 (우측 — 3D 느낌) ──
+  const bsX = rx + T * 5.3, bsY = ry + T * 0.4;
+  // 책장 본체
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#1e1608';
+  ctx.fillRect(bsX, bsY, T * 1.2, T * 2.8);
+  ctx.restore();
+  ctx.fillStyle = '#2a1e0c';  // top face
+  ctx.fillRect(bsX, bsY, T * 1.2, T * 2.8);
+  ctx.fillStyle = '#3a2e1a';  // top highlight
+  ctx.fillRect(bsX, bsY, T * 1.2, 2);
+  ctx.fillStyle = '#0e0a04';  // side shadow
+  ctx.fillRect(bsX + T * 1.17, bsY, 3, T * 2.8);
+  // 선반 3개
+  for (let sh = 0; sh < 3; sh++) {
+    ctx.fillStyle = '#1a1208';
+    ctx.fillRect(bsX + 2, bsY + T * 0.85 + sh * T * 0.9, T * 1.16, 3);
+    // 책 스파인 (각 선반 6권)
+    const spineColors = ['#7a3020', '#2050a0', '#205030', '#a06010', '#602080', '#2070a0'];
+    for (let bk = 0; bk < 6; bk++) {
+      ctx.fillStyle = spineColors[(bk + sh * 2) % spineColors.length];
+      ctx.fillRect(bsX + 2 + bk * 6, bsY + T * 0.88 + sh * T * 0.9, 5, T * 0.6);
+      // 책 상단 하이라이트
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(bsX + 2 + bk * 6, bsY + T * 0.88 + sh * T * 0.9, 5, 1);
+    }
   }
 
-  ctx.restore();
+  // ── 화분 (코너) ──
+  drawPlantSmall(ctx, rx + T * 1.0, ry + T * 2.8);
+
+  // ── 임원 의자 (큰 것) ──
+  const chX = mDX + T * 1.8, chY = mDY + T * 0.8;
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(chX, chY + 10, 12, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // legs
+  ctx.fillStyle = '#1e2430';
+  ctx.fillRect(chX - 7, chY + 4, 3, 7);
+  ctx.fillRect(chX + 4, chY + 4, 3, 7);
+  // seat
+  ctx.fillStyle = '#1a2030';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(chX - 8, chY - 3, 16, 9, 3);
+  else ctx.rect(chX - 8, chY - 3, 16, 9);
+  ctx.fill();
+  ctx.fillStyle = teamColor + '40';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(chX - 7, chY - 2, 14, 7, 3);
+  else ctx.rect(chX - 7, chY - 2, 14, 7);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fillRect(chX - 7, chY - 2, 14, 1);
+  // back rest
+  ctx.fillStyle = '#1a2030';
+  ctx.fillRect(chX - 7, chY - 16, 14, 13);
+  ctx.fillStyle = teamColor + '30';
+  ctx.fillRect(chX - 6, chY - 15, 12, 11);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(chX - 6, chY - 15, 12, 1);
 }
 
 // ── Standard Module (회의실/서버룸): 일자 데스크 + 모니터 + 의자 + 방 소품 1개 ──
@@ -163,65 +372,176 @@ function drawStandardFurniture(
   teamColor: string, variant: 'meeting' | 'server',
 ) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.08)';
-  ctx.shadowBlur = 6;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 2;
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
 
   if (variant === 'meeting') {
-    // 일자 데스크
-    const deskW = _rw - T * 2.3;
-    ctx.fillStyle = '#4a5060';
-    ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, T * 0.5);
-    ctx.fillStyle = '#3a4050';
-    ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, 2);
-    // 모니터
-    drawMonitor(ctx, rx + T * 2.5, ry + T * 1, T * 1, T * 0.6, teamColor + '28', '#4a5060');
-    // 의자
-    ctx.fillStyle = '#4a5060';
+    // ── 원형 컨퍼런스 테이블 ──
+    const tcx = rx + _rw / 2;
+    const tcy = ry + _rh / 2 - T * 0.2;
+    const tR = T * 1.3;
+
+    // 테이블 그림자
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 5;
+    // 테이블 상면 (원형)
+    ctx.fillStyle = '#3a2c18';
     ctx.beginPath();
-    ctx.arc(rx + T * 3.5, ry + T * 2.8, 7, 0, Math.PI * 2);
+    ctx.arc(tcx, tcy, tR, 0, Math.PI * 2);
     ctx.fill();
-    // 화이트보드
-    ctx.fillStyle = '#f5f5f4';
-    ctx.globalAlpha = 0.9;
-    ctx.fillRect(rx + _rw - T * 2, ry + T * 0.5, T * 1.3, T * 1.5);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = '#a0a4b0';
+    ctx.restore();
+    ctx.save();
+    // 테이블 상면 중앙 하이라이트
+    const tblGrd = ctx.createRadialGradient(tcx - tR * 0.25, tcy - tR * 0.25, 0, tcx, tcy, tR);
+    tblGrd.addColorStop(0, 'rgba(120,80,30,0.5)');
+    tblGrd.addColorStop(0.5, 'rgba(80,50,15,0.2)');
+    tblGrd.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = tblGrd;
+    ctx.beginPath();
+    ctx.arc(tcx, tcy, tR, 0, Math.PI * 2);
+    ctx.fill();
+    // 테이블 엣지 라인
+    ctx.strokeStyle = '#1a0e04';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(tcx, tcy, tR - 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#5a4428';
     ctx.lineWidth = 1;
-    ctx.strokeRect(rx + _rw - T * 2, ry + T * 0.5, T * 1.3, T * 1.5);
+    ctx.beginPath();
+    ctx.arc(tcx, tcy, tR - 3, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
+
+    // 테이블 위 소품: 노트북 + 물컵들
+    // 노트북
+    ctx.fillStyle = '#1e2636';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(tcx - 10, tcy - 8, 20, 13, 2);
+    else ctx.rect(tcx - 10, tcy - 8, 20, 13);
+    ctx.fill();
+    ctx.fillStyle = teamColor + '35';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(tcx - 9, tcy - 7, 18, 11, 1);
+    else ctx.rect(tcx - 9, tcy - 7, 18, 11);
+    ctx.fill();
+    // 노트북 화면 코드 라인
+    for (let li = 0; li < 3; li++) {
+      ctx.fillStyle = `rgba(${li===0?'88,166,255':li===1?'34,197,94':'201,162,39'},0.5)`;
+      ctx.fillRect(tcx - 8, tcy - 5 + li * 3, 8 + li * 2, 1.5);
+    }
+
+    // 물컵 (4개, 테이블 주변)
+    const cupAngles = [0.3, 1.2, 2.5, 4.0];
+    for (const a of cupAngles) {
+      const cpx = tcx + Math.cos(a) * (tR - 8);
+      const cpy = tcy + Math.sin(a) * (tR - 8);
+      ctx.fillStyle = '#0d1117';
+      ctx.beginPath();
+      ctx.arc(cpx, cpy, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(88,166,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(cpx, cpy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    ctx.save();
+
+    // 의자 4개 (테이블 주변)
+    const chairAngles = [Math.PI * 0.5, Math.PI * 1.1, Math.PI * 1.7, Math.PI * 0.0];
+    for (const a of chairAngles) {
+      const chairX = tcx + Math.cos(a) * (tR + 12);
+      const chairY = tcy + Math.sin(a) * (tR + 12);
+      drawChair(ctx, chairX, chairY, teamColor);
+    }
+
+    // 프로젝터 스크린 (상단 벽)
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+    const scrX = rx + _rw * 0.2, scrY = ry + T * 0.5;
+    const scrW = _rw * 0.6, scrH = T * 0.9;
+    ctx.fillStyle = '#0a0e17';
+    ctx.fillRect(scrX - 2, scrY - 2, scrW + 4, scrH + 4);
+    ctx.restore();
+    ctx.save();
+    // 스크린 내용 (프레젠테이션 느낌)
+    const scrGrd = ctx.createLinearGradient(scrX, scrY, scrX + scrW, scrY);
+    scrGrd.addColorStop(0, teamColor + '18');
+    scrGrd.addColorStop(1, '#0d1117');
+    ctx.fillStyle = scrGrd;
+    ctx.fillRect(scrX, scrY, scrW, scrH);
+    // 슬라이드 제목 라인
+    ctx.fillStyle = teamColor + '80';
+    ctx.fillRect(scrX + 4, scrY + 4, scrW * 0.5, 3);
+    ctx.fillStyle = '#c9d1d960';
+    ctx.fillRect(scrX + 4, scrY + 10, scrW * 0.35, 2);
+    ctx.fillRect(scrX + 4, scrY + 14, scrW * 0.45, 2);
+    // 스크린 테두리
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(scrX, scrY, scrW, scrH);
+
   } else {
-    // 서버 랙 3개 — 왼쪽 배치 (모니터/의자 제거)
-    for (let i = 0; i < 3; i++) {
-      const sx = rx + T * 0.7 + i * (T * 0.7);
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(sx, ry + T * 0.5, T * 0.55, T * 2.5);
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(sx, ry + T * 0.55, T * 0.55, T * 2.5);
-      // LED 점 + 글로우
-      for (let j = 0; j < 6; j++) {
-        const ledColor = j % 2 === 0 ? '#22c55e' : '#3b82f6';
-        const ledCx = sx + T * 0.15;
-        const ledCy = ry + T * 0.8 + j * 12;
-        ctx.fillStyle = (j % 2 === 0 ? 'rgba(34,197,94,0.3)' : 'rgba(59,130,246,0.3)');
+    // ── 서버 랙 4개 ──
+    for (let i = 0; i < 4; i++) {
+      const sx = rx + T * 0.4 + i * (T * 0.72);
+      const sy = ry + T * 0.4;
+      const rackH = T * 2.8;
+      // 랙 본체 (3-shade)
+      ctx.fillStyle = '#141c26';
+      ctx.fillRect(sx, sy, T * 0.6, rackH);
+      ctx.fillStyle = '#1e2836';  // top highlight
+      ctx.fillRect(sx, sy, T * 0.6, 2);
+      ctx.fillStyle = '#0a0e17';  // right shadow
+      ctx.fillRect(sx + T * 0.57, sy, 3, rackH);
+      ctx.fillStyle = '#0a0e17';  // bottom
+      ctx.fillRect(sx, sy + rackH - 2, T * 0.6, 3);
+      // 랙 유닛 구분선
+      ctx.strokeStyle = '#0d1117';
+      ctx.lineWidth = 0.5;
+      for (let u = 0; u < 8; u++) {
         ctx.beginPath();
-        ctx.arc(ledCx, ledCy, 5, 0, Math.PI * 2);
+        ctx.moveTo(sx, sy + u * (rackH / 8));
+        ctx.lineTo(sx + T * 0.6, sy + u * (rackH / 8));
+        ctx.stroke();
+      }
+      // LED 상태등 (각 유닛)
+      for (let u = 0; u < 7; u++) {
+        const ledY = sy + u * (rackH / 8) + rackH / 16;
+        const ledColor = u % 3 === 0 ? '#22c55e' : u % 3 === 1 ? '#3b82f6' : '#22c55e';
+        // glow
+        ctx.fillStyle = ledColor + '30';
+        ctx.beginPath();
+        ctx.arc(sx + T * 0.12, ledY, 4, 0, Math.PI * 2);
         ctx.fill();
+        // dot
         ctx.fillStyle = ledColor;
         ctx.beginPath();
-        ctx.arc(ledCx, ledCy, 3, 0, Math.PI * 2);
+        ctx.arc(sx + T * 0.12, ledY, 2, 0, Math.PI * 2);
         ctx.fill();
+        // label (작은 포트 표시)
+        ctx.fillStyle = '#2d3340';
+        ctx.fillRect(sx + T * 0.25, ledY - 2, T * 0.28, 4);
       }
     }
-    // 관리 데스크 — 오른쪽
-    const deskX = rx + _rw - T * 2.2;
-    ctx.fillStyle = '#4a5060';
-    ctx.fillRect(deskX, ry + T * 1.8, T * 1.5, T * 0.5);
-    ctx.fillStyle = '#3a4050';
-    ctx.fillRect(deskX, ry + T * 1.8, T * 1.5, 2);
+    // 관리 단말 데스크
+    const tdX = rx + _rw - T * 2.3, tdY = ry + T * 1.8;
+    ctx.fillStyle = '#3a2c18';
+    ctx.fillRect(tdX, tdY, T * 1.8, T * 0.5);
+    ctx.fillStyle = '#5a4428';
+    ctx.fillRect(tdX, tdY, T * 1.8, 2);
+    ctx.fillStyle = '#1a0e04';
+    ctx.fillRect(tdX, tdY + T * 0.47, T * 1.8, 3);
+    drawMonitor(ctx, tdX + T * 0.35, tdY - T * 0.65, T * 0.9, T * 0.55, '#22c55e25', '#2d3340');
+    drawChair(ctx, tdX + T * 0.85, tdY + T * 0.65, '#22c55e');
   }
-
   ctx.restore();
 }
 
@@ -396,87 +716,231 @@ export function drawRoomFurniture(
       drawStandardFurniture(ctx, rx, ry, _rw, _rh, r.teamColor, 'server');
       break;
     case 'cron-center': {
-      // ── 바닥 — 서버룸 타일 패턴 ──────────────────────────────
-      ctx.fillStyle = '#e8eaef';
+      // ══════════════════════════════════════════════════════════
+      // 홀로그래픽 컨트롤 패널 스타일 — 블루프린트 + 서버 랙 믹스
+      // ══════════════════════════════════════════════════════════
+
+      // ── 1) 베이스 그라디언트 (상단 밝음 → 하단 어두움, 천장 라이트 시뮬) ──
+      const bgGrd = ctx.createLinearGradient(rx, ry, rx, ry + _rh);
+      bgGrd.addColorStop(0, '#0e1624');
+      bgGrd.addColorStop(0.45, '#070b13');
+      bgGrd.addColorStop(1, '#050810');
+      ctx.fillStyle = bgGrd;
       ctx.fillRect(rx + 1, ry + 1, _rw - 2, _rh - 2);
-      // 타일 그리드 (Gather Town 서버룸 스타일)
-      ctx.strokeStyle = '#d0d5dd';
+
+      // ── 2) 중앙 웜 라디얼 글로우 (공조 조명 느낌) ──
+      const cgX = rx + _rw / 2;
+      const cgY = ry + _rh / 2;
+      const cgR = Math.max(_rw, _rh) * 0.55;
+      const centerGlow = ctx.createRadialGradient(cgX, cgY, 0, cgX, cgY, cgR);
+      centerGlow.addColorStop(0, 'rgba(99,102,241,0.15)');
+      centerGlow.addColorStop(0.5, 'rgba(88,166,255,0.06)');
+      centerGlow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = centerGlow;
+      ctx.fillRect(rx + 1, ry + 1, _rw - 2, _rh - 2);
+
+      // ── 3) 블루프린트 그리드 — 세로/가로 얇은 라인 + 주요선 강조 ──
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rx + 1, ry + 1, _rw - 2, _rh - 2);
+      ctx.clip();
+      // minor grid (T 단위)
+      ctx.strokeStyle = 'rgba(88,166,255,0.06)';
       ctx.lineWidth = 0.5;
       for (let gx = rx; gx < rx + _rw; gx += T) {
-        ctx.beginPath(); ctx.moveTo(gx, ry); ctx.lineTo(gx, ry + _rh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx + 0.5, ry); ctx.lineTo(gx + 0.5, ry + _rh); ctx.stroke();
       }
       for (let gy = ry; gy < ry + _rh; gy += T) {
-        ctx.beginPath(); ctx.moveTo(rx, gy); ctx.lineTo(rx + _rw, gy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rx, gy + 0.5); ctx.lineTo(rx + _rw, gy + 0.5); ctx.stroke();
       }
-      // 바닥 반사광 — 각 워크스테이션 개별 glow (전체 폭 밴드 제거)
-      // 개별 그림자는 워크스테이션 렌더링 시 처리
+      // major grid (5T 단위) — 더 밝음
+      ctx.strokeStyle = 'rgba(88,166,255,0.14)';
+      ctx.lineWidth = 0.7;
+      for (let gx = rx; gx < rx + _rw; gx += T * 5) {
+        ctx.beginPath(); ctx.moveTo(gx + 0.5, ry); ctx.lineTo(gx + 0.5, ry + _rh); ctx.stroke();
+      }
+      for (let gy = ry; gy < ry + _rh; gy += T * 5) {
+        ctx.beginPath(); ctx.moveTo(rx, gy + 0.5); ctx.lineTo(rx + _rw, gy + 0.5); ctx.stroke();
+      }
 
-      // ── 크론 워크스테이션 — 카드 그리드 스타일 ─────────────────
+      // ── 4) 스캔라인 (2픽셀 간격 — CRT 느낌, 아주 은은하게) ──
+      ctx.fillStyle = 'rgba(0,0,0,0.10)';
+      for (let sy = ry; sy < ry + _rh; sy += 3) {
+        ctx.fillRect(rx + 1, sy, _rw - 2, 1);
+      }
 
+      // ── 5) 움직이는 스위프 라인 (fc 기반 — 40프레임 주기) ──
+      const sweepY = ry + ((fc * 0.8) % _rh);
+      const sweepGrd = ctx.createLinearGradient(rx, sweepY - 8, rx, sweepY + 8);
+      sweepGrd.addColorStop(0, 'rgba(99,102,241,0)');
+      sweepGrd.addColorStop(0.5, 'rgba(99,102,241,0.12)');
+      sweepGrd.addColorStop(1, 'rgba(99,102,241,0)');
+      ctx.fillStyle = sweepGrd;
+      ctx.fillRect(rx + 1, sweepY - 8, _rw - 2, 16);
+      ctx.restore();
+
+      // ── 6) 코너 마커 (홀로그램 UI 브래킷) ──
+      const cm = 14;
+      ctx.strokeStyle = 'rgba(99,102,241,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      // top-left
+      ctx.beginPath();
+      ctx.moveTo(rx + 3, ry + 3 + cm); ctx.lineTo(rx + 3, ry + 3); ctx.lineTo(rx + 3 + cm, ry + 3);
+      ctx.stroke();
+      // top-right
+      ctx.beginPath();
+      ctx.moveTo(rx + _rw - 3 - cm, ry + 3); ctx.lineTo(rx + _rw - 3, ry + 3); ctx.lineTo(rx + _rw - 3, ry + 3 + cm);
+      ctx.stroke();
+      // bottom-left
+      ctx.beginPath();
+      ctx.moveTo(rx + 3, ry + _rh - 3 - cm); ctx.lineTo(rx + 3, ry + _rh - 3); ctx.lineTo(rx + 3 + cm, ry + _rh - 3);
+      ctx.stroke();
+      // bottom-right
+      ctx.beginPath();
+      ctx.moveTo(rx + _rw - 3 - cm, ry + _rh - 3); ctx.lineTo(rx + _rw - 3, ry + _rh - 3); ctx.lineTo(rx + _rw - 3, ry + _rh - 3 - cm);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+
+      // ── 7) 상단 타이틀 텍스트 ──
+      ctx.font = 'bold 9px ui-monospace, "SF Mono", monospace';
+      ctx.fillStyle = 'rgba(147,197,253,0.55)';
+      ctx.textAlign = 'left';
+      ctx.fillText('◈ CRON OPS // REALTIME', rx + 22, ry + 13);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(99,102,241,0.75)';
+      ctx.fillText(`[${cronItems.length.toString().padStart(3, '0')} ACTIVE]`, rx + _rw - 22, ry + 13);
+
+      // ══════════════════════════════════════════════════════════
+      // 워크스테이션 카드 — 3D 칩 스타일 (드롭섀도 + 이너 그라디언트 + 글로우)
+      // ══════════════════════════════════════════════════════════
       cronItems.forEach((cron, i) => {
         const { tx, ty } = getCronTilePos(r, i);
         const snx = tx * T - (r.x * T - rx) + T / 2;
         const sny = ty * T - (r.y * T - ry) + T / 2;
 
-        // 화면 밖이면 skip
         if (snx < rx - 80 || snx > _rw + rx + 80 || sny < ry - 40 || sny > _rh + ry + 40) return;
 
-        // 상태별 색상
-        const statusConfig = {
-          success: { bg: '#ecfdf5', border: '#22c55e', text: '#4ade80', label: '성공' },
-          failed:  { bg: '#fef2f2', border: '#f85149', text: '#f87171', label: '실패' },
-          running: { bg: '#eff6ff', border: '#58a6ff', text: '#93c5fd', label: '실행중' },
-          skipped: { bg: '#fffbeb', border: '#d29922', text: '#fbbf24', label: '스킵' },
-          unknown: { bg: '#f5f6f8', border: '#374151', text: '#6b7280', label: '-' },
+        type StatusKey = 'success' | 'failed' | 'running' | 'skipped' | 'unknown';
+        const statusConfig: Record<StatusKey, { bgTop: string; bgBot: string; border: string; glow: string; text: string }> = {
+          success: { bgTop: '#102a1a', bgBot: '#061208', border: '#22c55e', glow: 'rgba(34,197,94,0.35)', text: '#86efac' },
+          failed:  { bgTop: '#2a0e0e', bgBot: '#140505', border: '#f85149', glow: 'rgba(248,81,73,0.40)', text: '#fca5a5' },
+          running: { bgTop: '#0e1e35', bgBot: '#050a14', border: '#58a6ff', glow: 'rgba(88,166,255,0.45)', text: '#93c5fd' },
+          skipped: { bgTop: '#241a05', bgBot: '#120c02', border: '#d29922', glow: 'rgba(210,153,34,0.35)', text: '#fbbf24' },
+          unknown: { bgTop: '#1a2030', bgBot: '#0a0e17', border: '#4b5563', glow: 'rgba(75,85,99,0.20)', text: '#9ca3af' },
         };
-        const st = statusConfig[cron.status] || statusConfig.unknown;
+        const st = statusConfig[(cron.status as StatusKey)] || statusConfig.unknown;
 
-        // 카드 크기
         const cardW = T * 4.2;
         const cardH = T * 1.0;
         const cx = snx - cardW / 2;
         const cy = sny - cardH / 2;
+        const rad = 5;
 
-        // 카드 배경 (상태색 배경)
-        ctx.fillStyle = st.bg;
+        // ── 드롭섀도 (소프트 블랙, 아래로 3px) ──
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = st.bgBot;
         ctx.beginPath();
-        ctx.roundRect(cx, cy, cardW, cardH, 4);
+        ctx.roundRect(cx, cy, cardW, cardH, rad);
         ctx.fill();
+        ctx.restore();
 
-        // 카드 테두리 (상태색)
-        ctx.strokeStyle = st.border + '80';
-        ctx.lineWidth = 1.5;
+        // ── 외곽 글로우 halo (상태별) ──
+        ctx.save();
+        ctx.shadowColor = st.glow;
+        ctx.shadowBlur = cron.status === 'failed' || cron.status === 'running' ? 8 : 4;
+        ctx.strokeStyle = st.border;
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(cx, cy, cardW, cardH, 4);
+        ctx.roundRect(cx + 0.5, cy + 0.5, cardW - 1, cardH - 1, rad);
         ctx.stroke();
+        ctx.restore();
 
-        // 상태 점 (좌측)
-        ctx.fillStyle = st.border;
+        // ── 이너 그라디언트 (상단 밝음 → 하단 어두움, 3D 칩 엣지) ──
+        const innerGrd = ctx.createLinearGradient(cx, cy, cx, cy + cardH);
+        innerGrd.addColorStop(0, st.bgTop);
+        innerGrd.addColorStop(0.6, st.bgBot);
+        innerGrd.addColorStop(1, st.bgBot);
+        ctx.fillStyle = innerGrd;
         ctx.beginPath();
-        ctx.arc(cx + 8, cy + cardH / 2, 3, 0, Math.PI * 2);
+        ctx.roundRect(cx + 1, cy + 1, cardW - 2, cardH - 2, rad - 1);
         ctx.fill();
 
-        // 이름 (점 오른쪽)
-        const displayName = cron.name.length > 16 ? cron.name.slice(0, 15) + '…' : cron.name;
-        ctx.font = 'bold 8px -apple-system, BlinkMacSystemFont, sans-serif';
-        ctx.fillStyle = '#2d3340';
-        ctx.textAlign = 'left';
-        ctx.fillText(displayName, cx + 15, cy + cardH / 2 + 3);
+        // ── 상단 하이라이트 라인 (베벨 탑) ──
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(cx + 1, cy + 1, cardW - 2, cardH - 2, rad - 1);
+        ctx.clip();
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(cx + 1, cy + 1, cardW - 2, 1);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(cx + 1, cy + 2, cardW - 2, 1);
+        ctx.restore();
 
-        // 팀 이모지 (우측)
+        // ── 좌측 상태 바 (세로 색상 바 — 2px 두께) ──
+        ctx.fillStyle = st.border;
+        ctx.fillRect(cx + 2, cy + 3, 2, cardH - 6);
+
+        // ── 상태 LED 점 (좌측 바 오른쪽, running은 펄스) ──
+        const ledX = cx + 10;
+        const ledY = cy + cardH / 2;
+        if (cron.status === 'running') {
+          const pulse = 0.5 + 0.5 * Math.sin(fc * 0.15 + i * 0.3);
+          ctx.save();
+          ctx.shadowColor = st.border;
+          ctx.shadowBlur = 4 + pulse * 4;
+          ctx.fillStyle = st.border;
+          ctx.beginPath();
+          ctx.arc(ledX, ledY, 2.2 + pulse * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.shadowColor = st.glow;
+          ctx.shadowBlur = 3;
+          ctx.fillStyle = st.border;
+          ctx.beginPath();
+          ctx.arc(ledX, ledY, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // ── 이름 라벨 ──
+        const displayName = cron.name.length > 16 ? cron.name.slice(0, 15) + '…' : cron.name;
+        ctx.font = 'bold 8px ui-monospace, "SF Mono", monospace';
+        ctx.fillStyle = '#e6edf3';
+        ctx.textAlign = 'left';
+        ctx.fillText(displayName, cx + 16, cy + cardH / 2 - 2);
+
+        // ── 상태 서브 라벨 (이름 아래 작게) ──
+        ctx.font = '6px ui-monospace, monospace';
+        ctx.fillStyle = st.text;
+        const subLabel = cron.status === 'success' ? 'OK' : cron.status === 'failed' ? 'ERR' : cron.status === 'running' ? 'RUN' : cron.status === 'skipped' ? 'SKIP' : '---';
+        ctx.fillText(subLabel, cx + 16, cy + cardH / 2 + 6);
+
+        // ── 우측 인덱스 넘버 (#001) ──
+        ctx.font = '6px ui-monospace, monospace';
+        ctx.fillStyle = 'rgba(147,197,253,0.35)';
+        ctx.textAlign = 'right';
+        ctx.fillText(`#${(i + 1).toString().padStart(3, '0')}`, cx + cardW - 6, cy + cardH / 2 - 2);
+
+        // ── 팀 이모지 (우측, 인덱스 아래) ──
         if (cron.teamEmoji) {
           ctx.font = '7px sans-serif';
           ctx.textAlign = 'right';
-          ctx.fillText(cron.teamEmoji, cx + cardW - 4, cy + cardH / 2 + 3);
+          ctx.fillText(cron.teamEmoji, cx + cardW - 6, cy + cardH / 2 + 6);
         }
       });
 
       // 빈 방 안내
       if (cronItems.length === 0) {
-        ctx.fillStyle = '#9ca3af';
-        ctx.font = '11px monospace';
+        ctx.fillStyle = 'rgba(147,197,253,0.6)';
+        ctx.font = '11px ui-monospace, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('크론 데이터 로딩 중...', rx + _rw / 2, ry + _rh / 2);
+        ctx.fillText('◈ LOADING CRON TELEMETRY ◈', rx + _rw / 2, ry + _rh / 2);
       }
       break;
     }
@@ -539,36 +1003,85 @@ function drawWallArt(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: n
 
 // ── 커피 스테이션 ──
 function drawCoffeeStation(ctx: CanvasRenderingContext2D, px: number, py: number) {
-  // 카운터 (목재)
-  ctx.fillStyle = '#6b4423';
+  // 카운터 그림자
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
+
+  // 카운터 상면 (어두운 목재)
+  ctx.fillStyle = '#3a2010';
   ctx.fillRect(px - 10, py - 2, 32, 14);
-  ctx.fillStyle = '#8b5a2b';
+  // top highlight
+  ctx.fillStyle = '#5a3520';
   ctx.fillRect(px - 10, py - 2, 32, 2);
-  // 커피 머신
-  ctx.fillStyle = '#2a2d36';
-  ctx.fillRect(px - 6, py - 10, 12, 10);
-  ctx.fillStyle = '#4a5060';
-  ctx.fillRect(px - 5, py - 9, 10, 3);
-  // 머신 스크린 (파란 LED)
+  // front edge face
+  ctx.fillStyle = '#1a0e04';
+  ctx.fillRect(px - 10, py + 10, 32, 4);
+  // right edge
+  ctx.fillStyle = '#2a1808';
+  ctx.fillRect(px + 20, py - 2, 3, 14);
+
+  ctx.restore();
+
+  // 커피 머신 본체 (3-shade metal)
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = '#1e2430';
+  ctx.fillRect(px - 6, py - 12, 12, 12);
+  ctx.restore();
+  ctx.fillStyle = '#2a3040';  // top face
+  ctx.fillRect(px - 6, py - 12, 12, 12);
+  ctx.fillStyle = '#3a4050';  // top highlight
+  ctx.fillRect(px - 6, py - 12, 12, 2);
+  ctx.fillStyle = '#0d1117';  // right shadow
+  ctx.fillRect(px + 5, py - 12, 2, 12);
+
+  // 머신 스크린 (파란 LED — glow)
+  ctx.fillStyle = '#58a6ff30';
+  ctx.fillRect(px - 5, py - 10, 6, 4);
   ctx.fillStyle = '#58a6ff';
-  ctx.fillRect(px - 4, py - 8, 3, 2);
+  ctx.fillRect(px - 4, py - 9, 4, 2);
+  // 스크린 반사
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(px - 4, py - 9, 4, 1);
+
+  // 커피 추출구 (하단)
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(px - 3, py - 4, 6, 3);
+
   // 커피 컵
-  ctx.fillStyle = '#f5f5f4';
-  ctx.fillRect(px - 3, py - 3, 3, 4);
-  ctx.fillStyle = '#6b4423';
-  ctx.fillRect(px - 3, py - 3, 3, 1);
+  ctx.fillStyle = '#e8e0d0';
+  ctx.fillRect(px - 3, py - 3, 4, 5);
+  ctx.fillStyle = '#6b4010';  // 커피
+  ctx.fillRect(px - 3, py - 3, 4, 1.5);
+  ctx.fillStyle = 'rgba(180,120,60,0.3)';  // 크레마
+  ctx.fillRect(px - 3, py - 3, 4, 0.8);
+
   // 뜨거운 증기
-  ctx.strokeStyle = 'rgba(200,220,255,0.5)';
-  ctx.lineWidth = 0.6;
+  ctx.strokeStyle = 'rgba(200,220,255,0.4)';
+  ctx.lineWidth = 0.7;
   ctx.beginPath();
   ctx.moveTo(px - 1.5, py - 4);
-  ctx.quadraticCurveTo(px, py - 7, px - 1, py - 9);
+  ctx.quadraticCurveTo(px, py - 8, px - 1, py - 11);
   ctx.stroke();
-  // 사이드 상품 (원두 포장)
-  ctx.fillStyle = '#78350f';
-  ctx.fillRect(px + 10, py - 5, 6, 8);
+  ctx.beginPath();
+  ctx.moveTo(px + 1, py - 4);
+  ctx.quadraticCurveTo(px + 2, py - 7, px + 1, py - 10);
+  ctx.stroke();
+
+  // 사이드 상품 (원두 포장 — 3D)
+  ctx.fillStyle = '#4a1e08';
+  ctx.fillRect(px + 10, py - 6, 7, 10);
+  ctx.fillStyle = '#6a2e10';  // top highlight
+  ctx.fillRect(px + 10, py - 6, 7, 2);
+  ctx.fillStyle = '#2a0e04';  // right shadow
+  ctx.fillRect(px + 15, py - 6, 2, 10);
   ctx.fillStyle = '#c9a227';
-  ctx.fillRect(px + 11, py - 3, 4, 1);
+  ctx.fillRect(px + 11, py - 3, 5, 1);
+  ctx.fillStyle = '#c9a22770';
+  ctx.fillRect(px + 11, py - 1, 5, 1);
 }
 
 // ── 복사기 ──
@@ -641,22 +1154,26 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   // Water cooler #1 (Row1-Row2 복도 좌측)
   const wcx = 1 * T - camX + T / 2;
   const wcy = 10 * T - camY;
-  ctx.fillStyle = '#b0b8c4';
+  ctx.fillStyle = '#2d3340';
   ctx.fillRect(wcx - 5, wcy - 2, 10, 12);
-  ctx.fillStyle = '#58a6ff40';
-  ctx.fillRect(wcx - 4, wcy - 10, 8, 10);
   ctx.fillStyle = '#58a6ff50';
+  ctx.fillRect(wcx - 4, wcy - 10, 8, 10);
+  ctx.fillStyle = '#58a6ff70';
   ctx.fillRect(wcx - 4, wcy - 10, 8, 4);
+  ctx.strokeStyle = '#30363d'; ctx.lineWidth = 0.5;
+  ctx.strokeRect(wcx - 5, wcy - 2, 10, 12);
 
   // Water cooler #2 (Row1-Row2 복도 우측)
   const wcx2 = 53 * T - camX + T / 2;
   const wcy2 = 10 * T - camY;
-  ctx.fillStyle = '#b0b8c4';
+  ctx.fillStyle = '#2d3340';
   ctx.fillRect(wcx2 - 5, wcy2 - 2, 10, 12);
-  ctx.fillStyle = '#58a6ff40';
-  ctx.fillRect(wcx2 - 4, wcy2 - 10, 8, 10);
   ctx.fillStyle = '#58a6ff50';
+  ctx.fillRect(wcx2 - 4, wcy2 - 10, 8, 10);
+  ctx.fillStyle = '#58a6ff70';
   ctx.fillRect(wcx2 - 4, wcy2 - 10, 8, 4);
+  ctx.strokeStyle = '#30363d'; ctx.lineWidth = 0.5;
+  ctx.strokeRect(wcx2 - 5, wcy2 - 2, 10, 12);
 
   // Vending machine (로비 우측)
   const vmx = 53 * T - camX;
@@ -701,9 +1218,9 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
     ctx.fillRect(nbx + 3 + i * 14, nby + 14, 10, 6);
   }
 
-  // ── 복도 카펫 러너 (다크 네이비, 미묘한 스트라이프) ──
-  const carpetColor = '#e8e0d8';
-  const carpetEdge = '#d5cdc5';
+  // ── 복도 카펫 러너 (다크 네이비 — 고급 호텔 복도 느낌) ──
+  const carpetColor = '#1a2240';
+  const carpetEdge = '#0f1628';
   for (const corridorY of [10, 18]) {
     for (let cx = 2; cx < 54; cx++) {
       const csx = cx * T - camX;
@@ -711,13 +1228,16 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
       // 러너 바탕 (2타일 높이 × 1타일 폭)
       ctx.fillStyle = carpetColor;
       ctx.fillRect(csx, csy + T * 0.3, T, T * 1.4);
-      // 러너 테두리 (좌우 스트라이프)
+      // 러너 테두리 (좌우 골드 스트라이프)
+      ctx.fillStyle = '#c9a22730';
+      ctx.fillRect(csx, csy + T * 0.3, T, 1.5);
+      ctx.fillRect(csx, csy + T * 1.68, T, 1.5);
       ctx.fillStyle = carpetEdge;
-      ctx.fillRect(csx, csy + T * 0.3, T, 2);
-      ctx.fillRect(csx, csy + T * 1.68, T, 2);
-      // 미세 다이아몬드 패턴 (4타일마다)
+      ctx.fillRect(csx, csy + T * 0.3 + 1.5, T, 1);
+      ctx.fillRect(csx, csy + T * 1.67 - 1, T, 1);
+      // 미세 다이아몬드 패턴 (4타일마다) — 골드 포인트
       if (cx % 4 === 0) {
-        ctx.fillStyle = '#d8d0c8';
+        ctx.fillStyle = '#c9a22728';
         ctx.beginPath();
         ctx.moveTo(csx + T / 2, csy + T * 0.5);
         ctx.lineTo(csx + T * 0.8, csy + T);
@@ -739,18 +1259,30 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   for (const bp of benchPositions) {
     const bpx = bp.x * T - camX;
     const bpy = bp.y * T - camY;
-    ctx.fillStyle = '#6a7080';
+    // Bench shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(bpx + 2, bpy + T * 0.5 + 1, T * 1.5 - 2, 2);
+    // Bench seat (dark wood)
+    ctx.fillStyle = '#2a1e12';
     ctx.beginPath();
-    ctx.roundRect(bpx, bpy, T * 1.5, T * 0.5, 3);
+    if (ctx.roundRect) ctx.roundRect(bpx, bpy, T * 1.5, T * 0.5, 3);
+    else ctx.rect(bpx, bpy, T * 1.5, T * 0.5);
     ctx.fill();
-    ctx.fillStyle = '#5a6070';
-    ctx.fillRect(bpx + 2, bpy - 2, T * 1.5 - 4, 4);
-    ctx.fillStyle = '#9ca3af40';
+    // Seat highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(bpx + 2, bpy + 1, T * 1.5 - 4, 1);
+    // Back rest (raised dark)
+    ctx.fillStyle = '#1e1510';
+    ctx.fillRect(bpx + 2, bpy - 3, T * 1.5 - 4, 4);
+    // Seat cushions
+    ctx.fillStyle = '#21262d';
     ctx.beginPath();
-    ctx.roundRect(bpx + 3, bpy + 2, T * 0.6, T * 0.35, 2);
+    if (ctx.roundRect) ctx.roundRect(bpx + 3, bpy + 2, T * 0.6, T * 0.35, 2);
+    else ctx.rect(bpx + 3, bpy + 2, T * 0.6, T * 0.35);
     ctx.fill();
     ctx.beginPath();
-    ctx.roundRect(bpx + T * 0.75, bpy + 2, T * 0.6, T * 0.35, 2);
+    if (ctx.roundRect) ctx.roundRect(bpx + T * 0.75, bpy + 2, T * 0.6, T * 0.35, 2);
+    else ctx.rect(bpx + T * 0.75, bpy + 2, T * 0.6, T * 0.35);
     ctx.fill();
   }
 
@@ -798,7 +1330,7 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   for (const arr of arrowPositions) {
     const ax = arr.x * T - camX + T / 2;
     const ay = arr.y * T - camY + T / 2;
-    ctx.fillStyle = '#00000008';
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
     ctx.beginPath();
     if (arr.dir === 'right') {
       ctx.moveTo(ax - 6, ay - 3);
@@ -839,6 +1371,15 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   ctx.beginPath();
   ctx.arc(clockX, clockCY, clockR + 2, 0, Math.PI * 2);
   ctx.fill();
+  // Clock backing (dark surround glow)
+  ctx.save();
+  ctx.shadowColor = 'rgba(201,162,39,0.3)';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#c9a227';
+  ctx.beginPath();
+  ctx.arc(clockX, clockCY, clockR + 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
   // Clock face
   ctx.fillStyle = '#f8f4ea';
   ctx.beginPath();
@@ -904,18 +1445,24 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   for (const lp of lightPositions) {
     const lx = lp.x * T - camX + T / 2;
     const ly = lp.y * T - camY + T / 2;
-    // 바닥 조명 원 (다크 배경에 약한 warm glow)
-    const lightGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, T * 2.2);
-    lightGlow.addColorStop(0, 'rgba(200,180,100,0.06)');
-    lightGlow.addColorStop(0.4, 'rgba(200,180,100,0.03)');
+    // 바닥 조명 원 (다크 배경에 warm glow — 더 강하게)
+    const lightGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, T * 2.5);
+    lightGlow.addColorStop(0, 'rgba(220,190,100,0.18)');
+    lightGlow.addColorStop(0.35, 'rgba(200,170,80,0.08)');
+    lightGlow.addColorStop(0.7, 'rgba(180,150,60,0.03)');
     lightGlow.addColorStop(1, 'transparent');
     ctx.fillStyle = lightGlow;
-    ctx.fillRect(lx - T * 2.2, ly - T * 2.2, T * 4.4, T * 4.4);
-    // 천장 등기구 표시 (작은 등)
-    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    ctx.fillRect(lx - T * 2.5, ly - T * 2.5, T * 5, T * 5);
+    // 천장 등기구 표시 (밝게)
+    ctx.fillStyle = 'rgba(255,255,200,0.20)';
     ctx.fillRect(lx - 6, ly - T * 0.4, 12, 3);
-    ctx.fillStyle = 'rgba(255,255,200,0.25)';
+    ctx.fillStyle = 'rgba(255,255,220,0.90)';
     ctx.fillRect(lx - 4, ly - T * 0.4 + 1, 8, 1);
+    // 등기구 미세 glow spot
+    ctx.fillStyle = 'rgba(255,240,180,0.35)';
+    ctx.beginPath();
+    ctx.arc(lx, ly - T * 0.38, 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Lobby welcome mat near entrance (Row1 위쪽, 다크)

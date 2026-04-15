@@ -668,8 +668,8 @@ export default function VirtualOffice() {
         ctx!.shadowBlur = 6;
         ctx!.shadowOffsetX = 2;
         ctx!.shadowOffsetY = 3;
-        // 러그 본체 (팀 컬러 베이스)
-        ctx!.fillStyle = r.teamColor + 'aa';
+        // 러그 본체 (팀 컬러 베이스 — 30% 불투명도로 카펫 텍스처 살림)
+        ctx!.fillStyle = r.teamColor + '4d';
         ctx!.fillRect(rugX, rugY, rugW, rugH);
         ctx!.restore();
 
@@ -682,19 +682,19 @@ export default function VirtualOffice() {
         for (let wy = 0; wy < rugH; wy += weaveSize) {
           for (let wx = 0; wx < rugW; wx += weaveSize) {
             if (((Math.floor(wx / weaveSize) + Math.floor(wy / weaveSize)) % 2) === 0) {
-              ctx!.fillStyle = 'rgba(255,255,255,0.12)';
+              ctx!.fillStyle = 'rgba(255,255,255,0.10)';
               ctx!.fillRect(rugX + wx, rugY + wy, weaveSize, weaveSize);
             }
           }
         }
-        // 러그 가장자리 프린지 (상하)
-        ctx!.fillStyle = r.teamColor + 'e0';
+        // 러그 가장자리 프린지 (상하 — 색상 강도 낮춤)
+        ctx!.fillStyle = r.teamColor + '70';
         for (let i = 0; i < rugW; i += 3) {
           ctx!.fillRect(rugX + i, rugY - 2, 2, 2);
           ctx!.fillRect(rugX + i, rugY + rugH, 2, 2);
         }
-        // 러그 테두리 (어두운 선)
-        ctx!.strokeStyle = r.teamColor + 'ff';
+        // 러그 테두리 (팀 컬러 테두리 — 50% 불투명도)
+        ctx!.strokeStyle = r.teamColor + '80';
         ctx!.lineWidth = 1.5;
         ctx!.strokeRect(rugX + 1, rugY + 1, rugW - 2, rugH - 2);
         // 내부 데코 선 (인셋)
@@ -928,10 +928,10 @@ export default function VirtualOffice() {
         }
       }
 
-      // 팀 컬러 바닥 러그 (40% — 확실한 구분)
+      // 팀 컬러 바닥 러그 (15% — 바닥 텍스처 살리면서 팀 구분)
       const rugPadX = rw * 0.1;
       const rugPadY = rh * 0.1;
-      ctx!.fillStyle = r.teamColor + '40';
+      ctx!.fillStyle = r.teamColor + '26';
       ctx!.fillRect(rx + rugPadX, ry + rugPadY, rw - rugPadX * 2, rh - rugPadY * 2);
 
       // Inner shadow along walls (subtle on bright)

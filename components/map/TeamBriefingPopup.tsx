@@ -258,7 +258,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                           background: teamColorHex + '12', border: `1px solid ${teamColorHex}25`,
                           borderRadius: 20, fontSize: 11, color: teamColorHex,
                         }}>
-                          {briefing.schedule && <span>📅 {briefing.schedule}</span>}
+                          {briefing.schedule && <span>📅 {cronToHuman(briefing.schedule)}</span>}
                           {briefing.schedule && briefing.title && <span>·</span>}
                           {briefing.title && <span>{briefing.title}</span>}
                         </div>
@@ -347,7 +347,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                     </div>
                     {briefing.schedule && (
                       <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', background: teamColorHex + '12', border: `1px solid ${teamColorHex}25`, borderRadius: 20, fontSize: 11, color: teamColorHex }}>
-                        📅 {briefing.schedule}
+                        📅 {cronToHuman(briefing.schedule)}
                       </div>
                     )}
                   </div>
@@ -1044,7 +1044,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               {/* 팀장 AI 질문 버튼 */}
               <div style={{ marginTop: 4, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 11, color: '#484f58' }}>
-                  {briefing.schedule ? `다음 실행: ${briefing.schedule}` : ''}
+                  {briefing.schedule ? `다음 실행: ${cronToHuman(briefing.schedule)}` : ''}
                 </span>
                 <button
                   onClick={() => { setChatPanelOpen(true); if (isMobile) setMobileTab('chat'); }}

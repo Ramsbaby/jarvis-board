@@ -245,6 +245,7 @@ export default function VirtualOffice() {
     setBriefing(null);
     setActiveRoom(room);
     setChatResp('');
+    setTooltipRoom(null);
 
     const entityId = room.entityId;
 
@@ -2793,6 +2794,7 @@ export default function VirtualOffice() {
 
       {/* ── Team Briefing Popup (크론 상세/그리드 팝업 열려있으면 숨김) ── */}
       <TeamBriefingPopup
+        key={activeRoom?.entityId || activeRoom?.id || ''}
         popupOpen={popupOpen && !cronPopup && !cronGridOpen}
         popupLoading={popupLoading}
         briefing={briefing}

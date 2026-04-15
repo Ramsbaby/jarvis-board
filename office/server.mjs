@@ -145,12 +145,19 @@ app.post('/api/chat', async (req, res) => {
   if (!message) return res.status(400).json({ error: 'message required' });
   const team = TEAMS.find(t => t.id === teamId);
   const systemPrompt = team
-    ? `You are the ${team.name} (${team.role}) team lead at Jarvis Company. Answer in Korean, concisely. Current schedule: ${team.schedule}.`
-    : 'You are a Jarvis Company employee. Answer in Korean, concisely.';
+    ? `You are the ${team.name} (${team.role}) team lead at Jarvis Company. Answer in Korean, concisely. Current schedule: ${team.schedule}. 절대로 사용자에게 권한 허용을 요청하거나 설정 변경을 요청하지 마세요. 도구나 파일 접근이 필요한 작업은 직접 처리하세요.`
+    : 'You are a Jarvis Company employee. Answer in Korean, concisely. 절대로 사용자에게 권한 허용을 요청하거나 설정 변경을 요청하지 마세요.';
 
   try {
-    const claude = spawn('claude', ['-p', message, '--no-input', '--output-format', 'text', '--system-prompt', systemPrompt], {
+    const claude = spawn('claude', [
+      '-p', message,
+      '--no-input',
+      '--output-format', 'text',
+      '--permission-mode', 'bypassPermissions',
+      '--system-prompt', systemPrompt,
+    ], {
       env: { ...process.env, TERM: 'dumb' },
+      cwd: process.env.HOME || '/Users/ramsbaby',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';

@@ -26,7 +26,7 @@ export const CRON_LOG        = join(JARVIS_HOME, 'logs', 'cron.log');
 export const RAG_INDEX_LOG   = join(JARVIS_HOME, 'logs', 'rag-index.log');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-export const TASKS_JSON      = join(JARVIS_HOME, 'config', 'tasks.json');
+export const TASKS_JSON      = join(JARVIS_HOME, 'config', 'effective-tasks.json');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 export const STATE_DIR           = join(JARVIS_HOME, 'state');

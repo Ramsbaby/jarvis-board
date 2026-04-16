@@ -5,6 +5,7 @@ import { exec, spawn } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
 import { TASKS_JSON as TASKS_FILE, CRON_LOG, JARVIS_HOME as JARVIS } from '@/lib/jarvis-paths';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 const HOME = homedir();
 
@@ -109,6 +110,15 @@ function buildLlmAlternatives(task: TaskDef): AltAction[] {
 }
 
 export async function POST(req: NextRequest) {
+  // ── 인증 확인 (defense-in-depth: middleware 1차 + route handler 2차) ──
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner) {
+    return NextResponse.json<RetryResponse>(
+      { success: false, message: '크론 재실행은 오너 인증이 필요합니다.' },
+      { status: 403 },
+    );
+  }
+
   try {
     const { cronId } = (await req.json()) as { cronId?: string };
     if (!cronId) {

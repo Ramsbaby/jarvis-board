@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { TASKS_JSON } from '@/lib/jarvis-paths';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 interface TaskDef {
   id: string;
@@ -27,6 +28,15 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // ── 인증 확인 (defense-in-depth: middleware 1차 + route handler 2차) ──
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner) {
+    return NextResponse.json(
+      { error: '크론 설정 변경은 오너 인증이 필요합니다.' },
+      { status: 403 },
+    );
+  }
+
   const { id: cronId } = await params;
   if (!cronId) {
     return NextResponse.json({ error: 'cronId는 필수입니다.' }, { status: 400 });

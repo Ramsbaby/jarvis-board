@@ -236,8 +236,10 @@ export interface BriefingData {
 }
 
 // ── 크론 아이템 (api/crons) ───────────────────────────────────
+export type CronStatus = 'success' | 'failed' | 'skipped' | 'running' | 'unknown';
+
 export interface RecentRun {
-  status: 'success' | 'failed' | 'skipped' | 'running' | 'unknown';
+  status: CronStatus;
   timestamp: string;
   message: string;
 }
@@ -248,12 +250,12 @@ export interface CronItem {
   description: string;
   schedule: string;
   scheduleHuman: string;
-  status: 'success' | 'failed' | 'skipped' | 'running' | 'unknown';
+  status: CronStatus;
   lastRun: string | null;
   lastResult: string;
   lastMessage: string;
-  lastDuration: string;
-  outputSummary: string;
+  lastDuration: string;      // "2s", "15s" 등
+  outputSummary: string;     // 실제 출력 요약 (노이즈 제거)
   nextRun: string | null;
   team: string;
   teamEmoji: string;

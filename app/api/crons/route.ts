@@ -2,14 +2,14 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync, statSync, readdirSync } from 'fs';
 import { CRON_LOG_LINE_RE, SKIP_TASK_RE } from '@/lib/map/cron-log-parser';
+import type { CronItem, CronStatus, RecentRun } from '@/lib/map/rooms';
+import { TEAM_REGISTRY } from '@/lib/map/team-registry';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { TASKS_JSON as TASKS_FILE, CRON_LOG, LOGS_DIR as LOG_DIR } from '@/lib/jarvis-paths';
 const MAX_LOG_READ_BYTES = 8000;
 
 let cache: { data: CronsResponse; ts: number } | null = null;
-
-type CronStatus = 'success' | 'failed' | 'skipped' | 'running' | 'unknown';
 
 interface TaskDef {
   id: string;
@@ -24,70 +24,30 @@ interface TaskDef {
   description?: string;
 }
 
-export interface RecentRun {
-  status: CronStatus;
-  timestamp: string;
-  message: string;
-}
-
-interface CronItem {
-  id: string;
-  name: string;
-  description: string;
-  schedule: string;
-  scheduleHuman: string;
-  status: CronStatus;
-  lastRun: string | null;
-  lastResult: string;
-  lastMessage: string;
-  lastDuration: string;      // "2s", "15s" 등
-  outputSummary: string;     // 실제 출력 요약 (노이즈 제거)
-  nextRun: string | null;
-  team: string;
-  teamEmoji: string;
-  priority: string;
-  hasLLM: boolean;
-  hasScript: boolean;
-  disabled?: boolean;
-  recentRuns: RecentRun[];
-}
-
 interface CronsResponse {
   crons: CronItem[];
   total: number;
   generatedAt: string;
 }
 
-// ── 팀 분류 ──────────────────────────────────────────────────────
-interface TeamRule {
-  id: string;
-  label: string;
-  emoji: string;
-  keywords: string[];
-}
-
-const TEAM_RULES: TeamRule[] = [
-  // 신설 재무실 — 돈 관련 (AI 비용 + 시장 + 개인 수입 통합). 순서 중요: 먼저 매칭
-  { id: 'finance', label: '재무실', emoji: '💰', keywords: ['tqqq', 'market', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule', 'boram'] },
-  { id: 'infra', label: 'SRE실', emoji: '⚙️', keywords: ['disk', 'system-doctor', 'system-health', 'infra', 'sync-system-metrics', 'glances', 'aggregate-metrics', 'health', 'log-cleanup', 'memory-cleanup', 'rate-limit', 'update-usage-cache', 'token-sync', 'daily-usage-check', 'security-scan', 'scorecard-enforcer'] },
-  // 전략기획실 — market/tqqq/finance 계열 재무실로 이관됨. 순수 트렌드/뉴스만
-  { id: 'info', label: '전략기획실', emoji: '📡', keywords: ['news', 'trend', 'github-monitor', 'calendar-alert', 'recon'] },
-  // 자료실 — 데이터실 업무 중 사용자 접근 레이어 (RAG 인덱스/벤치). 데이터실보다 먼저 매칭 필요
-  { id: 'library', label: '자료실', emoji: '📖', keywords: ['rag-index', 'rag-bench'] },
-  { id: 'record', label: '데이터실', emoji: '🗄️', keywords: ['record', 'memory', 'rag', 'session', 'vault', 'gen-system-overview'] },
-  // 인재개발실 = 구 학습팀 + 구 커리어팀 통합 (면접 + 기술 학습)
-  { id: 'growth', label: '인재개발실', emoji: '🌱', keywords: ['career', 'interview', 'commitment', 'job', 'resume', 'isg', 'growth', 'academy', 'learning', 'study', 'lecture'] },
-  { id: 'brand', label: '마케팅실', emoji: '📣', keywords: ['brand', 'blog', 'oss', 'openclaw', 'github-star', 'stars'] },
-  { id: 'audit', label: 'QA실', emoji: '🔍', keywords: ['audit', 'e2e', 'cron-failure', 'regression', 'doc-sync', 'doc-supervisor', 'code-auditor', 'cron-auditor', 'stale-task', 'kpi', 'roi', 'bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval'] },
-  // 대표실 (구 CEO/임원실 + 오너 공간)
-  { id: 'exec', label: '대표실', emoji: '🏛️', keywords: ['board', 'ceo', 'council', 'morning-standup', 'daily-summary', 'schedule-coherence', 'monthly-review', 'connections-weekly', 'private-sync', 'dev-runner', 'jarvis-coder', 'agent-batch-commit', 'weekly-code-review', 'weekly-usage-stats'] },
-];
+// ── 팀 분류 (SSoT: TEAM_REGISTRY) ──────────────────────────────
+// 매칭 우선순위: finance → library 를 record 보다 먼저 시도해야 키워드 겹침 방지
+const TEAM_CLASSIFY_ORDER = [
+  'finance', 'infra-lead', 'trend-lead',
+  'library', 'record-lead',
+  'growth-lead', 'brand-lead', 'audit-lead',
+  'secretary', 'standup', 'dev-queue', 'president',
+] as const;
 
 function classifyTeam(taskId: string): { label: string; emoji: string } {
   const lower = taskId.toLowerCase();
-  for (const rule of TEAM_RULES) {
-    if (rule.keywords.some(kw => lower.includes(kw))) {
-      return { label: rule.label, emoji: rule.emoji };
+  for (const key of TEAM_CLASSIFY_ORDER) {
+    const entry = TEAM_REGISTRY[key];
+    if (!entry) continue;
+    if (entry.keywords.some(kw => lower.includes(kw))) {
+      const label = entry.name.includes(' · ') ? entry.name.split(' · ')[0] : entry.name;
+      const emoji = entry.avatar || entry.icon || '❓';
+      return { label, emoji };
     }
   }
   return { label: '미분류', emoji: '❓' };

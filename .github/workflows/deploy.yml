@@ -7,7 +7,7 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Deploy to production
         run: bash ~/.jarvis/scripts/board-auto-deploy.sh

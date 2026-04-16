@@ -144,157 +144,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── LLM 태스크 (prompt 또는 prompt_file): jarvis-cron.sh를 detached 실행 ──
-    const isLlmTask = !task.script && (task.prompt || task.prompt_file);
-    if (isLlmTask) {
-      const preview = (task.prompt || `(prompt_file: ${task.prompt_file})`).replace(/\s+/g, ' ').trim().slice(0, 240);
-      // jarvis-cron.sh를 detached spawn (prompt_file 포함 모든 LLM 태스크)
-      const llmRunner = path.join(JARVIS, 'bin', 'jarvis-cron.sh');
-
-      if (!existsSync(llmRunner)) {
-        return NextResponse.json<RetryResponse>({
-          success: false,
-          message: 'jarvis-cron.sh를 찾을 수 없습니다. LLM 태스크 재실행 불가.',
-          alternativeActions: buildLlmAlternatives(task),
-          promptPreview: preview,
-          logPath: CRON_LOG,
-        });
-      }
-
-      lastRetry.set(cronId, now);
-
-      let pid: number | null = null;
-      let spawnError: string | null = null;
-      try {
-        const child = spawn(
-          'bash',
-          [llmRunner, cronId],
-          {
-            detached: true,
-            stdio: 'ignore',
-            env: { ...process.env, HOME, TASK_ID: cronId, PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin' },
-          },
-        );
-        pid = child.pid ?? null;
-        child.unref();
-        child.on('error', (err) => { spawnError = err.message; });
-      } catch (e) {
-        spawnError = e instanceof Error ? e.message : String(e);
-      }
-
-      if (spawnError || pid === null) {
-        return NextResponse.json<RetryResponse>({
-          success: false,
-          message: `백그라운드 실행 시작 실패: ${spawnError || 'PID 없음'}`,
-          alternativeActions: buildLlmAlternatives(task),
-          promptPreview: preview,
-          logPath: CRON_LOG,
-        });
-      }
-
-      return NextResponse.json<RetryResponse>({
-        success: true,
-        message: `🚀 LLM 태스크 백그라운드 실행 시작 (PID ${pid}) — cron.log에 결과가 기록됩니다`,
-        promptPreview: preview,
-        logPath: CRON_LOG,
-        logTailLines: 20,
-        stdout: tailCronLogForTask(cronId, 10) || '(기존 실행 이력 없음 — 결과가 곧 여기에 기록됩니다)',
-        alternativeActions: [
-          { label: '진행 상황 확인', description: '백그라운드에서 실행 중입니다. 1-2분 후 이 팝업을 다시 열면 결과가 업데이트됩니다.' },
-          { label: '결과가 안 나타나면', description: '2분이 지나도 결과가 없으면 재시도 버튼을 다시 누르거나, 팀장 채팅에서 상태를 물어보세요.' },
-        ],
-      });
-    }
-
-    if (!task.script) {
-      return NextResponse.json<RetryResponse>({
-        success: false,
-        message: '실행 가능한 스크립트가 없습니다. tasks.json에 script 또는 prompt를 지정하세요.',
-        logPath: TASKS_FILE,
-      });
-    }
-
-    // ── 스크립트 실행 (크론 러너와 동일 로직: script 있으면 직접, 없으면 jarvis-cron.sh) ──
-    lastRetry.set(cronId, now);
-    let scriptPath = '';
-    let scriptExists = false;
-    if (task.script) {
-      const rawScript = task.script.startsWith('~') ? task.script.replace(/^~/, HOME) : task.script;
-      scriptPath = rawScript.startsWith('/') ? rawScript : path.join(JARVIS, rawScript);
-      scriptExists = existsSync(scriptPath);
-    }
-
-    // script가 없거나 파일이 없으면 → jarvis-cron.sh로 실행 (prompt 기반 포함)
-    // 크론 러너(jarvis-cron.sh)가 script/prompt 분기를 자체 처리함
+    // ══════════════════════════════════════════════════════════════
+    // DRY 원칙: 크론 실행의 SSoT = jarvis-cron.sh
+    //
+    // 어떤 태스크든 (script/prompt/prompt_file/하이브리드) 동일 경로:
+    //   jarvis-cron.sh TASK_ID → detached spawn → cron.log에 결과 기록
+    //
+    // retry route는 "실행 트리거"만 담당. 실행 로직을 재구현하지 않는다.
+    // ══════════════════════════════════════════════════════════════
     const cronRunner = path.join(JARVIS, 'bin', 'jarvis-cron.sh');
-    const useCronRunner = !scriptExists && existsSync(cronRunner);
-
-    if (!scriptExists && !useCronRunner) {
+    if (!existsSync(cronRunner)) {
       return NextResponse.json<RetryResponse>({
         success: false,
-        message: `스크립트(${scriptPath || 'N/A'})도 없고 크론 러너(${cronRunner})도 없습니다.`,
-        logPath: scriptPath || TASKS_FILE,
+        message: 'jarvis-cron.sh를 찾을 수 없습니다.',
+        logPath: CRON_LOG,
       });
     }
 
-    // 로그 파일 경로 (task 전용 있으면 우선)
+    lastRetry.set(cronId, now);
+
+    let pid: number | null = null;
+    let spawnError: string | null = null;
+    try {
+      const child = spawn(
+        'bash',
+        [cronRunner, cronId],
+        {
+          detached: true,
+          stdio: 'ignore',
+          env: {
+            ...process.env,
+            HOME,
+            TASK_ID: cronId,
+            PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+          },
+        },
+      );
+      pid = child.pid ?? null;
+      child.unref();
+      child.on('error', (err) => { spawnError = err.message; });
+    } catch (e) {
+      spawnError = e instanceof Error ? e.message : String(e);
+    }
+
+    if (spawnError || pid === null) {
+      return NextResponse.json<RetryResponse>({
+        success: false,
+        message: `실행 시작 실패: ${spawnError || 'PID 없음'}`,
+        alternativeActions: buildLlmAlternatives(task),
+        logPath: CRON_LOG,
+      });
+    }
+
     const taskLog = path.join(JARVIS, 'logs', `${cronId}.log`);
     const resolvedLog = existsSync(taskLog) ? taskLog : CRON_LOG;
 
-    const startMs = Date.now();
-    // script가 존재하면 직접 실행, 없으면 jarvis-cron.sh TASK_ID로 실행
-    const runCommand = scriptExists
-      ? `bash "${scriptPath}"`
-      : `TASK_ID="${cronId}" bash "${cronRunner}" "${cronId}"`;
-    const runTimeout = useCronRunner ? 120_000 : 15_000; // 크론 러너는 LLM 호출 포함 가능 → 2분
-    const result = await new Promise<RetryResponse>(resolve => {
-      exec(
-        runCommand,
-        { timeout: runTimeout, env: { ...process.env, HOME }, maxBuffer: 4 * 1024 * 1024 },
-        (err, stdout, stderr) => {
-          const durationMs = Date.now() - startMs;
-          const exitCode = err ? (typeof err.code === 'number' ? err.code : null) : 0;
-          const success = !err;
-          const trimmedOut = truncate(stdout, 3000);
-          const trimmedErr = truncate(stderr, 3000);
-
-          if (success) {
-            resolve({
-              success: true,
-              message: `✅ 재실행 성공 (${(durationMs / 1000).toFixed(1)}s, exit ${exitCode})`,
-              exitCode,
-              stdout: trimmedOut || '(stdout 없음)',
-              stderr: trimmedErr,
-              logPath: resolvedLog,
-              logTailLines: 40,
-              durationMs,
-              runnerCommand: `bash "${scriptPath}"`,
-            });
-          } else {
-            resolve({
-              success: false,
-              message: err?.killed
-                ? `⏱ 타임아웃 (30초 초과) — 스크립트가 너무 오래 걸립니다.`
-                : `❌ 재실행 실패 (exit ${exitCode ?? '?'}, ${(durationMs / 1000).toFixed(1)}s)`,
-              exitCode,
-              stdout: trimmedOut,
-              stderr: trimmedErr || err?.message || '(stderr 없음)',
-              logPath: resolvedLog,
-              logTailLines: 40,
-              durationMs,
-              runnerCommand: `bash "${scriptPath}"`,
-              alternativeActions: [
-                { label: '잠시 후 자동 재시도', description: '일시적인 오류일 수 있습니다. 다음 스케줄에 자동으로 재실행됩니다.' },
-                { label: '실패 패턴 확인', description: '이 팝업의 실행 이력에서 같은 에러가 반복되는지 확인하세요.' },
-                { label: '팀장에게 진단 요청', description: '해당 팀장 NPC를 클릭해 채팅으로 원인 분석을 요청할 수 있습니다.' },
-              ],
-            });
-          }
-        },
-      );
+    return NextResponse.json<RetryResponse>({
+      success: true,
+      message: `🚀 재실행 시작 (PID ${pid}) — 결과는 로그에 기록됩니다`,
+      logPath: resolvedLog,
+      logTailLines: 20,
+      stdout: tailCronLogForTask(cronId, 10) || '(결과가 곧 여기에 기록됩니다)',
+      alternativeActions: [
+        { label: '진행 상황 확인', description: '백그라운드에서 실행 중입니다. 잠시 후 이 팝업을 다시 열면 결과가 업데이트됩니다.' },
+        { label: '팀장에게 진단 요청', description: '해당 팀장 NPC를 클릭해 채팅으로 상태를 물어볼 수 있습니다.' },
+      ],
     });
-
-    return NextResponse.json<RetryResponse>(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json<RetryResponse>(

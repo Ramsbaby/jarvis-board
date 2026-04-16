@@ -825,37 +825,13 @@ export default function VirtualOffice() {
               // 우측 엣지 라인
               ctx!.fillStyle = 'rgba(0,0,0,0.35)';
               ctx!.fillRect(x + plankW - 1, y, 1, plankH);
-              // 결(grain) 3줄 — warm highlight on dark wood (다양한 밀도)
-              const grainAlpha = 0.14 + (rowIdx % 3) * 0.04;
-              ctx!.strokeStyle = `rgba(200,150,80,${grainAlpha})`;
+              // 결(grain) 1줄만 — 가벼운 버전 (bezier 제거, 직선으로 대체)
+              ctx!.strokeStyle = `rgba(200,150,80,0.12)`;
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
-              ctx!.moveTo(x + 2, y + plankH * 0.28);
-              ctx!.bezierCurveTo(x + plankW * 0.25, y + plankH * 0.33, x + plankW * 0.75, y + plankH * 0.22, x + plankW - 2, y + plankH * 0.28);
+              ctx!.moveTo(x + 2, y + plankH * 0.5);
+              ctx!.lineTo(x + plankW - 2, y + plankH * 0.5);
               ctx!.stroke();
-              ctx!.beginPath();
-              ctx!.moveTo(x + 2, y + plankH * 0.52);
-              ctx!.bezierCurveTo(x + plankW * 0.3, y + plankH * 0.56, x + plankW * 0.7, y + plankH * 0.48, x + plankW - 2, y + plankH * 0.52);
-              ctx!.stroke();
-              ctx!.beginPath();
-              ctx!.moveTo(x + 2, y + plankH * 0.76);
-              ctx!.bezierCurveTo(x + plankW * 0.35, y + plankH * 0.82, x + plankW * 0.65, y + plankH * 0.72, x + plankW - 2, y + plankH * 0.76);
-              ctx!.stroke();
-              // 나무 옹이(knot) — deterministic 위치, 드물게
-              const knotSeed = (Math.floor(px / plankW) * 11 + rowIdx * 23) % 100;
-              if (knotSeed < 8) {
-                const kx = x + plankW * 0.3 + (knotSeed % 5) * plankW * 0.08;
-                const ky = y + plankH * 0.4 + (knotSeed % 3) * plankH * 0.1;
-                ctx!.fillStyle = 'rgba(40,25,5,0.35)';
-                ctx!.beginPath();
-                ctx!.ellipse(kx, ky, 3, 2, (knotSeed % 4) * 0.4, 0, Math.PI * 2);
-                ctx!.fill();
-                ctx!.strokeStyle = 'rgba(160,110,50,0.15)';
-                ctx!.lineWidth = 0.5;
-                ctx!.beginPath();
-                ctx!.ellipse(kx, ky, 4.5, 3, (knotSeed % 4) * 0.4, 0, Math.PI * 2);
-                ctx!.stroke();
-              }
             }
           }
           // 샹들리에 warm glow (천장 조명 반사)
@@ -1005,26 +981,8 @@ export default function VirtualOffice() {
                 ctx!.fillRect(tx, ty + i, T, 1);
                 ctx!.fillRect(tx + i, ty, 1, T);
               }
-              // 대각선 섬유 (교차 직조 — 카펫 질감)
-              ctx!.strokeStyle = 'rgba(80,100,150,0.08)';
-              ctx!.lineWidth = 0.5;
-              for (let d = 0; d < T; d += 6) {
-                ctx!.beginPath();
-                ctx!.moveTo(tx + d, ty);
-                ctx!.lineTo(tx, ty + d);
-                ctx!.stroke();
-                ctx!.beginPath();
-                ctx!.moveTo(tx + T - d, ty);
-                ctx!.lineTo(tx + T, ty + d);
-                ctx!.stroke();
-              }
-              // 미세 노이즈 점 (카펫 파일 질감, deterministic seed)
-              const seed = (gx * 17 + gy * 31) % 255;
-              if (seed % 3 === 0) {
-                ctx!.fillStyle = 'rgba(80,100,140,0.12)';
-                ctx!.fillRect(tx + (seed % 12) + 4, ty + ((seed * 7) % 12) + 4, 1, 1);
-                ctx!.fillRect(tx + ((seed * 3) % 16) + 6, ty + ((seed * 5) % 14) + 8, 1, 1);
-              }
+              // 대각선 섬유 제거 (성능 — 타일당 10 stroke 제거)
+              // 미세 노이즈 점 제거 (성능)
             }
           }
           ctx!.restore();

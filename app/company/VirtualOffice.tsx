@@ -2904,6 +2904,14 @@ export default function VirtualOffice() {
               setCronSearch(id);
             }
           }}
+          onTeamClick={(teamId) => {
+            const room = ROOMS.find(r => r.id === teamId);
+            if (room) {
+              setActiveRoom(room);
+              setPopupOpen(true);
+              setPopupLoading(true);
+            }
+          }}
         />
       )}
 

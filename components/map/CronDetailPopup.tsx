@@ -8,6 +8,22 @@ import type { CronItem } from '@/lib/map/rooms';
 import { detectTokenUsage, estimateCost, inferCronRole, inferSuggestedFix } from '@/lib/map/cron-role';
 import { getCronDeepInfo, filterCeoActionsForStatus, type CeoAction } from '@/lib/map/cron-encyclopedia';
 
+/** stderr raw 메시지를 사용자가 이해할 수 있는 한국어로 해석 */
+function humanizeError(stderr: string): string | null {
+  if (!stderr) return null;
+  const lower = stderr.toLowerCase();
+  if (/enoent|no such file/.test(lower)) return '필요한 파일을 찾을 수 없습니다. 경로가 변경되었거나 삭제되었을 수 있습니다.';
+  if (/etimedout|timeout|socket hang up|econnreset/.test(lower)) return '외부 서비스 연결이 시간 초과되었습니다. 네트워크 상태를 확인하세요.';
+  if (/429|rate.?limit|too many request/.test(lower)) return 'API 호출 한도를 초과했습니다. 잠시 후 다시 시도하세요.';
+  if (/permission denied|eacces/.test(lower)) return '실행 권한이 없습니다. 파일 권한을 확인하세요.';
+  if (/enospc|no space|disk/.test(lower)) return '디스크 공간이 부족합니다. 불필요한 로그/캐시를 정리하세요.';
+  if (/oom|out of memory|killed/.test(lower)) return '메모리 부족으로 프로세스가 강제 종료되었습니다.';
+  if (/syntax|unexpected token|parse error/.test(lower)) return '스크립트에 문법 오류가 있습니다.';
+  if (/token|credit|quota|billing|insufficient/.test(lower)) return 'API 크레딧 또는 토큰이 부족합니다.';
+  if (/spawn|fork|exec/.test(lower)) return '프로세스 실행에 실패했습니다. 시스템 리소스를 확인하세요.';
+  return null;
+}
+
 interface CronDetailPopupProps {
   cronPopup: CronItem;
   isMobile: boolean;
@@ -679,6 +695,22 @@ function RetryResultCard({ result, onCopy }: { result: RetryFullResponse; onCopy
         </div>
       )}
 
+      {/* 원인 분석 배너 (humanizeError) */}
+      {result.stderr && (() => {
+        const humanMsg = humanizeError(result.stderr);
+        if (!humanMsg) return null;
+        return (
+          <div style={{
+            marginBottom: 8, padding: '10px 12px', borderRadius: 8,
+            background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)',
+            borderLeft: '3px solid #3b82f6',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', marginBottom: 3 }}>💡 원인 분석</div>
+            <div style={{ fontSize: 12, color: '#93c5fd', lineHeight: 1.5 }}>{humanMsg}</div>
+          </div>
+        );
+      })()}
+
       {/* stderr (실패 시 펼침 기본) */}
       {result.stderr && (
         <details open={showStderr} onToggle={e => setShowStderr((e.target as HTMLDetailsElement).open)} style={{ marginBottom: 8 }}>
@@ -745,28 +777,8 @@ function RetryResultCard({ result, onCopy }: { result: RetryFullResponse; onCopy
                 border: '1px solid rgba(255,255,255,0.08)',
                 borderRadius: 6,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c9d1d9', flex: 1 }}>{a.label}</span>
-                  {a.command && (
-                    <button
-                      onClick={() => onCopy(a.command!, '커맨드 복사됨')}
-                      style={{
-                        fontSize: 9, fontWeight: 700, cursor: 'pointer',
-                        background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
-                        color: '#22c55e', padding: '2px 6px', borderRadius: 4,
-                      }}
-                    >📋 복사</button>
-                  )}
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#c9d1d9', marginBottom: 3 }}>{a.label}</div>
                 <div style={{ fontSize: 10, color: '#6b7280', lineHeight: 1.4 }}>{a.description}</div>
-                {a.command && (
-                  <code style={{
-                    display: 'block', marginTop: 3,
-                    fontSize: 9, color: '#4a5370', fontFamily: 'monospace',
-                    padding: '3px 6px', background: 'rgba(0,0,0,0.2)', borderRadius: 3,
-                    wordBreak: 'break-all',
-                  }}>{a.command}</code>
-                )}
               </div>
             ))}
           </div>

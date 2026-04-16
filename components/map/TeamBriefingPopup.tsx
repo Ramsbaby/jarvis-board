@@ -50,6 +50,22 @@ interface TeamBriefingPopupProps {
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
+const BRIEFING_NOISE = ['데이터 수집중', '수집 중', '수집중', '시작합니다', '준비 중', 'START', '시작', '처리 중', '진행 중', '처리중', 'SUCCESS', 'DONE', 'STARTED', 'RUNNING'];
+
+function cleanMessage(raw: string, maxLen = 200): string {
+  if (!raw) return '';
+  if (BRIEFING_NOISE.some(p => raw.includes(p) && raw.length < 40)) return '';
+  const cleaned = raw.replace(/\b(SUCCESS|DONE|STARTED?|RUNNING)\b/gi, '').replace(/\(duration=\d+s\)/gi, '').replace(/^(stderr|stdout):\s*/gim, '').trim();
+  return cleaned.length <= maxLen ? cleaned : cleaned.slice(0, maxLen - 1) + '…';
+}
+
+function extractFailFirstLine(raw: string): { first: string; hasMore: boolean } {
+  if (!raw) return { first: '', hasMore: false };
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const firstMeaningful = lines.find(l => !BRIEFING_NOISE.some(p => l.includes(p)) && l.length > 5) || lines[0] || '';
+  return { first: firstMeaningful.slice(0, 200), hasMore: lines.length > 1 };
+}
+
 const stColor = (s: string) => {
   if (s === 'GREEN') return '#3fb950';
   if (s === 'RED') return '#f85149';
@@ -463,7 +479,11 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                             <span style={{ fontWeight: 600 }}>{a.task || '알 수 없음'}</span>
                             <span style={{ color: '#4b5563', fontFamily: 'monospace', fontSize: 10 }}>{(a.time || '').slice(11, 16)}</span>
                           </div>
-                          {a.message && <div style={{ color: '#8b949e', fontSize: 11, marginLeft: 14 }}>{String(a.message).slice(0, 100)}</div>}
+                          {a.message && (() => {
+                            const { first, hasMore } = extractFailFirstLine(String(a.message));
+                            if (!first) return null;
+                            return <div style={{ color: '#8b949e', fontSize: 11, marginLeft: 14 }}>{first}{hasMore && <span style={{ color: '#5a6480', fontSize: 10, marginLeft: 4 }}>(상세 클릭)</span>}</div>;
+                          })()}
                         </div>
                       ))}
                       {/* cronData에서 같은 팀 실패 크론 */}

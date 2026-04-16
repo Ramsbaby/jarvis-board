@@ -73,38 +73,22 @@ function truncate(s: string | undefined | null, n: number): string {
 }
 
 function buildLlmAlternatives(task: TaskDef): AltAction[] {
-  const actions: AltAction[] = [];
-  const askClaude = path.join(JARVIS, 'bin', 'ask-claude.sh');
-  const runnerMjs = path.join(JARVIS, 'scripts', 'prompt-runner.mjs');
-
-  // 1순위: ask-claude.sh 존재 시
-  if (existsSync(askClaude)) {
-    actions.push({
-      label: 'ask-claude.sh로 수동 실행',
-      command: `bash "${askClaude}" --task "${task.id}"`,
-      description: 'Jarvis 게이트웨이를 통해 이 태스크의 프롬프트를 Claude에 직접 요청합니다.',
-    });
-  }
-  // 2순위: prompt-runner.mjs
-  if (existsSync(runnerMjs)) {
-    actions.push({
-      label: 'prompt-runner.mjs로 실행',
-      command: `node "${runnerMjs}" "${task.id}"`,
-      description: 'tasks.json에 정의된 프롬프트와 동일한 컨텍스트로 실행합니다.',
-    });
-  }
-  // 3순위: Discord 슬래시 명령
+  // NPC 원칙: shell 명령어 노출 금지 — "무엇을/왜"만 안내
+  const actions: AltAction[] = [
+    {
+      label: '잠시 후 자동 재시도',
+      description: '일시적인 오류일 수 있습니다. 다음 스케줄에 자동으로 재실행됩니다.',
+    },
+  ];
   if (task.discordChannel) {
     actions.push({
-      label: `Discord #${task.discordChannel} 에서 /ask 트리거`,
-      description: '봇이 살아 있으면 Discord에서 /ask 명령으로 수동 트리거할 수 있습니다.',
+      label: `Discord #${task.discordChannel} 에서 확인`,
+      description: '봇이 살아있다면 Discord에서 실행 결과를 확인하거나 수동 트리거할 수 있습니다.',
     });
   }
-  // 4순위: tasks.json 확인
   actions.push({
-    label: 'tasks.json 에서 프롬프트 확인',
-    command: `cat "${TASKS_FILE}" | jq '.tasks[] | select(.id=="${task.id}")'`,
-    description: '태스크 정의를 열어 직접 확인/수정한 뒤 다음 스케줄에 재시도합니다.',
+    label: '팀장에게 진단 요청',
+    description: '맵의 해당 팀장 NPC를 클릭해 채팅으로 원인 분석을 요청할 수 있습니다.',
   });
   return actions;
 }
@@ -128,8 +112,8 @@ export async function POST(req: NextRequest) {
     // Rate limit
     const now = Date.now();
     const last = lastRetry.get(cronId) ?? 0;
-    if (now - last < 30_000) {
-      const wait = Math.ceil((30_000 - (now - last)) / 1000);
+    if (now - last < 15_000) {
+      const wait = Math.ceil((15_000 - (now - last)) / 1000);
       return NextResponse.json<RetryResponse>(
         { success: false, message: `⏳ ${wait}초 후 재시도 가능합니다 (연타 방지).` },
         { status: 429 },
@@ -224,21 +208,8 @@ export async function POST(req: NextRequest) {
         logTailLines: 20,
         stdout: tailCronLogForTask(cronId, 10) || '(기존 실행 이력 없음 — 결과가 곧 여기에 기록됩니다)',
         alternativeActions: [
-          {
-            label: '실행 진행 상황 실시간 확인',
-            command: `tail -f "${CRON_LOG}" | grep "\\[${cronId}\\]"`,
-            description: '백그라운드 태스크가 진행되는 동안 cron.log를 실시간으로 팔로우합니다.',
-          },
-          {
-            label: 'Claude stderr 로그 확인',
-            command: `tail -n 50 "${path.join(JARVIS, 'logs', `claude-stderr-${cronId}.log`)}"`,
-            description: 'Claude CLI가 남긴 stderr를 확인해 실패 원인을 분석합니다.',
-          },
-          {
-            label: '수동 재실행 (동일 파라미터)',
-            command: `bash "${askClaude}" ${cronId} "<prompt>" Read 120`,
-            description: '같은 인자로 터미널에서 다시 실행합니다.',
-          },
+          { label: '진행 상황 확인', description: '백그라운드에서 실행 중입니다. 1-2분 후 이 팝업을 다시 열면 결과가 업데이트됩니다.' },
+          { label: '결과가 안 나타나면', description: '2분이 지나도 결과가 없으면 재시도 버튼을 다시 누르거나, 팀장 채팅에서 상태를 물어보세요.' },
         ],
       });
     }
@@ -283,7 +254,7 @@ export async function POST(req: NextRequest) {
     const runCommand = scriptExists
       ? `bash "${scriptPath}"`
       : `TASK_ID="${cronId}" bash "${cronRunner}" "${cronId}"`;
-    const runTimeout = useCronRunner ? 120_000 : 30_000; // 크론 러너는 LLM 호출 포함 가능 → 2분
+    const runTimeout = useCronRunner ? 120_000 : 15_000; // 크론 러너는 LLM 호출 포함 가능 → 2분
     const result = await new Promise<RetryResponse>(resolve => {
       exec(
         runCommand,
@@ -321,21 +292,9 @@ export async function POST(req: NextRequest) {
               durationMs,
               runnerCommand: `bash "${scriptPath}"`,
               alternativeActions: [
-                {
-                  label: '로그 꼬리 보기 (50줄)',
-                  command: `tail -n 50 "${resolvedLog}"`,
-                  description: '실제 cron 로그 파일에서 가장 최근 50줄을 직접 확인합니다.',
-                },
-                {
-                  label: '수동 실행 + 디버그 출력',
-                  command: `bash -x "${scriptPath}"`,
-                  description: 'bash -x 로 한 줄씩 추적하며 어느 단계에서 실패하는지 확인합니다.',
-                },
-                {
-                  label: '실패 가이드 — 크론 실패 추적기',
-                  command: `bash "${path.join(JARVIS, 'scripts', 'cron-failure-tracker.sh')}" "${cronId}"`,
-                  description: 'Jarvis 장애 추적 스크립트를 이 태스크에 대해 수동 실행합니다.',
-                },
+                { label: '잠시 후 자동 재시도', description: '일시적인 오류일 수 있습니다. 다음 스케줄에 자동으로 재실행됩니다.' },
+                { label: '실패 패턴 확인', description: '이 팝업의 실행 이력에서 같은 에러가 반복되는지 확인하세요.' },
+                { label: '팀장에게 진단 요청', description: '해당 팀장 NPC를 클릭해 채팅으로 원인 분석을 요청할 수 있습니다.' },
               ],
             });
           }

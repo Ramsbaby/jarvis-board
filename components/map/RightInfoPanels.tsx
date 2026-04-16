@@ -43,6 +43,8 @@ interface RightInfoPanelsProps {
   onCronClick?: (cronId: string) => void;
   /** 커밋 항목 클릭 시 — 현 단계는 GitHub 웹 URL을 새 창으로 연다 */
   onCommitClick?: (commit: Commit) => void;
+  /** 팀 이름 클릭 시 — 해당 팀장 브리핑 팝업 열기 */
+  onTeamClick?: (teamId: string) => void;
 }
 
 /**
@@ -50,7 +52,7 @@ interface RightInfoPanelsProps {
  *  1. 오늘 남은 예정 크론 (6개) → 클릭 시 CronDetailPopup
  *  2. 최근 커밋 (jarvis/jarvis-board 합쳐 10개) → 클릭 시 GitHub
  */
-export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }: RightInfoPanelsProps) {
+export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick, onTeamClick }: RightInfoPanelsProps) {
   const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -461,15 +463,22 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }
                   : item.status === 'running' ? '#58a6ff' : '#6e7681';
                 const icon = item.status === 'success' ? '✅' : item.status === 'failed' ? '❌' : item.status === 'running' ? '🔄' : '○';
                 return (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 6,
-                    padding: '5px 8px',
-                    background: item.status === 'failed' ? 'rgba(248,81,73,0.07)' : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${sc}18`,
-                    borderLeft: `2px solid ${sc}`,
-                    borderRadius: 6,
-                    fontSize: 10,
-                  }}>
+                  <div key={i}
+                    onClick={() => onCronClick?.(item.cronId)}
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 6,
+                      padding: '5px 8px',
+                      background: item.status === 'failed' ? 'rgba(248,81,73,0.07)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${sc}18`,
+                      borderLeft: `2px solid ${sc}`,
+                      borderRadius: 6,
+                      fontSize: 10,
+                      cursor: onCronClick ? 'pointer' : 'default',
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={e => { if (onCronClick) (e.currentTarget as HTMLDivElement).style.background = item.status === 'failed' ? 'rgba(248,81,73,0.13)' : 'rgba(255,255,255,0.06)'; }}
+                    onMouseLeave={e => { if (onCronClick) (e.currentTarget as HTMLDivElement).style.background = item.status === 'failed' ? 'rgba(248,81,73,0.07)' : 'rgba(255,255,255,0.02)'; }}
+                  >
                     <span style={{ flexShrink: 0, marginTop: 1 }}>{icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
@@ -479,9 +488,10 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }
                         {item.time}
                       </div>
                     </div>
-                    {item.status === 'failed' && (
+                    {onCronClick && <span style={{ flexShrink: 0, fontSize: 10, color: '#5a6480', marginTop: 2 }}>›</span>}
+                    {item.status === 'failed' && !onCronClick && (
                       <button
-                        onClick={() => handleRetry(item.cronId)}
+                        onClick={(e) => { e.stopPropagation(); handleRetry(item.cronId); }}
                         disabled={retrying === item.cronId}
                         style={{
                           flexShrink: 0, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',

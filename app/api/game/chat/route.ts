@@ -14,6 +14,7 @@ import { TEAM_REGISTRY, TEAM_KEYWORDS as REGISTRY_KEYWORDS } from '@/lib/map/tea
 import { computeCronStats24h } from '@/lib/map/cron-stats';
 import { JARVIS_HOME, CLAUDE_CLI } from '@/lib/jarvis-paths';
 import { type TaskDef, getTasksFile } from '@/lib/task-types';
+import { safeRead, tailLines } from '@/lib/file-utils';
 
 // 공통 NPC 행동 규칙 — 캐릭터 몰입 유지 + 적극적 대응
 const NPC_RULES = `
@@ -49,22 +50,6 @@ const TEAM_PROMPTS: Record<string, string> = Object.fromEntries(
 // --- Team context gathering ---
 
 const contextCache = new Map<string, { value: string; ts: number }>();
-
-function safeRead(file: string, maxBytes = 8192): string {
-  try {
-    if (!existsSync(file)) return '';
-    const buf = readFileSync(file, 'utf8');
-    return buf.length > maxBytes ? buf.slice(-maxBytes) : buf;
-  } catch {
-    return '';
-  }
-}
-
-function tailLines(text: string, n: number): string {
-  if (!text) return '';
-  const lines = text.split('\n').filter(Boolean);
-  return lines.slice(-n).join('\n');
-}
 
 function grepLines(text: string, patterns: string[], n: number): string {
   if (!text) return '';

@@ -54,11 +54,6 @@ function tailCronLogForTask(taskId: string, lines = 40): string {
   }
 }
 
-function truncate(s: string | undefined | null, n: number): string {
-  if (!s) return '';
-  return s.length > n ? s.slice(-n) : s;
-}
-
 function buildLlmAlternatives(task: TaskDef): AltAction[] {
   // NPC 원칙: shell 명령어 노출 금지 — "무엇을/왜"만 안내
   const actions: AltAction[] = [

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
 import type { DevTask } from '@/lib/types';
+import { timeAgo } from '@/lib/utils';
 
 function TaskDetail({ task, isWaiting, onDetailUpdate }: {
   task: { id: string; title: string; detail: string };
@@ -173,14 +174,6 @@ function renderTitle(title: string): React.ReactNode {
       })}
     </>
   );
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const h = Math.floor(diff / 3600000);
-  if (h < 1) return `${Math.floor(diff / 60000)}분 전`;
-  if (h < 24) return `${h}시간 전`;
-  return `${Math.floor(h / 24)}일 전`;
 }
 
 function parseImpactAreas(raw?: string): string[] {

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import path from 'path';
 import { CRON_LOG, CIRCUIT_BREAKER_DIR } from '@/lib/jarvis-paths';
+import { safeRead } from '@/lib/file-utils';
 
 /**
  * 실시간 활동 피드 + 긴급 알림 트레이 데이터
@@ -32,14 +33,6 @@ interface CircuitBroken {
   failures: number;
   state: string;
   lastFailureAt?: string;
-}
-
-function safeRead(file: string, maxBytes = 128_000): string {
-  try {
-    if (!existsSync(file)) return '';
-    const buf = readFileSync(file, 'utf8');
-    return buf.length > maxBytes ? buf.slice(-maxBytes) : buf;
-  } catch { return ''; }
 }
 
 // cron.log 파싱 → 최근 20건 실행 이력

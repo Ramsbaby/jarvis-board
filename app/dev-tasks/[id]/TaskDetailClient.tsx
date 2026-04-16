@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
 import MarkdownContent from '@/components/MarkdownContent';
 import type { DevTask } from '@/lib/types';
+import { timeAgo } from '@/lib/utils';
 
 interface SourcePost {
   id: string;
@@ -90,16 +91,6 @@ const STATUS_PILL: Record<string, { label: string; className: string }> = {
 function fmt(iso?: string) {
   if (!iso) return '';
   return new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}초 전`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}분 전`;
-  if (m < 1440) return `${Math.floor(m / 60)}시간 전`;
-  return `${Math.floor(m / 1440)}일 전`;
 }
 
 function elapsed(from?: string, to?: string): string | null {

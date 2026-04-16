@@ -72,6 +72,7 @@ export default function VirtualOffice() {
   const collisionMap = useRef(buildCollisionMap());
   const pathRef = useRef<{ x: number; y: number }[]>([]); // A* 경로 큐
   const pathTargetRef = useRef<{ x: number; y: number } | null>(null); // 목표 타일 (시각 표시)
+  const tweenRafRef = useRef<number>(0); // 성능: tweenLoop RAF ID (중첩 방지)
   const popupOpenRef = useRef(false);
   // 논리 픽셀 크기 (DPR 보정용) — CSS 좌표계와 일치
   const logicalSizeRef = useRef({ w: 1280, h: 800 });
@@ -81,6 +82,7 @@ export default function VirtualOffice() {
   // 구역 진입 토스트 (캔버스 레이어)
   const zoneToastRef = useRef<{ text: string; color: string; emoji: string; frame: number } | null>(null);
   const lastNearbyIdRef = useRef<string | null>(null);
+  const nearbyRoomIdRef = useRef<string | null>(null); // 성능: setNearbyRoom 디바운스용
   const cameraRef = useRef({ x: 0, y: 0 });
   const frameCountRef = useRef(0);
   const historyPushedRef = useRef(false);
@@ -90,6 +92,12 @@ export default function VirtualOffice() {
   const floorCacheRef = useRef<HTMLCanvasElement | null>(null);
   // ── 성능: 방 드롭 섀도 그라데이션 캐시 ──
   const shadowCacheRef = useRef<Map<string, { south: CanvasGradient; east: CanvasGradient }>>(new Map());
+  // ── 성능: HUD gradient 캐시 (리사이즈 시에만 재생성) ──
+  const hudGradCacheRef = useRef<{
+    w: number; h: number;
+    topBar: CanvasGradient; botBar: CanvasGradient;
+    vignette: CanvasGradient; coolTint: CanvasGradient; warmTint: CanvasGradient;
+  } | null>(null);
 
   useEffect(() => { popupOpenRef.current = popupOpen || cronGridOpen; }, [popupOpen, cronGridOpen]);
 
@@ -124,6 +132,7 @@ export default function VirtualOffice() {
       }
     } else {
       historyPushedRef.current = false;
+      basePushedRef.current = false; // 팝업 닫힘 → 이탈 차단 가드 리셋
     }
   }, [popupOpen, cronGridOpen]);
 
@@ -133,14 +142,17 @@ export default function VirtualOffice() {
   }, []);
 
   // popstate (back 버튼/스와이프) — 팝업 닫기 또는 이탈 차단
+  // 성능: basePushedRef로 pushState 무한 누적 방지
+  const basePushedRef = useRef(false);
   useEffect(() => {
     const handlePop = () => {
       if (historyPushedRef.current) {
         // 팝업 열려있으면 닫기
         closePopup();
         historyPushedRef.current = false;
-      } else {
-        // 팝업 없어도 게임 페이지 이탈 차단 — 상태 재push
+      } else if (!basePushedRef.current) {
+        // 팝업 없어도 게임 페이지 이탈 차단 — 1회만 push
+        basePushedRef.current = true;
         history.pushState({ jarvisMap: true }, '');
       }
     };
@@ -1995,6 +2007,8 @@ export default function VirtualOffice() {
             lastMove = time;
 
             const startTime = time;
+            // 성능: 이전 tweenLoop 취소 (중첩 RAF 방지)
+            if (tweenRafRef.current) cancelAnimationFrame(tweenRafRef.current);
             const tweenLoop = (t: number) => {
               const progress = Math.min(1, (t - startTime) / MOVE_SPEED);
               tweenRef.current.t = progress;
@@ -2002,11 +2016,12 @@ export default function VirtualOffice() {
                 tweenRef.current.active = false;
                 movingRef.current = false;
                 animRef.current.walking = false;
+                tweenRafRef.current = 0;
               } else {
-                requestAnimationFrame(tweenLoop);
+                tweenRafRef.current = requestAnimationFrame(tweenLoop);
               }
             };
-            requestAnimationFrame(tweenLoop);
+            tweenRafRef.current = requestAnimationFrame(tweenLoop);
           } else {
             // 충돌로 경로 막힘 → 경로 초기화
             pathRef.current = [];
@@ -2015,9 +2030,14 @@ export default function VirtualOffice() {
         }
       }
 
-      // Nearby NPC detection
+      // Nearby NPC detection — 변경 시에만 setState (60fps 리렌더 방지)
       const nearby = findNearbyRoom();
-      setNearbyRoom(nearby);
+      const nearbyIdNow = nearby?.id ?? null;
+      const prevNearbyId = nearbyRoomIdRef.current;
+      if (nearbyIdNow !== prevNearbyId) {
+        nearbyRoomIdRef.current = nearbyIdNow;
+        setNearbyRoom(nearby);
+      }
 
       // 구역 진입 토스트 트리거
       const nearbyId = nearby?.id ?? null;
@@ -2350,13 +2370,33 @@ export default function VirtualOffice() {
       // ── HUD 패스: 줌 해제 → 화면 좌표계 (w×h) ──────────────
       ctx!.setTransform(_dpr, 0, 0, _dpr, 0, 0);
 
-      // ── HUD: Top bar (다크) ──
+      // ── HUD: Top bar (다크) ── 성능: gradient 캐시 사용
       const _isMob = w < 768;
       const topBarH = _isMob ? 36 : 56;
-      const grad = ctx!.createLinearGradient(0, 0, 0, topBarH);
-      grad.addColorStop(0, 'rgba(0,0,0,0.5)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx!.fillStyle = grad;
+      // HUD gradient 캐시 갱신 (리사이즈 시에만)
+      if (!hudGradCacheRef.current || hudGradCacheRef.current.w !== w || hudGradCacheRef.current.h !== h) {
+        const _topBar = ctx!.createLinearGradient(0, 0, 0, topBarH);
+        _topBar.addColorStop(0, 'rgba(0,0,0,0.5)');
+        _topBar.addColorStop(1, 'rgba(0,0,0,0)');
+        const _botBar = ctx!.createLinearGradient(0, h - 56, 0, h);
+        _botBar.addColorStop(0, 'rgba(0,0,0,0)');
+        _botBar.addColorStop(1, 'rgba(0,0,0,0.5)');
+        const vCx = w / 2, vCy = h / 2;
+        const vRadius = Math.max(w, h) * 0.75;
+        const _vig = ctx!.createRadialGradient(vCx, vCy, Math.min(w, h) * 0.3, vCx, vCy, vRadius);
+        _vig.addColorStop(0, 'rgba(0,0,0,0)');
+        _vig.addColorStop(0.55, 'rgba(5,8,16,0.15)');
+        _vig.addColorStop(1, 'rgba(3,6,12,0.55)');
+        const _cool = ctx!.createLinearGradient(0, 0, 0, h * 0.4);
+        _cool.addColorStop(0, 'rgba(88,166,255,0.08)');
+        _cool.addColorStop(1, 'rgba(88,166,255,0)');
+        const _warm = ctx!.createLinearGradient(0, h * 0.6, 0, h);
+        _warm.addColorStop(0, 'rgba(255,180,100,0)');
+        _warm.addColorStop(1, 'rgba(255,180,100,0.06)');
+        hudGradCacheRef.current = { w, h, topBar: _topBar, botBar: _botBar, vignette: _vig, coolTint: _cool, warmTint: _warm };
+      }
+      const hudGrad = hudGradCacheRef.current;
+      ctx!.fillStyle = hudGrad.topBar;
       ctx!.fillRect(0, 0, w, topBarH);
 
       ctx!.fillStyle = '#e6edf3';
@@ -2366,11 +2406,8 @@ export default function VirtualOffice() {
       ctx!.fillText('JARVIS MAP', w / 2, _isMob ? 24 : 36);
       ctx!.letterSpacing = '0px';
 
-      // ── HUD: Bottom bar (다크) ──
-      const gradBot = ctx!.createLinearGradient(0, h - 56, 0, h);
-      gradBot.addColorStop(0, 'rgba(0,0,0,0)');
-      gradBot.addColorStop(1, 'rgba(0,0,0,0.5)');
-      ctx!.fillStyle = gradBot;
+      // ── HUD: Bottom bar (다크) ── 캐시 사용
+      ctx!.fillStyle = hudGrad.botBar;
       ctx!.fillRect(0, h - 56, w, 56);
 
       ctx!.fillStyle = '#8b949e';
@@ -2438,30 +2475,12 @@ export default function VirtualOffice() {
         }
       }
 
-      // ── Cinematic vignette (radial + warm/cool tint) ──
-      // 화면 중앙은 밝게, 바깥은 어둠 + 상단 쿨(블루)/하단 웜(앰버) 틴트
-      const vCx = w / 2;
-      const vCy = h / 2;
-      const vRadius = Math.max(w, h) * 0.75;
-      const vig = ctx!.createRadialGradient(vCx, vCy, Math.min(w, h) * 0.3, vCx, vCy, vRadius);
-      vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(0.55, 'rgba(5,8,16,0.15)');
-      vig.addColorStop(1, 'rgba(3,6,12,0.55)');
-      ctx!.fillStyle = vig;
+      // ── Cinematic vignette (radial + warm/cool tint) ── 캐시 사용
+      ctx!.fillStyle = hudGrad.vignette;
       ctx!.fillRect(0, 0, w, h);
-
-      // 상단 쿨 블루 틴트 (아침 창가 느낌)
-      const coolTint = ctx!.createLinearGradient(0, 0, 0, h * 0.4);
-      coolTint.addColorStop(0, 'rgba(88,166,255,0.08)');
-      coolTint.addColorStop(1, 'rgba(88,166,255,0)');
-      ctx!.fillStyle = coolTint;
+      ctx!.fillStyle = hudGrad.coolTint;
       ctx!.fillRect(0, 0, w, h * 0.4);
-
-      // 하단 웜 앰버 틴트 (크론 센터 글로우 연장)
-      const warmTint = ctx!.createLinearGradient(0, h * 0.6, 0, h);
-      warmTint.addColorStop(0, 'rgba(255,180,100,0)');
-      warmTint.addColorStop(1, 'rgba(255,180,100,0.06)');
-      ctx!.fillStyle = warmTint;
+      ctx!.fillStyle = hudGrad.warmTint;
       ctx!.fillRect(0, h * 0.6, w, h * 0.4);
 
       animId = requestAnimationFrame(gameLoop);
@@ -2486,6 +2505,7 @@ export default function VirtualOffice() {
 
     return () => {
       cancelAnimationFrame(animId);
+      if (tweenRafRef.current) cancelAnimationFrame(tweenRafRef.current);
       clearInterval(dataInterval);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('keydown', onKeyDown);
@@ -2793,11 +2813,12 @@ export default function VirtualOffice() {
 
   // Phase 1 (D1): 팝업 닫혀도 chatAbortRef 호출하지 않음 — 서버 스트림 백그라운드 지속
   // briefing이 null로 바뀔 때 (다른 팀으로 전환 or 완전 언마운트) chatAbortRef 참조만 정리
+  // 성능: retryCount Map도 팀 전환 시 초기화 (메모리 누수 방지)
   useEffect(() => {
     if (!briefing) {
-      // abort 호출 안 함 — 서버는 완료까지 달리고 DB에 저장
       chatAbortRef.current = null;
     }
+    setRetryCount(new Map());
   }, [briefing]);
 
   // ── 렌더 ─────────────────────────────────────────────────────

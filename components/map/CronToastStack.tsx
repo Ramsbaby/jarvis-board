@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
+import { useEvent, type BoardEvent } from '@/contexts/EventContext';
 
 type CronEvent = {
   type: 'cron_start' | 'cron_success' | 'cron_failed';
@@ -42,26 +43,22 @@ interface CronToastStackProps {
 
 /**
  * CSS 트랜지션 기반 토스트 — React가 매 프레임 렌더하지 않음.
- * 각 토스트는 3단계 phase 전이:
- *  1. enter(mount) → 즉시 stay (0ms 후 setState)
- *  2. stay → STAY_MS 후 leave 전이
- *  3. leave → FADE_MS 후 unmount
+ * 성능: 독립 EventSource 대신 공유 EventContext.subscribe 사용 (SSE 연결 1개로 통합)
  */
 export default function CronToastStack({ isMobile = false }: CronToastStackProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Map<number, number[]>>(new Map());
   const nextId = useRef(1);
+  const { subscribe } = useEvent();
 
   useEffect(() => {
-    const es = new EventSource('/api/events');
-
-    const onMessage = (e: MessageEvent) => {
+    const unsubscribe = subscribe((data: BoardEvent) => {
       try {
-        const data = JSON.parse(e.data) as Partial<CronEvent>;
-        if (!data.type || !(data.type in STYLE)) return;
-        const ev = data as CronEvent;
+        const ev = data as unknown as Partial<CronEvent>;
+        if (!ev.type || !(ev.type in STYLE)) return;
+        const cronEv = ev as CronEvent;
         const id = nextId.current++;
-        const toast: Toast = { ...ev, id, phase: 'enter' };
+        const toast: Toast = { ...cronEv, id, phase: 'enter' };
 
         setToasts(prev => {
           const next = [toast, ...prev].slice(0, MAX_TOASTS);
@@ -86,20 +83,14 @@ export default function CronToastStack({ isMobile = false }: CronToastStackProps
 
         timers.current.set(id, [t1, t2, t3]);
       } catch { /* ignore non-cron events */ }
-    };
-
-    es.addEventListener('message', onMessage);
-    es.onerror = () => {
-      // EventSource 자동 재연결
-    };
+    });
 
     return () => {
-      es.removeEventListener('message', onMessage);
-      es.close();
+      unsubscribe();
       timers.current.forEach(ids => ids.forEach(i => window.clearTimeout(i)));
       timers.current.clear();
     };
-  }, []);
+  }, [subscribe]);
 
   if (toasts.length === 0) return null;
 

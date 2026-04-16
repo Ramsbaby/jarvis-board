@@ -2844,7 +2844,7 @@ export default function VirtualOffice() {
 
   // ── 렌더 ─────────────────────────────────────────────────────
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#e8eaef' }}>
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#0a0e17' }}>
       <canvas
         ref={canvasRef}
         style={{

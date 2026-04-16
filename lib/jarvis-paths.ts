@@ -1,5 +1,5 @@
 /**
- * jarvis-paths.ts — ~/.jarvis 경로 SSoT
+ * jarvis-paths.ts — 하드코딩 경로 SSoT
  *
  * 왜 이 파일이 존재하는가:
  *   `~/.jarvis` 하위 경로 상수가 app/api/ 아래 13개 route 파일에 각자
@@ -10,7 +10,7 @@
  *   이 파일 하나로 통일한다.
  *
  * 규칙:
- *   - ~/.claude/* 경로는 여기에 넣지 않는다 (jarvis 무관 도메인).
+ *   - jarvis-board가 참조하는 외부 바이너리·캐시도 여기서 관리한다.
  *   - 새 경로 추가 시 이 파일에만 추가하면 모든 caller 가 혜택받는다.
  */
 
@@ -39,3 +39,14 @@ export const RESULTS_DIR         = join(JARVIS_HOME, 'results');
 
 // ── RAG ───────────────────────────────────────────────────────────────────────
 export const RAG_DATA_DIR        = join(JARVIS_HOME, 'rag', 'data');
+export const RAG_QUERY_PATH      = join(JARVIS_HOME, 'lib', 'rag-query.mjs');
+
+// ── Bin ───────────────────────────────────────────────────────────────────────
+export const JARVIS_BIN          = join(JARVIS_HOME, 'bin');
+
+// ── Wiki ──────────────────────────────────────────────────────────────────────
+export const WIKI_DIR            = join(JARVIS_HOME, 'wiki');
+
+// ── External (Claude CLI / cache) ─────────────────────────────────────────────
+export const CLAUDE_CLI          = join(homedir(), '.local', 'bin', 'claude');
+export const CLAUDE_USAGE_CACHE  = join(homedir(), '.claude', 'usage-cache.json');

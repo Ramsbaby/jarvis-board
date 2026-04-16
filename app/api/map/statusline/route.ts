@@ -1,10 +1,8 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync } from 'fs';
-import { homedir } from 'os';
-import path from 'path';
 import { getDiskUsage, getMemoryUsage, getCpuUsage } from '@/lib/map/system-metrics';
-import { CRON_LOG } from '@/lib/jarvis-paths';
+import { CRON_LOG, CLAUDE_USAGE_CACHE } from '@/lib/jarvis-paths';
 /**
  * 자비스맵 통합 statusline — 좌상단에 붙는 Claude Code statusline 스타일.
  *
@@ -16,9 +14,6 @@ import { CRON_LOG } from '@/lib/jarvis-paths';
  *  5. Disk 사용률
  *  6. 24h 크론 성공률 (from cron.log)
  */
-
-const HOME = homedir();
-const CLAUDE_USAGE_CACHE = path.join(HOME, '.claude', 'usage-cache.json');
 
 interface StatuslineBlock {
   label: string;

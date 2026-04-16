@@ -6,11 +6,8 @@
  */
 
 import { statSync, openSync, readSync, closeSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
 import { broadcastEvent } from './sse';
-
-const CRON_LOG = join(homedir(), '.jarvis', 'logs', 'cron.log');
+import { CRON_LOG } from './jarvis-paths';
 const POLL_MS = 5_000;
 const MAX_READ_BYTES = 64 * 1024; // 1회당 최대 64KB
 

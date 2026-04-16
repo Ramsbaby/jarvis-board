@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { exec, spawn } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
-import { TASKS_JSON as TASKS_FILE, CRON_LOG, JARVIS_HOME as JARVIS } from '@/lib/jarvis-paths';
+import { TASKS_JSON as TASKS_FILE, CRON_LOG, JARVIS_HOME as JARVIS, JARVIS_BIN } from '@/lib/jarvis-paths';
 import { getRequestAuth } from '@/lib/guest-guard';
 
 const HOME = homedir();
@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     //
     // retry route는 "실행 트리거"만 담당. 실행 로직을 재구현하지 않는다.
     // ══════════════════════════════════════════════════════════════
-    const cronRunner = path.join(JARVIS, 'bin', 'jarvis-cron.sh');
+    const cronRunner = path.join(JARVIS_BIN, 'jarvis-cron.sh');
     if (!existsSync(cronRunner)) {
       return NextResponse.json<RetryResponse>({
         success: false,

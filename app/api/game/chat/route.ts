@@ -11,9 +11,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 import { TEAM_REGISTRY, TEAM_KEYWORDS as REGISTRY_KEYWORDS } from '@/lib/map/team-registry';
 import { computeCronStats24h } from '@/lib/map/cron-stats';
-import { JARVIS_HOME } from '@/lib/jarvis-paths';
-
-const CLAUDE_CLI = '/Users/ramsbaby/.local/bin/claude';
+import { JARVIS_HOME, CLAUDE_CLI } from '@/lib/jarvis-paths';
 
 // 공통 NPC 행동 규칙 — 캐릭터 몰입 유지 + 적극적 대응
 const NPC_RULES = `

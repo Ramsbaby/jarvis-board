@@ -3,9 +3,8 @@
  * 매분 체크: 활성 토론이 없거나 30분 이상 지났으면 새 토론 자동 생성
  */
 import { execFile } from 'child_process';
-import { join } from 'path';
-import { homedir } from 'os';
 import { nanoid } from 'nanoid';
+import { RAG_QUERY_PATH, JARVIS_HOME } from './jarvis-paths';
 import { callLLM, MODEL_FAST } from './llm';
 import { broadcastEvent } from './sse';
 
@@ -61,12 +60,12 @@ const FALLBACK_TOPICS = [
 
 /** ~/.jarvis/lib/rag-query.mjs를 child_process로 호출해 관련 컨텍스트 반환 */
 async function queryRag(query: string, timeoutMs = 8000): Promise<string> {
-  const ragQueryPath = join(homedir(), '.jarvis', 'lib', 'rag-query.mjs');
+  const ragQueryPath = RAG_QUERY_PATH;
   return new Promise((resolve) => {
     const child = execFile(
       process.execPath, // 현재 Node.js 바이너리
       [ragQueryPath, query],
-      { timeout: timeoutMs, env: { ...process.env, BOT_HOME: join(homedir(), '.jarvis') } },
+      { timeout: timeoutMs, env: { ...process.env, BOT_HOME: JARVIS_HOME } },
       (err, stdout) => {
         if (err || !stdout.trim()) {
           resolve('');

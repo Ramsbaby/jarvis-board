@@ -251,22 +251,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── 스크립트 실행 ──
+    // ── 스크립트 실행 (크론 러너와 동일 로직: script 있으면 직접, 없으면 jarvis-cron.sh) ──
     lastRetry.set(cronId, now);
-    // ~ → 절대경로 resolve (tasks.json에 "~/.jarvis/scripts/..." 형태로 저장됨)
-    const rawScript = task.script.startsWith('~') ? task.script.replace(/^~/, HOME) : task.script;
-    const scriptPath = rawScript.startsWith('/') ? rawScript : path.join(JARVIS, rawScript);
-    const scriptExists = existsSync(scriptPath);
-    if (!scriptExists) {
+    let scriptPath = '';
+    let scriptExists = false;
+    if (task.script) {
+      const rawScript = task.script.startsWith('~') ? task.script.replace(/^~/, HOME) : task.script;
+      scriptPath = rawScript.startsWith('/') ? rawScript : path.join(JARVIS, rawScript);
+      scriptExists = existsSync(scriptPath);
+    }
+
+    // script가 없거나 파일이 없으면 → jarvis-cron.sh로 실행 (prompt 기반 포함)
+    // 크론 러너(jarvis-cron.sh)가 script/prompt 분기를 자체 처리함
+    const cronRunner = path.join(JARVIS, 'bin', 'jarvis-cron.sh');
+    const useCronRunner = !scriptExists && existsSync(cronRunner);
+
+    if (!scriptExists && !useCronRunner) {
       return NextResponse.json<RetryResponse>({
         success: false,
-        message: `스크립트 파일을 찾을 수 없습니다: ${scriptPath}`,
-        logPath: scriptPath,
-        runnerCommand: `bash "${scriptPath}"`,
-        alternativeActions: [
-          { label: '상위 디렉토리 확인', command: `ls -la "${path.dirname(scriptPath)}"`, description: '상위 디렉토리에 실제 어떤 파일이 있는지 확인합니다.' },
-          { label: 'git log에서 이동 흔적 찾기', command: `cd "${JARVIS}" && git log --diff-filter=R --summary | grep -A1 "${path.basename(scriptPath)}"`, description: '스크립트가 이름 변경/이동됐는지 확인합니다.' },
-        ],
+        message: `스크립트(${scriptPath || 'N/A'})도 없고 크론 러너(${cronRunner})도 없습니다.`,
+        logPath: scriptPath || TASKS_FILE,
       });
     }
 
@@ -275,10 +279,15 @@ export async function POST(req: NextRequest) {
     const resolvedLog = existsSync(taskLog) ? taskLog : CRON_LOG;
 
     const startMs = Date.now();
+    // script가 존재하면 직접 실행, 없으면 jarvis-cron.sh TASK_ID로 실행
+    const runCommand = scriptExists
+      ? `bash "${scriptPath}"`
+      : `TASK_ID="${cronId}" bash "${cronRunner}" "${cronId}"`;
+    const runTimeout = useCronRunner ? 120_000 : 30_000; // 크론 러너는 LLM 호출 포함 가능 → 2분
     const result = await new Promise<RetryResponse>(resolve => {
       exec(
-        `bash "${scriptPath}"`,
-        { timeout: 30_000, env: { ...process.env, HOME }, maxBuffer: 4 * 1024 * 1024 },
+        runCommand,
+        { timeout: runTimeout, env: { ...process.env, HOME }, maxBuffer: 4 * 1024 * 1024 },
         (err, stdout, stderr) => {
           const durationMs = Date.now() - startMs;
           const exitCode = err ? (typeof err.code === 'number' ? err.code : null) : 0;

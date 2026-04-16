@@ -119,8 +119,57 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick, 
     }
   };
 
-  // 모바일에선 숨김 (화면 좁아서)
-  if (isMobile) return null;
+  // 모바일: 장애 알림만 표시 (나머지 패널은 화면 좁아서 숨김)
+  if (isMobile) {
+    if (alertTeams.length === 0) return null;
+    return (
+      <div style={{
+        position: 'fixed', top: 44, left: 8, right: 8, zIndex: 1100,
+        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+      }}>
+        <div style={{
+          background: 'rgba(30, 8, 8, 0.95)',
+          border: '1px solid rgba(248,81,73,0.45)',
+          borderTop: '2px solid #f85149',
+          borderRadius: 10,
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 20px rgba(248,81,73,0.25)',
+          overflow: 'hidden',
+        }}>
+          <div style={{ padding: '9px 12px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#f85149', letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              🚨 장애 알림 {alertTeams.length}팀
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 8px 8px' }}>
+            {alertTeams.slice(0, 3).map((team) => (
+              <div key={team.teamId} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 8px', background: 'rgba(248,81,73,0.06)',
+                border: '1px solid rgba(248,81,73,0.18)', borderRadius: 7,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {team.teamLabel} · 실패 {team.failCount}건
+                  </div>
+                </div>
+                <button
+                  onClick={() => team.failingCronIds.length > 0 && handleRetry(team.failingCronIds[0])}
+                  disabled={retrying === team.failingCronIds[0]}
+                  style={{
+                    flexShrink: 0, padding: '3px 7px', borderRadius: 5, cursor: 'pointer',
+                    fontSize: 9, fontWeight: 700, border: 'none',
+                    background: 'rgba(248,81,73,0.25)', color: '#fca5a5',
+                    opacity: retrying === team.failingCronIds[0] ? 0.5 : 1,
+                  }}
+                >{retrying === team.failingCronIds[0] ? '…' : '▶ 재시도'}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const fmtUntil = (min: number) => {
     if (min < 1) return '곧';

@@ -2835,12 +2835,12 @@ export default function VirtualOffice() {
         }}
       />
 
-      {/* ── 도움말 버튼 (우상단) — Phase 1: 맵/표 토글 제거 ── */}
+      {/* ── 도움말 버튼 (우상단, Banner 왼쪽) — BoardBanner 겹침 방지 ── */}
       <div style={{
         position: 'fixed',
         top: isMobile ? 12 : 20,
-        right: isMobile ? 12 : 24,
-        zIndex: 900,
+        right: isMobile ? 12 : 396,
+        zIndex: 1300,
         display: 'flex',
         gap: 6,
         alignItems: 'center',

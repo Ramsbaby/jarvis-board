@@ -316,6 +316,8 @@ export default function CronDetailPopup({
                     </div>
                   </div>
                 )}
+                {/* 🧠 AI 진단 버튼 (실패 시) */}
+                {isFail && <AIDiagnoseButton cronId={cronPopup.id} />}
               </div>
             );
           })()}
@@ -782,6 +784,87 @@ function RetryResultCard({ result, onCopy }: { result: RetryFullResponse; onCopy
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── AI 진단 버튼 — POST /api/diagnose 호출 ── */
+function AIDiagnoseButton({ cronId }: { cronId: string }) {
+  const [loading, setLoading] = React.useState(false);
+  const [result, setResult] = React.useState<{ causes: string[]; fix: string; costUsd?: number } | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleDiagnose = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch('/api/diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cronId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `HTTP ${res.status}`);
+      } else {
+        setResult(data);
+      }
+    } catch (e) {
+      setError(`요청 실패: ${String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      {!result && !error && (
+        <button
+          onClick={handleDiagnose}
+          disabled={loading}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8, cursor: loading ? 'wait' : 'pointer',
+            fontSize: 12, fontWeight: 700, border: '1px solid #7c3aed40',
+            background: loading ? '#7c3aed15' : '#7c3aed12', color: '#a78bfa',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            transition: 'all 0.15s',
+          }}
+        >
+          {loading ? '🔄 AI 분석 중...' : '🧠 AI 진단 (Groq LLaMA)'}
+        </button>
+      )}
+      {error && (
+        <div style={{ padding: '10px 14px', background: 'rgba(248,81,73,0.06)', border: '1px solid #f8514940', borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: '#f85149' }}>❌ {error}</div>
+        </div>
+      )}
+      {result && (
+        <div style={{ padding: '12px 14px', background: 'rgba(124,58,237,0.06)', border: '1px solid #7c3aed30', borderLeft: '3px solid #7c3aed', borderRadius: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: 0.6 }}>🧠 AI 진단 결과</div>
+            {result.costUsd != null && (
+              <span style={{ fontSize: 9, color: '#6b7280', fontFamily: 'monospace' }}>${result.costUsd.toFixed(4)}</span>
+            )}
+          </div>
+          {result.causes.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#f85149', marginBottom: 4 }}>🔍 원인</div>
+              <ul style={{ paddingLeft: 16, margin: 0 }}>
+                {result.causes.map((c, i) => (
+                  <li key={i} style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.6, marginBottom: 2 }}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.fix && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', marginBottom: 4 }}>💡 해결책</div>
+              <div style={{ fontSize: 12, color: '#86efac', lineHeight: 1.6 }}>{result.fix}</div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -37,7 +37,8 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
       { href: '/interview', label: '면접', icon: '🎤' },
       { href: '/dev-tasks', label: '개발 태스크', icon: '⚙️' },
     ] : []),
-    { href: '/reports', label: '보고서', icon: '📊' },
+    { href: '/reports', label: '보고서', icon: '📝' },
+    { href: '/wiki', label: '위키', icon: '📚' },
     { href: '/leaderboard', label: '리더보드', icon: '🏆' },
     { href: '/about', label: '소개', icon: 'ℹ️' },
   ];

@@ -328,18 +328,47 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={closePopup}
-                    className="jm-close-btn"
-                    style={{
-                      background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#8094b0',
-                      cursor: 'pointer', fontSize: 15, padding: '0',
-                      borderRadius: 10, width: 36, height: 36, flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'background 0.15s, color 0.15s',
-                    }}
-                    aria-label="닫기"
-                  >✕</button>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {/* 🔄 브리핑 새로고침 */}
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const btn = e.currentTarget;
+                        btn.style.opacity = '0.5';
+                        btn.style.pointerEvents = 'none';
+                        try {
+                          const entityId = room?.entityId || briefing.id;
+                          await fetch(`/api/entity/${entityId}/briefing`, { method: 'POST' });
+                          // 짧은 딜레이 후 GET으로 갱신된 브리핑 가져오기
+                          await new Promise(r => setTimeout(r, 500));
+                          window.location.reload();
+                        } catch { /* silent */ }
+                        btn.style.opacity = '1';
+                        btn.style.pointerEvents = 'auto';
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#8094b0',
+                        cursor: 'pointer', fontSize: 14, padding: '0',
+                        borderRadius: 10, width: 36, height: 36,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                      aria-label="브리핑 새로고침"
+                      title="브리핑 새로고침"
+                    >🔄</button>
+                    <button
+                      onClick={closePopup}
+                      className="jm-close-btn"
+                      style={{
+                        background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#8094b0',
+                        cursor: 'pointer', fontSize: 15, padding: '0',
+                        borderRadius: 10, width: 36, height: 36,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                      aria-label="닫기"
+                    >✕</button>
+                  </div>
                 </div>
               </div>
 

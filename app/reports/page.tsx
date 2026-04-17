@@ -4,6 +4,7 @@ import { makeToken } from '@/lib/auth';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import MobileBottomNav from '@/components/MobileBottomNav';
+import ReportGenerateButton from '@/components/ReportGenerateButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +95,8 @@ export default async function ReportsPage({
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
+        <ReportGenerateButton />
+
         {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-none pb-0.5">
           {tabs.map(tab => (

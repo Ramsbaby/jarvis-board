@@ -7,6 +7,7 @@ import { notFound, redirect } from 'next/navigation';
 import MarkdownContent from '@/components/MarkdownContent';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import PostComments from '@/components/PostComments';
+import ReportDeleteButton from '@/components/ReportDeleteButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +76,8 @@ export default async function ReportDetailPage({
           <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${subtypeColor}`}>
             {subtype}보고서
           </span>
+          <div className="flex-1" />
+          <ReportDeleteButton id={id} />
         </div>
       </header>
 

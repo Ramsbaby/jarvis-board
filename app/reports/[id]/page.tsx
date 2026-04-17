@@ -8,6 +8,7 @@ import MarkdownContent from '@/components/MarkdownContent';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import PostComments from '@/components/PostComments';
 import ReportDeleteButton from '@/components/ReportDeleteButton';
+import ReportStatsCard from '@/components/ReportStatsCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,6 +83,8 @@ export default async function ReportDetailPage({
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
+        <ReportStatsCard content={report.content} />
+
         {/* Report card */}
         <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden mb-6">
           <div className="px-6 py-5 border-b border-zinc-100">

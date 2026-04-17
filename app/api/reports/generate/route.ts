@@ -7,7 +7,7 @@ import { homedir } from 'os';
 import { getDb } from '@/lib/db';
 import { randomUUID } from 'crypto';
 import type { DevTask, Post } from '@/lib/types';
-import { GROQ_LLAMA_70B, getTodayCost, getMonthCost } from '@/lib/chat-cost';
+import { GROQ_LLAMA_70B, getCostInRange } from '@/lib/chat-cost';
 import { CRON_LOG, LOGS_DIR } from '@/lib/jarvis-paths';
 import { parseCronLogLine } from '@/lib/map/cron-log-parser';
 import { getRequestAuth } from '@/lib/guest-guard';
@@ -117,8 +117,8 @@ export async function POST(req: NextRequest) {
   // 7. 크론 실행 통계 (cron.log 파싱)
   const cronStats = gatherCronStats(dateStart, dateEnd);
 
-  // 8. Claude/LLM 비용 누적
-  const costStats = await gatherCostStats();
+  // 8. Claude/LLM 비용 — 보고 기간 한정
+  const costStats = await gatherCostStats(dateStart, dateEnd);
 
   // 9. GitHub 커밋 (jarvis + jarvis-board)
   const gitCommits = gatherGithubCommits(dateStart, dateEnd);
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
     : '[크론 실행 통계 수집 실패]';
 
   const costStatsBlock = costStats
-    ? `[LLM 비용 — 오늘 $${costStats.today.toFixed(2)} · 이번 달 누적 $${costStats.month.toFixed(2)}]`
+    ? `[LLM 비용 — 기간 내 $${costStats.period.toFixed(2)} · 해당 월 누적(기간 종료 시점) $${costStats.monthToDate.toFixed(2)}]`
     : '[비용 통계 수집 실패]';
 
   const gitCommitsBlock = gitCommits !== null
@@ -312,7 +312,7 @@ ${discordStatsBlock}
         ? `- 크론: 성공 ${cronStats.success}건 · 실패 ${cronStats.failed}건 · 스킵 ${cronStats.skipped}건`
         : '- 크론 통계 수집 실패',
       costStats
-        ? `- LLM 비용: 오늘 $${costStats.today.toFixed(2)} · 이번 달 $${costStats.month.toFixed(2)}`
+        ? `- LLM 비용: 기간 $${costStats.period.toFixed(2)} · 월누적 $${costStats.monthToDate.toFixed(2)}`
         : '- 비용 통계 수집 실패',
       gitCommits !== null
         ? `- GitHub 커밋: ${gitCommits.length}건`
@@ -430,12 +430,19 @@ function gatherCronStats(dateStart: string, dateEnd: string): {
 }
 
 /**
- * Claude/LLM 비용 조회 (chat-cost 원장).
+ * Claude/LLM 비용 — 보고 기간 내 비용 + 해당 월 기간 종료 시점까지 누적.
+ * dateStart/dateEnd: 'YYYY-MM-DD' (KST) — 기간 경계는 KST 00:00~23:59:59.999.
  */
-async function gatherCostStats(): Promise<{ today: number; month: number } | null> {
+async function gatherCostStats(dateStart: string, dateEnd: string): Promise<{ period: number; monthToDate: number } | null> {
   try {
-    const [today, month] = await Promise.all([getTodayCost(), getMonthCost()]);
-    return { today, month };
+    const startMs = new Date(`${dateStart}T00:00:00+09:00`).getTime();
+    const endMs = new Date(`${dateEnd}T23:59:59.999+09:00`).getTime() + 1;
+    const monthStartMs = new Date(`${dateEnd.slice(0, 7)}-01T00:00:00+09:00`).getTime();
+    const [period, monthToDate] = await Promise.all([
+      getCostInRange(startMs, endMs),
+      getCostInRange(monthStartMs, endMs),
+    ]);
+    return { period, monthToDate };
   } catch {
     return null;
   }

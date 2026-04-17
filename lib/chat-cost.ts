@@ -135,6 +135,19 @@ export async function getMonthCost(): Promise<number> {
   return sum;
 }
 
+/**
+ * 임의 기간(epoch ms) 내 비용 합계.
+ * 백필 보고서가 "생성 시점의 오늘 값"이 아닌 "보고 기간의 실제 값"을 보여줄 수 있게 하기 위한 함수.
+ */
+export async function getCostInRange(startMs: number, endMs: number): Promise<number> {
+  const store = await readStore();
+  let sum = 0;
+  for (const r of store.records) {
+    if (r.ts >= startMs && r.ts < endMs) sum += r.costUsd;
+  }
+  return sum;
+}
+
 export async function getDailyCap(): Promise<number> {
   const raw = process.env.JARVIS_MAP_DAILY_CAP_USD;
   if (raw) {

@@ -46,14 +46,18 @@ function parseStats(content: string): Stat[] {
   const mCommit = content.match(/GitHub 커밋[:\s—]+(\d+)건/);
   if (mCommit) stats.push({ icon: '🐙', label: 'GitHub 커밋', value: `${mCommit[1]}건`, tone: 'zinc' });
 
-  // 이번 달 누적 우선, 없으면 오늘
+  // 월 누적 우선 (신규 포맷: "월누적 $X.XX" 또는 "월 누적 ... $X.XX"),
+  // 레거시 (구 포맷: "이번 달 $X.XX" / "오늘 $X.XX") 순서로 폴백
+  const mMonthToDate = content.match(/월\s*누적[^$]*\$([\d.]+)/);
   const mMonth = content.match(/이번 ?달[^$]*\$([\d.]+)/);
+  const mPeriod = content.match(/기간[^$]*\$([\d.]+)/);
   const mToday = content.match(/오늘[^$]*\$([\d.]+)/);
-  const costVal = mMonth?.[1] ?? mToday?.[1];
+  const costVal = mMonthToDate?.[1] ?? mMonth?.[1] ?? mPeriod?.[1] ?? mToday?.[1];
   if (costVal) {
+    const isMonth = !!(mMonthToDate || mMonth);
     stats.push({
       icon: '💸',
-      label: mMonth ? 'LLM 비용(월)' : 'LLM 비용(일)',
+      label: isMonth ? 'LLM 비용(월)' : 'LLM 비용(기간)',
       value: `$${parseFloat(costVal).toFixed(2)}`,
       tone: parseFloat(costVal) > 10 ? 'amber' : 'zinc',
     });

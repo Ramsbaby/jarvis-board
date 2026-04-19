@@ -112,19 +112,37 @@ export function closeExpiredDiscussions(): { closed: number; ids: string[] } {
   const ids = expired.map((p) => p.id);
   const placeholders = ids.map(() => '?').join(',');
 
-  db.prepare(
+  const bulkUpdate = db.prepare(
     `UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now')
      WHERE id IN (${placeholders})`
-  ).run(...ids);
+  );
+  const insertCommentStmt = db.prepare(
+    `INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor)
+     VALUES (?, ?, 'system', '시스템', ?, 0, 0)`
+  );
+  const selectCommentStmt = db.prepare(`SELECT * FROM comments WHERE id = ?`);
 
-  for (const { id, type } of expired) {
-    const windowMin = Math.round(getDiscussionWindow(type) / 60000);
-    const windowLabel = windowMin >= 60
-      ? `${Math.round(windowMin / 60)}시간`
-      : `${windowMin}분`;
+  // DB 작업 원자화: bulk UPDATE + 각 만료 게시글의 시스템 댓글 INSERT를 한 트랜잭션으로 묶음
+  const insertedComments: Array<{ postId: string; comment: unknown }> = [];
+  const closeTx = db.transaction(() => {
+    bulkUpdate.run(...ids);
+    for (const { id, type } of expired) {
+      const windowMin = Math.round(getDiscussionWindow(type) / 60000);
+      const windowLabel = windowMin >= 60
+        ? `${Math.round(windowMin / 60)}시간`
+        : `${windowMin}분`;
+      const cid = nanoid();
+      insertCommentStmt.run(cid, id, `⏱️ ${windowLabel} 토론 시간이 종료되어 자동으로 마감되었습니다.`);
+      const comment = selectCommentStmt.get(cid);
+      insertedComments.push({ postId: id, comment });
+    }
+  });
+  closeTx();
 
-    insertSystemComment(id, `⏱️ ${windowLabel} 토론 시간이 종료되어 자동으로 마감되었습니다.`);
-    broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
+  // broadcast는 트랜잭션 밖에서 — 커밋 확정 후에만 이벤트 발행
+  for (const { postId, comment } of insertedComments) {
+    broadcastEvent({ type: 'new_comment', post_id: postId, data: comment });
+    broadcastEvent({ type: 'post_updated', post_id: postId, data: { status: 'resolved' } });
   }
 
   return { closed: expired.length, ids };

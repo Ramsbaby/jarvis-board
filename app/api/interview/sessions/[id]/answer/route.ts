@@ -39,22 +39,33 @@ function saveFeedbackDual(
   missingKeywords: string[],
   parseError = false,
   evaluatorVerdict: 'fair' | 'too_generous' | 'too_harsh' = 'fair',
+  nextQuestion?: string | null,
 ): string {
   const feedbackId = nanoid();
-  db.prepare(
-    `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
-     VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
-  ).run(feedbackId, sessionId, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
 
-  // interview_feedback 정규화 테이블에도 저장 (통계 + evaluator verdict용)
-  if (score !== null) {
-    try {
+  // 피드백 메시지 + interview_feedback + (있으면) 다음 질문을 원자적으로 저장
+  const saveTx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
+       VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+    ).run(feedbackId, sessionId, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+
+    if (score !== null) {
+      try {
+        db.prepare(
+          `INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, parse_error, evaluator_verdict)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(nanoid(), sessionId, feedbackId, score, JSON.stringify(strengths), JSON.stringify(weaknesses), JSON.stringify(missingKeywords), betterAnswer, parseError ? 1 : 0, evaluatorVerdict);
+      } catch { /* 마이그레이션 전 구버전 스키마 호환 */ }
+    }
+
+    if (nextQuestion) {
       db.prepare(
-        `INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, parse_error, evaluator_verdict)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(nanoid(), sessionId, feedbackId, score, JSON.stringify(strengths), JSON.stringify(weaknesses), JSON.stringify(missingKeywords), betterAnswer, parseError ? 1 : 0, evaluatorVerdict);
-    } catch { /* 마이그레이션 전 구버전 무시 */ }
-  }
+        `INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`
+      ).run(nanoid(), sessionId, nextQuestion);
+    }
+  });
+  saveTx();
 
   return feedbackId;
 }
@@ -245,12 +256,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
           const parseError = Object.keys(parsed).length === 0;
-          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError, evalResult.verdict);
-
-          if (nextQuestion) {
-            db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
-              .run(nanoid(), id, nextQuestion);
-          }
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError, evalResult.verdict, nextQuestion);
 
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
           controller.close();
@@ -292,10 +298,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
                 const groqParseError = Object.keys(groqParsed).length === 0;
-                saveFeedbackDual(db, id, groqText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, groqParseError, evalResult.verdict);
-                if (nextQuestion) {
-                  db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
-                }
+                saveFeedbackDual(db, id, groqText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, groqParseError, evalResult.verdict, nextQuestion);
                 controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
                 controller.close();
                 return;
@@ -363,12 +366,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
           const parseError = Object.keys(parsed).length === 0;
-          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer as string | null, missingKeywords, parseError, evalResult.verdict);
-
-          if (nextQuestion) {
-            db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
-              .run(nanoid(), id, nextQuestion as string);
-          }
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer as string | null, missingKeywords, parseError, evalResult.verdict, nextQuestion as string | null);
 
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
           controller.close();
@@ -468,11 +466,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const allWeaknesses = [...weaknesses, ...evalResult.additionalWeaknesses];
 
           const parseError = genScore === null && strengths.length === 0 && weaknesses.length === 0;
-          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError, evalResult.verdict);
-
-          if (nextQuestion) {
-            db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
-          }
+          saveFeedbackDual(db, id, fullText, finalScore, strengths, allWeaknesses, betterAnswer, missingKeywords, parseError, evalResult.verdict, nextQuestion);
 
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score: finalScore, nextQuestion, evaluatorVerdict: evalResult.verdict })}\n\n`));
           controller.close();

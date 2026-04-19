@@ -258,7 +258,7 @@ function GroupedTaskList({
             {logEntries.length > 0 && (
               <div className="bg-zinc-900 rounded-lg p-2.5 space-y-1 max-h-24 overflow-y-auto">
                 {logEntries.slice(-4).map((entry, i) => (
-                  <p key={i} className="text-[10px] text-emerald-400 font-mono leading-snug">
+                  <p key={`${entry.time ?? 'no-time'}-${i}`} className="text-[10px] text-emerald-400 font-mono leading-snug">
                     <span className="text-zinc-500 mr-1.5">{entry.time?.slice(11, 16)}</span>
                     {entry.message}
                   </p>

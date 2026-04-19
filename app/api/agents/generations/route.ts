@@ -25,34 +25,54 @@ export async function GET() {
     ORDER BY g.generation_number DESC
   `).all() as Array<Record<string, unknown>>;
 
-  // For each generation, compute avg_score + best/worst ratios from member scores
-  const memberScoreStmt = db.prepare(`
-    SELECT m.agent_id,
-      COALESCE(SUM(s.points), 0) as total_score
-    FROM persona_generation_members m
-    LEFT JOIN agent_scores s ON s.agent_id = m.agent_id
-    WHERE m.generation_id = ?
-    GROUP BY m.agent_id
-  `);
+  // N+1 제거: 모든 세대의 점수/투표 데이터를 한 번에 집계
+  const genIds = rows.map(r => r.id as string);
 
-  const memberVoteStmt = db.prepare(`
-    SELECT
-      COUNT(CASE WHEN pv.vote_type = 'best' THEN 1 END) as best_received,
-      COUNT(CASE WHEN pv.vote_type = 'worst' THEN 1 END) as worst_received,
-      COUNT(pv.id) as total_votes
-    FROM persona_generation_members m
-    JOIN comments c ON c.author = m.agent_id
-    JOIN peer_votes pv ON pv.comment_id = c.id
-    WHERE m.generation_id = ?
-  `);
+  type ScoreAggregate = { generation_id: string; agent_id: string; total_score: number };
+  type VoteAggregate = { generation_id: string; best_received: number; worst_received: number; total_votes: number };
+
+  const scoreRowsAll: ScoreAggregate[] = genIds.length === 0
+    ? []
+    : db.prepare(`
+        SELECT m.generation_id, m.agent_id,
+          COALESCE(SUM(s.points), 0) as total_score
+        FROM persona_generation_members m
+        LEFT JOIN agent_scores s ON s.agent_id = m.agent_id
+        WHERE m.generation_id IN (${genIds.map(() => '?').join(',')})
+        GROUP BY m.generation_id, m.agent_id
+      `).all(...genIds) as ScoreAggregate[];
+
+  const voteRowsAll: VoteAggregate[] = genIds.length === 0
+    ? []
+    : db.prepare(`
+        SELECT m.generation_id,
+          COUNT(CASE WHEN pv.vote_type = 'best' THEN 1 END) as best_received,
+          COUNT(CASE WHEN pv.vote_type = 'worst' THEN 1 END) as worst_received,
+          COUNT(pv.id) as total_votes
+        FROM persona_generation_members m
+        JOIN comments c ON c.author = m.agent_id
+        JOIN peer_votes pv ON pv.comment_id = c.id
+        WHERE m.generation_id IN (${genIds.map(() => '?').join(',')})
+        GROUP BY m.generation_id
+      `).all(...genIds) as VoteAggregate[];
+
+  const scoresByGen = new Map<string, Array<{ agent_id: string; total_score: number }>>();
+  for (const s of scoreRowsAll) {
+    let arr = scoresByGen.get(s.generation_id);
+    if (!arr) { arr = []; scoresByGen.set(s.generation_id, arr); }
+    arr.push({ agent_id: s.agent_id, total_score: s.total_score });
+  }
+  const voteByGen = new Map<string, VoteAggregate>();
+  for (const v of voteRowsAll) voteByGen.set(v.generation_id, v);
 
   const enriched = rows.map(gen => {
-    const scores = memberScoreStmt.all(gen.id) as Array<{ agent_id: string; total_score: number }>;
+    const genId = gen.id as string;
+    const scores = scoresByGen.get(genId) ?? [];
     const avg_score = scores.length > 0
       ? Math.round((scores.reduce((sum, s) => sum + s.total_score, 0) / scores.length) * 100) / 100
       : 0;
 
-    const voteRow = memberVoteStmt.get(gen.id) as { best_received: number; worst_received: number; total_votes: number } | undefined;
+    const voteRow = voteByGen.get(genId);
     const totalVotes = voteRow?.total_votes ?? 0;
     const best_ratio = totalVotes > 0 ? Math.round(((voteRow?.best_received ?? 0) / totalVotes) * 1000) / 1000 : 0;
     const worst_ratio = totalVotes > 0 ? Math.round(((voteRow?.worst_received ?? 0) / totalVotes) * 1000) / 1000 : 0;
@@ -84,31 +104,29 @@ export async function POST(req: NextRequest) {
   const db = getDb();
   const id = nanoid();
 
-  // Auto-increment generation_number
-  const maxRow = db.prepare(
+  // MAX+INSERT race 방지: MAX 조회부터 멤버 등록까지 하나의 트랜잭션(IMMEDIATE)으로 묶음
+  const maxStmt = db.prepare(
     `SELECT COALESCE(MAX(generation_number), 0) + 1 as next_num FROM persona_generations`
-  ).get() as { next_num: number };
-  const generationNumber = maxRow.next_num;
-
-  db.prepare(`
+  );
+  const insertGeneration = db.prepare(`
     INSERT INTO persona_generations (id, generation_number, name, notes)
     VALUES (?, ?, ?, ?)
-  `).run(id, generationNumber, name, notes ?? null);
-
-  // Auto-register all AGENT_ROSTER members
+  `);
   const insertMember = db.prepare(`
     INSERT INTO persona_generation_members (id, generation_id, agent_id, system_prompt_snapshot, status, score_at_hire)
     VALUES (?, ?, ?, ?, 'active', ?)
   `);
-
   const getPersona = db.prepare(`SELECT system_prompt FROM personas WHERE id = ?`);
   const getScore = db.prepare(`SELECT SUM(points) as total FROM agent_scores WHERE agent_id = ?`);
 
-  const registerAll = db.transaction(() => {
+  const createGenerationTx = db.transaction(() => {
+    const maxRow = maxStmt.get() as { next_num: number };
+    const generationNumber = maxRow.next_num;
+    insertGeneration.run(id, generationNumber, name, notes ?? null);
+
     for (const agent of AGENT_ROSTER) {
       const persona = getPersona.get(agent.id) as { system_prompt: string } | undefined;
       const scoreRow = getScore.get(agent.id) as { total: number | null } | undefined;
-
       insertMember.run(
         nanoid(),
         id,
@@ -117,8 +135,9 @@ export async function POST(req: NextRequest) {
         scoreRow?.total ?? 0,
       );
     }
+    return generationNumber;
   });
-  registerAll();
+  createGenerationTx();
 
   // Return created generation
   const created = db.prepare(`SELECT * FROM persona_generations WHERE id = ?`).get(id);

@@ -132,23 +132,28 @@ export async function POST(
     if (body.consensus) {
       const now = new Date().toISOString();
 
-      // Save consensus summary
-      db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ?, consensus_requested_at = NULL, consensus_pending_prompt = NULL WHERE id = ?')
-        .run(body.consensus, now, id);
-
-      // Parse and extract dev tasks from consensus
+      // parse first (CPU-only, no DB) — 실패해도 consensus 저장은 진행
+      let parsedTasks: ReturnType<typeof parseConsensusTasks> = [];
+      let parseError: unknown = null;
       try {
-        const parsedTasks = parseConsensusTasks(body.consensus);
+        parsedTasks = parseConsensusTasks(body.consensus);
+      } catch (e) {
+        parseError = e;
+      }
 
-        // Insert each task into dev_tasks table with awaiting_approval status
+      // consensus UPDATE + dev_tasks INSERTs 원자적으로 묶음
+      const updatePostStmt = db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ?, consensus_requested_at = NULL, consensus_pending_prompt = NULL WHERE id = ?');
+      const insertTaskStmt = db.prepare(`
+        INSERT INTO dev_tasks (
+          id, title, detail, priority, source, assignee, status,
+          post_id, post_title, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const saveConsensusTx = db.transaction(() => {
+        updatePostStmt.run(body.consensus, now, id);
         for (const task of parsedTasks) {
           const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          db.prepare(`
-            INSERT INTO dev_tasks (
-              id, title, detail, priority, source, assignee, status,
-              post_id, post_title, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
+          insertTaskStmt.run(
             taskId,
             task.title,
             task.detail,
@@ -161,11 +166,13 @@ export async function POST(
             now
           );
         }
+      });
+      saveConsensusTx();
 
-        console.log(`[Consensus Parser] Extracted ${parsedTasks.length} tasks from consensus for post ${id}`);
-      } catch (parseError) {
+      if (parseError) {
         console.error(`[Consensus Parser] Failed to parse tasks from consensus for post ${id}:`, parseError);
-        // Don't fail the consensus save if task parsing fails
+      } else {
+        console.log(`[Consensus Parser] Extracted ${parsedTasks.length} tasks from consensus for post ${id}`);
       }
 
       broadcastEvent({ type: 'post_updated', post_id: id, data: {

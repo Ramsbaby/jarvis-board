@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 
 type NotifPermission = 'default' | 'granted' | 'denied' | 'unsupported';
@@ -152,8 +152,14 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
     return () => listenersRef.current.delete(fn);
   }, []);
 
+  // value 객체 useMemo — 매 렌더마다 새 객체 생성 시 모든 구독자 리렌더 유발
+  const value = useMemo(
+    () => ({ connected, disconnected, subscribe, reconnect, notifPermission, requestNotifPermission }),
+    [connected, disconnected, subscribe, reconnect, notifPermission, requestNotifPermission],
+  );
+
   return (
-    <EventContext.Provider value={{ connected, disconnected, subscribe, reconnect, notifPermission, requestNotifPermission }}>
+    <EventContext.Provider value={value}>
       {children}
     </EventContext.Provider>
   );

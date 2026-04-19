@@ -47,12 +47,18 @@ export default function InsightPanel() {
 
   useEffect(() => {
     fetch('/api/insights')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => { setInsights(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
 
     fetch('/api/agents/scores?window=7')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
         const agents: AgentScore[] = Array.isArray(data?.agents) ? data.agents : [];
         const top = agents[0];

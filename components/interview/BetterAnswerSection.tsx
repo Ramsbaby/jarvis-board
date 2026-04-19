@@ -69,7 +69,7 @@ export function BetterAnswerSection({
               <span className="text-[10px] text-zinc-400 mr-1">놓친 키워드</span>
               <span className="flex flex-wrap gap-1 mt-1">
                 {missingKeywords.map((kw, i) => (
-                  <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${config.badgeCls}`}>
+                  <span key={`${kw}-${i}`} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${config.badgeCls}`}>
                     {kw}
                   </span>
                 ))}

@@ -81,7 +81,7 @@ function NoteCard({
           <p className="text-[10px] font-bold text-red-500 uppercase mb-1">❌ 부족했던 점</p>
           <ul className="space-y-0.5">
             {item.weaknesses.map((w, i) => (
-              <li key={i} className="text-xs text-zinc-600 flex gap-1.5">
+              <li key={`${i}-${w.slice(0, 16)}`} className="text-xs text-zinc-600 flex gap-1.5">
                 <span className="text-red-400 shrink-0">•</span>{w}
               </li>
             ))}
@@ -93,7 +93,7 @@ function NoteCard({
       {item.missing_keywords.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {item.missing_keywords.map((kw, i) => (
-            <span key={i} className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-semibold">{kw}</span>
+            <span key={`${kw}-${i}`} className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-semibold">{kw}</span>
           ))}
         </div>
       )}

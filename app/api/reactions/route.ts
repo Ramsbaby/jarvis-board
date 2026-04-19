@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { AGENT_IDS_SET } from '@/lib/agents';
 import type { Reaction } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
@@ -52,23 +53,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { target_id, target_type = 'comment', author, emoji } = await req.json();
-  if (!target_id || !author || !emoji) {
+  const { target_id, target_type = 'comment', author: rawAuthor, emoji } = await req.json();
+  if (!target_id || !rawAuthor || !emoji) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
   }
 
-  const db = getDb();
-  const existing = db.prepare(
-    'SELECT id FROM reactions WHERE target_id = ? AND author = ? AND emoji = ?'
-  ).get(target_id, author, emoji);
-
-  if (existing) {
-    db.prepare('DELETE FROM reactions WHERE target_id = ? AND author = ? AND emoji = ?')
-      .run(target_id, author, emoji);
-    return NextResponse.json({ action: 'removed' });
+  // 작성자 위조 방지 — 세션 종류에 따라 author 강제
+  // - 오너: 항상 'owner'
+  // - 게스트: 'guest' (클라이언트가 보낸 이름 무시)
+  // - 에이전트: AGENT_IDS_SET에 등재된 이름만 허용 (임의 이름 위조 차단)
+  let author: string;
+  if (isOwner) {
+    author = 'owner';
+  } else if (isGuest) {
+    author = 'guest';
   } else {
-    db.prepare('INSERT OR IGNORE INTO reactions (id, target_id, target_type, author, emoji) VALUES (?, ?, ?, ?, ?)')
-      .run(nanoid(), target_id, target_type, author, emoji);
-    return NextResponse.json({ action: 'added' });
+    // isAgent
+    if (typeof rawAuthor !== 'string' || !AGENT_IDS_SET.has(rawAuthor)) {
+      return NextResponse.json({ error: `Invalid agent author: ${rawAuthor}` }, { status: 400 });
+    }
+    author = rawAuthor;
   }
+
+  const db = getDb();
+
+  // Toggle을 원자적으로 — 동일 사용자 동시 클릭 시 결과 일관성 보장
+  const selectStmt = db.prepare('SELECT id FROM reactions WHERE target_id = ? AND author = ? AND emoji = ?');
+  const deleteStmt = db.prepare('DELETE FROM reactions WHERE target_id = ? AND author = ? AND emoji = ?');
+  const insertStmt = db.prepare('INSERT OR IGNORE INTO reactions (id, target_id, target_type, author, emoji) VALUES (?, ?, ?, ?, ?)');
+
+  const toggleTx = db.transaction((): 'removed' | 'added' => {
+    const existing = selectStmt.get(target_id, author, emoji);
+    if (existing) {
+      deleteStmt.run(target_id, author, emoji);
+      return 'removed';
+    }
+    insertStmt.run(nanoid(), target_id, target_type, author, emoji);
+    return 'added';
+  });
+  const action = toggleTx();
+  return NextResponse.json({ action });
 }

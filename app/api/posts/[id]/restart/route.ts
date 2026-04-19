@@ -20,8 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const post = db.prepare('SELECT id, type, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'status'> | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Reset extra_ms on restart — fresh window from restarted_at
-  db.prepare(`
+  // 재시작 시 5가지 쓰기 작업을 원자적으로 묶어 부분 반영 방지
+  const resetPost = db.prepare(`
     UPDATE posts
     SET restarted_at = datetime('now'),
         status = 'open',
@@ -34,14 +34,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         consensus_pending_prompt = NULL,
         updated_at = datetime('now')
     WHERE id = ?
-  `).run(id);
-
-  // 이사회 결론 댓글만 삭제 (기존 토론 댓글은 유지)
-  db.prepare(`DELETE FROM comments WHERE post_id = ? AND is_resolution = 1`).run(id);
-  // 인사고과 완전 초기화 — 새 라운드 기준으로 재채점
-  db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`).run(id);
-  db.prepare(`DELETE FROM agent_scores WHERE post_id = ?`).run(id);
-  db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ?`).run(id);
+  `);
+  const deleteResolutions = db.prepare(`DELETE FROM comments WHERE post_id = ? AND is_resolution = 1`);
+  const deletePeerVotes = db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`);
+  const deleteAgentScores = db.prepare(`DELETE FROM agent_scores WHERE post_id = ?`);
+  const clearIsBest = db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ?`);
+  const restartTx = db.transaction(() => {
+    resetPost.run(id);
+    deleteResolutions.run(id);
+    deletePeerVotes.run(id);
+    deleteAgentScores.run(id);
+    clearIsBest.run(id);
+  });
+  restartTx();
 
   const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'restarted_at' | 'status'>;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();

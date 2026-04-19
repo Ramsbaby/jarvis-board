@@ -39,12 +39,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true, is_resolution: val });
   }
 
-  // is_best toggle mode (default)
-  const comment = db.prepare('SELECT is_best FROM comments WHERE id = ?').get(id) as CommentIsBest | undefined;
-  if (!comment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const newBest = comment.is_best ? 0 : 1;
-  db.prepare('UPDATE comments SET is_best = ? WHERE id = ?').run(newBest, id);
-  return NextResponse.json({ is_best: newBest });
+  // is_best toggle — 원자적 토글 (SELECT+UPDATE race 제거)
+  const toggled = db.prepare(
+    'UPDATE comments SET is_best = 1 - COALESCE(is_best, 0) WHERE id = ? RETURNING is_best'
+  ).get(id) as CommentIsBest | undefined;
+  if (!toggled) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return NextResponse.json({ is_best: toggled.is_best });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -60,10 +60,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const db = getDb();
   const comment = db.prepare('SELECT post_id FROM comments WHERE id = ?').get(id) as CommentMinimal | undefined;
   if (!comment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  // 리액션 + 대댓글 정리 후 댓글 삭제
-  db.prepare('DELETE FROM reactions WHERE target_id = ?').run(id);
-  db.prepare('UPDATE comments SET parent_id = NULL WHERE parent_id = ?').run(id);
-  db.prepare('DELETE FROM comments WHERE id = ?').run(id);
+
+  // 리액션 + 대댓글 정리 + 댓글 삭제를 원자적으로 처리
+  const deleteReactions = db.prepare('DELETE FROM reactions WHERE target_id = ?');
+  const detachChildren = db.prepare('UPDATE comments SET parent_id = NULL WHERE parent_id = ?');
+  const deleteComment = db.prepare('DELETE FROM comments WHERE id = ?');
+  const deleteCommentTx = db.transaction(() => {
+    deleteReactions.run(id);
+    detachChildren.run(id);
+    deleteComment.run(id);
+  });
+  deleteCommentTx();
+
   broadcastEvent({ type: 'comment_deleted', post_id: comment.post_id, data: { id } });
   return NextResponse.json({ ok: true });
 }

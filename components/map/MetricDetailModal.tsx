@@ -274,7 +274,7 @@ export default function MetricDetailModal({ metric, briefingSummary, onClose, is
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {info.consumers.map((c, i) => (
-              <div key={i} style={{ fontSize: 12, color: '#8094b0', paddingLeft: 12, position: 'relative' }}>
+              <div key={`${c}-${i}`} style={{ fontSize: 12, color: '#8094b0', paddingLeft: 12, position: 'relative' }}>
                 <span style={{ position: 'absolute', left: 0, color: '#4a5370' }}>•</span>
                 {c}
               </div>
@@ -291,7 +291,7 @@ export default function MetricDetailModal({ metric, briefingSummary, onClose, is
             {info.thresholds.map((t, i) => {
               const isActive = t === currentThreshold;
               return (
-                <div key={i} style={{
+                <div key={`${t.range}-${i}`} style={{
                   padding: '10px 12px', borderRadius: 10,
                   background: isActive ? `${t.color}15` : 'rgba(255,255,255,0.02)',
                   border: `1px solid ${isActive ? `${t.color}40` : 'rgba(255,255,255,0.05)'}`,
@@ -323,7 +323,7 @@ export default function MetricDetailModal({ metric, briefingSummary, onClose, is
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {info.verifyCommands.map((cmd, i) => (
-                <div key={i} style={{
+                <div key={`${cmd.label}-${i}`} style={{
                   padding: '10px 12px', borderRadius: 8,
                   background: 'rgba(34,197,94,0.05)',
                   border: '1px solid rgba(34,197,94,0.2)',
@@ -368,7 +368,7 @@ export default function MetricDetailModal({ metric, briefingSummary, onClose, is
                 💡 현재 상태 분석
               </div>
               {relevant.map((s, i) => (
-                <div key={i} style={{
+                <div key={`${i}-${s.slice(0, 16)}`} style={{
                   fontSize: 12, color: '#8094b0', lineHeight: 1.6,
                   padding: '8px 12px', borderRadius: 8,
                   background: 'rgba(255,255,255,0.03)',

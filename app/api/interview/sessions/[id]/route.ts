@@ -37,9 +37,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const db = getDb();
   const session = db.prepare(`SELECT id FROM interview_sessions WHERE id = ?`).get(id);
   if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  // 연관 데이터 모두 삭제 후 세션 삭제
-  db.prepare(`DELETE FROM interview_messages WHERE session_id = ?`).run(id);
-  try { db.prepare(`DELETE FROM interview_feedback WHERE session_id = ?`).run(id); } catch { /* 테이블 없으면 skip */ }
-  db.prepare(`DELETE FROM interview_sessions WHERE id = ?`).run(id);
+
+  // 연관 데이터 + 세션 삭제를 원자적으로 처리
+  const deleteMessages = db.prepare(`DELETE FROM interview_messages WHERE session_id = ?`);
+  const deleteSession = db.prepare(`DELETE FROM interview_sessions WHERE id = ?`);
+  // interview_feedback 테이블은 환경에 따라 없을 수 있어 prepare 자체를 방어
+  let deleteFeedback: ReturnType<typeof db.prepare> | null = null;
+  try {
+    deleteFeedback = db.prepare(`DELETE FROM interview_feedback WHERE session_id = ?`);
+  } catch { /* 테이블 없으면 skip */ }
+
+  const deleteSessionTx = db.transaction(() => {
+    deleteMessages.run(id);
+    if (deleteFeedback) {
+      try { deleteFeedback.run(id); } catch { /* 런타임 실패도 skip */ }
+    }
+    deleteSession.run(id);
+  });
+  deleteSessionTx();
+
   return NextResponse.json({ ok: true });
 }

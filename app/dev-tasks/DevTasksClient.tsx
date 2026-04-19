@@ -163,14 +163,14 @@ function renderTitle(title: string): React.ReactNode {
           const isLast = isTruncated && i === parts.length - 2;
           return (
             <code
-              key={i}
+              key={`code-${i}-${code.slice(0, 16)}`}
               className="mx-0.5 px-1 py-0.5 rounded bg-zinc-100 text-zinc-600 font-mono text-[0.82em] border border-zinc-200 not-italic"
             >
               {code}{isLast ? '…' : ''}
             </code>
           );
         }
-        return <span key={i}>{part}</span>;
+        return <span key={`part-${i}-${part.slice(0, 16)}`}>{part}</span>;
       })}
     </>
   );

@@ -84,7 +84,7 @@ async function makeToken(password: string): Promise<string> {
     .join('');
 }
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const start = Date.now();
   const url = req.nextUrl.clone();
   const { pathname } = url;

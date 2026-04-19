@@ -7,6 +7,7 @@ import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap, computeCostUsd, GROQ_LLAMA_70B } from '@/lib/chat-cost';
 import { CRON_LOG } from '@/lib/jarvis-paths';
 import { getTask } from '@/lib/task-types';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 // Groq llama-3.3-70b-versatile (OpenAI 호환, JSON 모드 지원)
 // MODEL 문자열은 lib/chat-cost.ts SSoT에서 import — typo 시 price table miss → costUsd=0 방지
@@ -81,6 +82,14 @@ function parseDiagnoseJson(text: string): DiagnoseResult {
 }
 
 export async function POST(req: NextRequest) {
+  // 인증 가드 — LLM 호출 비용이 발생하므로 오너 또는 에이전트만 허용 (미들웨어와 별개로 defense in depth)
+  const { isOwner } = getRequestAuth(req);
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = !!(agentKey && agentKey === process.env.AGENT_API_KEY);
+  if (!isOwner && !isAgent) {
+    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+  }
+
   let cronId: string;
   try {
     const body = await req.json();

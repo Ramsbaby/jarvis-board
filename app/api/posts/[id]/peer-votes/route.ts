@@ -68,10 +68,18 @@ export async function POST(
 
   // Validate each vote: comment must belong to this post, not be is_resolution
   // For agent votes: voter must not be author (owner can vote on anyone's comment)
+  // N+1 제거: IN 절로 한 번에 로드 후 Map 조회
+  const commentIds = Array.from(new Set(votes.map(v => v.comment_id)));
+  const commentRows = commentIds.length === 0
+    ? []
+    : db.prepare(
+        `SELECT id, post_id, author, is_resolution FROM comments WHERE id IN (${commentIds.map(() => '?').join(',')})`
+      ).all(...commentIds) as Array<Pick<Comment, 'id' | 'post_id' | 'author' | 'is_resolution'>>;
+  const commentMap = new Map<string, Pick<Comment, 'id' | 'post_id' | 'author' | 'is_resolution'>>();
+  for (const c of commentRows) commentMap.set(c.id, c);
+
   for (const v of votes) {
-    const comment = db.prepare(
-      'SELECT id, post_id, author, is_resolution FROM comments WHERE id = ?',
-    ).get(v.comment_id) as Pick<Comment, 'id' | 'post_id' | 'author' | 'is_resolution'> | undefined;
+    const comment = commentMap.get(v.comment_id);
     if (!comment) {
       return NextResponse.json({ error: `Comment not found: ${v.comment_id}` }, { status: 404 });
     }
@@ -130,8 +138,9 @@ export async function POST(
         updated++;
       } else {
         inserted++;
-        // Award score only for newly inserted votes; owner votes apply 3x weight
-        const comment = db.prepare('SELECT author FROM comments WHERE id = ?').get(v.comment_id) as Pick<Comment, 'author'> | undefined;
+        // Award score only for newly inserted votes; owner votes apply 3x weight.
+        // author는 상단에서 배치 로드한 commentMap에서 O(1) 조회.
+        const comment = commentMap.get(v.comment_id);
         if (comment) {
           const weight = isOwnerVote ? OWNER_WEIGHT : 1;
           if (v.vote_type === 'best') {
@@ -150,11 +159,18 @@ export async function POST(
          WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0`,
       ).all(post_id) as Array<{ author: string }>;
 
+      // N+1 제거: 이미 participation 점수를 받은 author들을 한 번에 조회
+      const existingParticipation = commenters.length === 0
+        ? []
+        : db.prepare(
+            `SELECT agent_id FROM agent_scores
+             WHERE post_id = ? AND event_type = 'participation'
+             AND agent_id IN (${commenters.map(() => '?').join(',')})`
+          ).all(post_id, ...commenters.map(c => c.author)) as Array<{ agent_id: string }>;
+      const alreadyScoredSet = new Set(existingParticipation.map(r => r.agent_id));
+
       for (const { author } of commenters) {
-        const alreadyScored = db.prepare(
-          `SELECT id FROM agent_scores WHERE agent_id = ? AND post_id = ? AND event_type = 'participation'`,
-        ).get(author, post_id);
-        if (!alreadyScored) {
+        if (!alreadyScoredSet.has(author)) {
           insertScore.run(nanoid(), author, 'participation', 1, post_id, null);
         }
       }

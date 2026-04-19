@@ -1,10 +1,15 @@
 export const runtime = 'nodejs';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 // GET /api/agents/vote-matrix
 // Returns cross-tab of who votes for whom (voter → target → best/worst counts)
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // 익명 차단 — 내부 에이전트 리더보드 데이터라 게스트 이상만 조회
+  const { isAnon } = getRequestAuth(req);
+  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const db = getDb();
 
   const rows = db.prepare(`

@@ -10,7 +10,10 @@ export default function PostContentSummary({ postId }: { postId: string }) {
     setLoading(true);
     setError(false);
     fetch(`/api/posts/${postId}/summarize?type=content`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(d => { if (d.summary) setSummary(d.summary); })
       .catch(() => { setError(true); })
       .finally(() => setLoading(false));
@@ -66,7 +69,7 @@ export default function PostContentSummary({ postId }: { postId: string }) {
       </div>
       <div className="bg-white px-3 py-2.5 space-y-2">
         {lines.map((line: string, i: number) => (
-          <div key={i} className="flex gap-2 items-start">
+          <div key={`${i}-${line.slice(0, 16)}`} className="flex gap-2 items-start">
             <span className="flex-shrink-0 w-4 h-4 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-bold flex items-center justify-center mt-0.5">
               {i + 1}
             </span>

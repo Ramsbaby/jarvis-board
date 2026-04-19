@@ -328,7 +328,7 @@ export default function ReportClient({
                 <p className="text-xs font-semibold text-gray-500 mb-2">✅ 이 회사 합격 포인트</p>
                 <ul className="space-y-1">
                   {criteria.tips.map((tip: string, i: number) => (
-                    <li key={i} className="text-sm text-gray-700 flex gap-2">
+                    <li key={`tip-${i}-${tip.slice(0, 16)}`} className="text-sm text-gray-700 flex gap-2">
                       <span className="text-emerald-500 shrink-0">•</span>{tip}
                     </li>
                   ))}
@@ -343,7 +343,7 @@ export default function ReportClient({
               <p className="text-[11px] font-bold text-red-600 uppercase tracking-wider">❌ 이번 세션 주요 약점</p>
               <ul className="space-y-1.5">
                 {topWeaknesses.map((w, i) => (
-                  <li key={i} className="text-xs text-zinc-700 flex gap-2">
+                  <li key={`weak-${i}-${w.slice(0, 16)}`} className="text-xs text-zinc-700 flex gap-2">
                     <span className="text-red-400 shrink-0 mt-0.5">•</span>{w}
                   </li>
                 ))}
@@ -357,7 +357,7 @@ export default function ReportClient({
               <p className="text-[11px] font-bold text-orange-700 uppercase tracking-wider">🔑 전체 세션에서 언급 안 한 핵심 키워드</p>
               <div className="flex flex-wrap gap-1.5">
                 {topMissingKw.map((kw, i) => (
-                  <span key={i} className="text-[11px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-semibold">{kw}</span>
+                  <span key={`${kw}-${i}`} className="text-[11px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-semibold">{kw}</span>
                 ))}
               </div>
               <p className="text-[11px] text-orange-600 mt-1">위 키워드는 실제 면접에서 필수로 언급해야 합니다.</p>

@@ -607,19 +607,24 @@ export async function POST(req: NextRequest) {
   const basePrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
   const db = getDb();
 
-  // ── Phase 1: User 메시지 INSERT + Assistant placeholder INSERT ──
-  // status='completed'가 기본값이므로 user 메시지는 그대로, assistant placeholder는 status='streaming'
+  // ── Phase 1: User + Assistant placeholder INSERT (원자적) ──
+  // user INSERT와 assistant placeholder INSERT 사이에 프로세스 크래시 시 user만 남는 부분반영 방지
   // isRetry=true 인 경우 user 메시지 중복 INSERT 방지 (재시도 — 원본 user 메시지 재사용)
-  if (!isRetry) {
-    db.prepare(
-      "INSERT INTO game_chat (team_id, role, content, status) VALUES (?, 'user', ?, 'completed')"
-    ).run(teamId, message);
-  }
-
-  const assistantInsert = db.prepare(
+  const userInsertStmt = db.prepare(
+    "INSERT INTO game_chat (team_id, role, content, status) VALUES (?, 'user', ?, 'completed')"
+  );
+  const assistantInsertStmt = db.prepare(
     "INSERT INTO game_chat (team_id, role, content, status) VALUES (?, 'assistant', '', 'streaming')"
-  ).run(teamId);
-  const assistantId = Number(assistantInsert.lastInsertRowid);
+  );
+
+  const phase1Tx = db.transaction((): number => {
+    if (!isRetry) {
+      userInsertStmt.run(teamId, message);
+    }
+    const res = assistantInsertStmt.run(teamId);
+    return Number(res.lastInsertRowid);
+  });
+  const assistantId = phase1Tx();
 
   const recentMessages = db.prepare(
     "SELECT role, content FROM game_chat WHERE team_id = ? AND status IN ('completed', 'aborted') ORDER BY created_at DESC LIMIT 6"

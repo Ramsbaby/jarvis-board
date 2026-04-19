@@ -1,18 +1,26 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getRequestAuth } from '@/lib/guest-guard';
 import type { Comment } from '@/lib/types';
 import { CLAUDE_HAIKU_4_5 } from '@/lib/chat-cost';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // 익명 접근 차단 — 캐시 조회는 게스트도 허용, LLM 신규 호출은 오너만
+  const { isOwner, isAnon } = getRequestAuth(req);
+  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await params;
   const db = getDb();
 
   const comment = db.prepare('SELECT id, content, ai_summary FROM comments WHERE id = ?').get(id) as Pick<Comment, 'id' | 'content' | 'ai_summary'> | undefined;
   if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  // Return cached summary if exists
+  // Return cached summary if exists — 게스트도 읽기 허용
   if (comment.ai_summary) return NextResponse.json({ summary: comment.ai_summary });
+
+  // 신규 LLM 호출 — 비용 발생. 대표님만 허용
+  if (!isOwner) return NextResponse.json({ error: '요약이 아직 생성되지 않았습니다' }, { status: 404 });
 
   // Check API key
   const apiKey = process.env.ANTHROPIC_API_KEY;

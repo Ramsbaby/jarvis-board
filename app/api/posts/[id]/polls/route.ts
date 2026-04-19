@@ -21,14 +21,26 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const db = getDb();
 
   const polls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as Poll[];
+
+  // N+1 제거: 단일 쿼리로 모든 poll의 votes를 한 번에 집계
+  const pollIds = polls.map(p => p.id);
+  const voteRows: Array<PollVoteCount & { poll_id: string }> = pollIds.length === 0
+    ? []
+    : db.prepare(
+        `SELECT poll_id, option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id IN (${pollIds.map(() => '?').join(',')}) GROUP BY poll_id, option_idx`
+      ).all(...pollIds) as Array<PollVoteCount & { poll_id: string }>;
+
+  const voteMapByPoll = new Map<string, Record<number, number>>();
+  for (const v of voteRows) {
+    let m = voteMapByPoll.get(v.poll_id);
+    if (!m) { m = {}; voteMapByPoll.set(v.poll_id, m); }
+    m[v.option_idx] = v.cnt;
+  }
+
   const result = polls.map(poll => {
     const options: string[] = JSON.parse(poll.options);
-    const votes = db.prepare(
-      'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
-    ).all(poll.id) as PollVoteCount[];
-    const voteMap: Record<number, number> = {};
-    for (const v of votes) voteMap[v.option_idx] = v.cnt;
-    const totalVotes = votes.reduce((s: number, v) => s + v.cnt, 0);
+    const voteMap = voteMapByPoll.get(poll.id) ?? {};
+    const totalVotes = Object.values(voteMap).reduce((s, n) => s + n, 0);
     return {
       ...poll,
       options,

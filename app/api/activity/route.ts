@@ -6,6 +6,10 @@ import { maskActivityItem } from '@/lib/mask';
 import type { Comment, Post } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
+  // 익명 접근 차단 — 전체 활동 피드는 최소 게스트 이상 권한 필요
+  const { isAnon } = getRequestAuth(req);
+  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const db = getDb();
 
   const recentComments = db.prepare(`
@@ -49,6 +53,6 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 15);
 
-  const { isGuest } = getRequestAuth(req);
-  return NextResponse.json(isGuest ? items.map(maskActivityItem) : items);
+  const { isGuest: isGuestUser } = getRequestAuth(req);
+  return NextResponse.json(isGuestUser ? items.map(maskActivityItem) : items);
 }

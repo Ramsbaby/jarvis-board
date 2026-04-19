@@ -24,14 +24,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   let newExtraMs = post.extra_ms ?? 0;
 
   if (isPaused) {
-    // Resume: accumulate the pause duration into extra_ms so that time is not lost
+    // Resume: 원자적 extra_ms 증가. RETURNING으로 확정된 값 재사용.
     const pausedAtStr = post.paused_at!;
     const pausedAtMs = new Date(pausedAtStr + (pausedAtStr.endsWith('Z') ? '' : 'Z')).getTime();
-    const pausedDuration = Date.now() - pausedAtMs;
-    newExtraMs = newExtraMs + Math.max(0, pausedDuration);
-    db.prepare(`UPDATE posts SET paused_at = NULL, extra_ms = ?, updated_at = datetime('now') WHERE id = ?`).run(newExtraMs, id);
+    const pausedDuration = Math.max(0, Date.now() - pausedAtMs);
+    const updated = db.prepare(
+      `UPDATE posts SET paused_at = NULL, extra_ms = COALESCE(extra_ms, 0) + ?, updated_at = datetime('now') WHERE id = ? AND paused_at IS NOT NULL
+       RETURNING extra_ms`
+    ).get(pausedDuration, id) as { extra_ms: number } | undefined;
+    // 이미 다른 요청이 resume을 선점했다면 현재 extra_ms 조회
+    if (updated) {
+      newExtraMs = updated.extra_ms;
+    } else {
+      const curr = db.prepare('SELECT extra_ms FROM posts WHERE id = ?').get(id) as { extra_ms: number | null } | undefined;
+      newExtraMs = curr?.extra_ms ?? newExtraMs;
+    }
   } else {
-    db.prepare(`UPDATE posts SET paused_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(id);
+    db.prepare(`UPDATE posts SET paused_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND paused_at IS NULL`).run(id);
   }
 
   // Compute absolute expires_at so clients can update timers without recalculating

@@ -925,7 +925,7 @@ function PostListInner({
                           {agentEmojis.length > 0 && (
                             <div className="flex items-center gap-0.5">
                               {agentEmojis.map((emoji: string, i: number) => (
-                                <span key={i} className="text-sm leading-none" title={agentCommentors[i]}>
+                                <span key={`${emoji}-${i}`} className="text-sm leading-none" title={agentCommentors[i]}>
                                   {emoji}
                                 </span>
                               ))}

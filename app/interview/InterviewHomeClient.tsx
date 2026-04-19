@@ -381,7 +381,7 @@ function TendencyWidget({ company }: { company: string }) {
         {data.tendency_diagnosis.length > 0 && (
           <div className="space-y-1">
             {data.tendency_diagnosis.map((d, i) => (
-              <p key={i} className="text-xs text-zinc-700 leading-relaxed">{d}</p>
+              <p key={`td-${i}-${d.slice(0, 16)}`} className="text-xs text-zinc-700 leading-relaxed">{d}</p>
             ))}
           </div>
         )}
@@ -393,7 +393,7 @@ function TendencyWidget({ company }: { company: string }) {
                 <p className="text-[10px] font-bold text-emerald-600 mb-1.5">✅ 반복 강점 패턴</p>
                 <ul className="space-y-1">
                   {data.top_strengths.map((s, i) => (
-                    <li key={i} className="text-xs text-zinc-600 flex gap-1.5">
+                    <li key={`str-${i}-${s.text?.slice(0, 16) ?? ''}`} className="text-xs text-zinc-600 flex gap-1.5">
                       <span className="text-emerald-400 shrink-0">•</span>
                       <span className="truncate">{s.text}</span>
                       <span className="text-[10px] text-zinc-400 shrink-0">×{s.count}</span>
@@ -407,7 +407,7 @@ function TendencyWidget({ company }: { company: string }) {
                 <p className="text-[10px] font-bold text-red-500 mb-1.5">❌ 반복 약점 패턴</p>
                 <ul className="space-y-1">
                   {data.top_weaknesses.map((w, i) => (
-                    <li key={i} className="text-xs text-zinc-600 flex gap-1.5">
+                    <li key={`weak-${i}-${w.text?.slice(0, 16) ?? ''}`} className="text-xs text-zinc-600 flex gap-1.5">
                       <span className="text-red-400 shrink-0">•</span>
                       <span className="truncate">{w.text}</span>
                       <span className="text-[10px] text-zinc-400 shrink-0">×{w.count}</span>

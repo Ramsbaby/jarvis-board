@@ -48,7 +48,7 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
       </div>
       <div className="bg-white px-4 py-3 space-y-2.5">
         {lines.map((line, i) => (
-          <div key={i} className="flex gap-3 items-start">
+          <div key={`${i}-${line.slice(0, 16)}`} className="flex gap-3 items-start">
             <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center mt-0.5">
               {i + 1}
             </span>
@@ -986,6 +986,7 @@ export default function PostComments({
                 setPauseLoading(true);
                 try {
                   const res = await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
                   const data = await res.json();
                   setPaused(data.paused);
                   // Refresh server component so StickyCountdownBar/CountdownTimer get new expiresAt

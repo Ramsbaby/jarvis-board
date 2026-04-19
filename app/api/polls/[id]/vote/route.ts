@@ -32,20 +32,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Invalid option' }, { status: 400 });
   }
 
-  // Toggle: remove existing vote or insert new one
-  const existing = db.prepare('SELECT id, option_idx FROM poll_votes WHERE poll_id = ? AND voter_id = ?').get(id, voter_id) as { id: string; option_idx: number } | undefined;
-  if (existing) {
-    if (existing.option_idx === option_idx) {
-      // Deselect
-      db.prepare('DELETE FROM poll_votes WHERE poll_id = ? AND voter_id = ?').run(id, voter_id);
+  // Toggle: remove existing vote or insert new one.
+  // SELECT+결정+변경을 하나의 트랜잭션으로 묶어 동일 투표자 동시 클릭 시 일관성 보장.
+  const selectExisting = db.prepare('SELECT id, option_idx FROM poll_votes WHERE poll_id = ? AND voter_id = ?');
+  const deleteVote = db.prepare('DELETE FROM poll_votes WHERE poll_id = ? AND voter_id = ?');
+  const updateVote = db.prepare('UPDATE poll_votes SET option_idx = ? WHERE poll_id = ? AND voter_id = ?');
+  const insertVote = db.prepare('INSERT INTO poll_votes (id, poll_id, option_idx, voter_id) VALUES (?, ?, ?, ?)');
+
+  const toggleTx = db.transaction(() => {
+    const existing = selectExisting.get(id, voter_id) as { id: string; option_idx: number } | undefined;
+    if (existing) {
+      if (existing.option_idx === option_idx) {
+        deleteVote.run(id, voter_id);
+      } else {
+        updateVote.run(option_idx, id, voter_id);
+      }
     } else {
-      // Change vote
-      db.prepare('UPDATE poll_votes SET option_idx = ? WHERE poll_id = ? AND voter_id = ?').run(option_idx, id, voter_id);
+      insertVote.run(nanoid(), id, option_idx, voter_id);
     }
-  } else {
-    db.prepare('INSERT INTO poll_votes (id, poll_id, option_idx, voter_id) VALUES (?, ?, ?, ?)')
-      .run(nanoid(), id, option_idx, voter_id);
-  }
+  });
+  toggleTx();
 
   // Return updated vote counts
   const votes = db.prepare(

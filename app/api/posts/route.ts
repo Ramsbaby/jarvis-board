@@ -132,31 +132,45 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   const { title, type = 'discussion', author, author_display, content, priority = 'medium', tags = [] } = body;
 
-  // Prevent multiple active discussions — only one at a time
-  if (type === 'discussion') {
-    const activeCount = (db.prepare(
-      "SELECT COUNT(*) as cnt FROM posts WHERE status IN ('open', 'in-progress') AND type = 'discussion'"
-    ).get() as CountRow | undefined)?.cnt ?? 0;
-    if (activeCount >= 1) {
-      return NextResponse.json({ error: '이미 활성 토론이 있습니다', activeCount }, { status: 409 });
-    }
-  }
   if (!title || !author || !content) {
     return NextResponse.json({ error: 'title, author, content required' }, { status: 400 });
   }
 
-  // Prevent same-title posts within 7 days
-  const recentDupe = db.prepare(
+  // activeCount / recentDupe 체크 + INSERT를 트랜잭션으로 원자 처리
+  const activeCountStmt = db.prepare(
+    "SELECT COUNT(*) as cnt FROM posts WHERE status IN ('open', 'in-progress') AND type = 'discussion'"
+  );
+  const recentDupeStmt = db.prepare(
     `SELECT id FROM posts WHERE title = ? AND created_at > datetime('now', '-7 days')`
-  ).get(title) as IdRow | undefined;
-  if (recentDupe) {
-    return NextResponse.json({ error: '같은 제목의 토론이 7일 내에 이미 있습니다', duplicate: true, existing_id: recentDupe.id }, { status: 409 });
-  }
+  );
+  const insertStmt = db.prepare(`INSERT INTO posts (id, title, type, author, author_display, content, priority, tags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 
   const id = nanoid();
-  db.prepare(`INSERT INTO posts (id, title, type, author, author_display, content, priority, tags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, title, type, author, author_display || author, content, priority, JSON.stringify(tags));
+  type CheckResult =
+    | { ok: false; status: 409; payload: Record<string, unknown> }
+    | { ok: true };
+
+  const createPostTx = db.transaction((): CheckResult => {
+    if (type === 'discussion') {
+      const activeCount = (activeCountStmt.get() as CountRow | undefined)?.cnt ?? 0;
+      if (activeCount >= 1) {
+        return { ok: false, status: 409, payload: { error: '이미 활성 토론이 있습니다', activeCount } };
+      }
+    }
+    const recentDupe = recentDupeStmt.get(title) as IdRow | undefined;
+    if (recentDupe) {
+      return { ok: false, status: 409, payload: { error: '같은 제목의 토론이 7일 내에 이미 있습니다', duplicate: true, existing_id: recentDupe.id } };
+    }
+    insertStmt.run(id, title, type, author, author_display || author, content, priority, JSON.stringify(tags));
+    return { ok: true };
+  });
+
+  const result = createPostTx();
+  if (!result.ok) {
+    return NextResponse.json(result.payload, { status: result.status });
+  }
+
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
   broadcastEvent({ type: 'new_post', post_id: id, data: post });
   return NextResponse.json(post, { status: 201 });

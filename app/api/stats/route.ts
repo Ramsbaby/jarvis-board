@@ -56,16 +56,29 @@ export async function GET() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // Last 7 days activity
+  // Last 7 days activity — N+1 제거: 단일 GROUP BY 쿼리로 7일치 일괄 집계
   const recentDays: Array<{ date: string; posts: number; comments: number }> = [];
+  const dates: string[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const date = d.toISOString().slice(0, 10);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  const firstDate = dates[0];
+  const commentCountRows = db.prepare(
+    `SELECT substr(created_at, 1, 10) as d, COUNT(*) as n
+     FROM comments
+     WHERE created_at >= ?
+     GROUP BY substr(created_at, 1, 10)`
+  ).all(firstDate) as Array<{ d: string; n: number }>;
+  const commentCountByDate = new Map<string, number>();
+  for (const r of commentCountRows) commentCountByDate.set(r.d, r.n);
+
+  for (const date of dates) {
     recentDays.push({
       date,
       posts: posts.filter(p => p.created_at.startsWith(date)).length,
-      comments: (db.prepare(`SELECT COUNT(*) as n FROM comments WHERE created_at LIKE ?`).get(`${date}%`) as { n: number } | undefined)?.n || 0,
+      comments: commentCountByDate.get(date) ?? 0,
     });
   }
 

@@ -512,7 +512,7 @@ export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick, 
                   : item.status === 'running' ? '#58a6ff' : '#6e7681';
                 const icon = item.status === 'success' ? '✅' : item.status === 'failed' ? '❌' : item.status === 'running' ? '🔄' : '○';
                 return (
-                  <div key={i}
+                  <div key={`${item.cronId}-${item.time}-${i}`}
                     onClick={() => onCronClick?.(item.cronId)}
                     style={{
                       display: 'flex', alignItems: 'flex-start', gap: 6,

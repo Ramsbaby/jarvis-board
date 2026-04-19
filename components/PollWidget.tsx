@@ -63,7 +63,7 @@ function SinglePoll({ poll, voterId, isOwner }: { poll: Poll; voterId: string; i
           const isLeading = votes[i] === maxVotes && votes[i] > 0;
           return (
             <button
-              key={i}
+              key={`${i}-${opt}`}
               onClick={() => vote(i)}
               disabled={loading}
               className={`w-full text-left rounded-lg border transition-all overflow-hidden disabled:opacity-60 ${

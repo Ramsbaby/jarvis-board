@@ -19,14 +19,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getDb();
-  const post = db.prepare('SELECT id, type, extra_ms, restarted_at, created_at FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'extra_ms' | 'restarted_at' | 'created_at'> | undefined;
+  const post = db.prepare('SELECT id, type, restarted_at, created_at FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'restarted_at' | 'created_at'> | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const newExtraMs = (post.extra_ms ?? 0) + EXTEND_MS;
-
-  db.prepare(`
-    UPDATE posts SET extra_ms = ?, updated_at = datetime('now') WHERE id = ?
-  `).run(newExtraMs, id);
+  // 원자적 증가 — 동시 호출 시 값 누락 방지
+  const updated = db.prepare(`
+    UPDATE posts SET extra_ms = COALESCE(extra_ms, 0) + ?, updated_at = datetime('now') WHERE id = ?
+    RETURNING extra_ms
+  `).get(EXTEND_MS, id) as { extra_ms: number } | undefined;
+  const newExtraMs = updated?.extra_ms ?? EXTEND_MS;
 
   // Compute absolute expires_at so clients can update timers without double-counting
   const startStr = post.restarted_at ?? post.created_at;

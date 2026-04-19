@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { callLLM, LLMError } from '@/lib/llm';
+import { getRequestAuth } from '@/lib/guest-guard';
 import type { DevTask, LogEntry } from '@/lib/types';
 
 const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
@@ -20,9 +21,13 @@ function buildCachedResponse(task: DevTask) {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 캐시된 결과 조회는 대표/게스트 모두 허용, 익명은 차단
+  const { isAnon } = getRequestAuth(req);
+  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await params;
   const db = getDb();
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
@@ -32,9 +37,17 @@ export async function GET(
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 신규 LLM 호출 — 비용 발생하므로 대표님만 허용
+  const { isOwner } = getRequestAuth(req);
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = !!(agentKey && agentKey === process.env.AGENT_API_KEY);
+  if (!isOwner && !isAgent) {
+    return NextResponse.json({ error: 'Owner or agent auth required' }, { status: 403 });
+  }
+
   const { id } = await params;
   const db = getDb();
 

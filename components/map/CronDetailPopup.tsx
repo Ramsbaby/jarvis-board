@@ -224,7 +224,7 @@ export default function CronDetailPopup({
               {/* mini run dots */}
               <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                 {runs.slice(0, 7).map((r, i) => (
-                  <div key={i} title={r.status} style={{
+                  <div key={`${r.status}-${i}`} title={r.status} style={{
                     width: 10, height: 10, borderRadius: '50%',
                     background: r.status === 'success' ? '#22c55e' : r.status === 'failed' ? '#f85149' : r.status === 'skipped' ? '#d29922' : '#4b5563',
                     flexShrink: 0,
@@ -437,13 +437,13 @@ export default function CronDetailPopup({
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', marginBottom: 6 }}>하는 일</div>
                     <ul style={{ paddingLeft: 16, margin: 0, marginBottom: 10 }}>
                       {deep.whatItDoes.map((w, i) => (
-                        <li key={i} style={{ marginBottom: 3 }}>{w}</li>
+                        <li key={`what-${i}-${w.slice(0, 16)}`} style={{ marginBottom: 3 }}>{w}</li>
                       ))}
                     </ul>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', marginBottom: 6 }}>언제 유용한지</div>
                     <ul style={{ paddingLeft: 16, margin: 0 }}>
                       {deep.whenUseful.map((w, i) => (
-                        <li key={i} style={{ marginBottom: 3 }}>{w}</li>
+                        <li key={`when-${i}-${w.slice(0, 16)}`} style={{ marginBottom: 3 }}>{w}</li>
                       ))}
                     </ul>
                   </div>
@@ -457,7 +457,7 @@ export default function CronDetailPopup({
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {actions.map((a, i) => (
-                        <CeoActionRow key={i} action={a} cronId={cronPopup.id} />
+                        <CeoActionRow key={`${a.label || a.kind || 'action'}-${i}`} action={a} cronId={cronPopup.id} />
                       ))}
                     </div>
                   </div>
@@ -773,7 +773,7 @@ function RetryResultCard({ result, onCopy }: { result: RetryFullResponse; onCopy
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {result.alternativeActions.map((a, i) => (
-              <div key={i} style={{
+              <div key={`${a.label}-${i}`} style={{
                 padding: '7px 9px',
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid rgba(255,255,255,0.08)',
@@ -854,7 +854,7 @@ function AIDiagnoseButton({ cronId }: { cronId: string }) {
               <div style={{ fontSize: 10, fontWeight: 700, color: '#f85149', marginBottom: 4 }}>🔍 원인</div>
               <ul style={{ paddingLeft: 16, margin: 0 }}>
                 {result.causes.map((c, i) => (
-                  <li key={i} style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.6, marginBottom: 2 }}>{c}</li>
+                  <li key={`cause-${i}-${c.slice(0, 16)}`} style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.6, marginBottom: 2 }}>{c}</li>
                 ))}
               </ul>
             </div>
@@ -887,6 +887,7 @@ function CronControlBar({ cronId, isDisabled }: { cronId: string; isDisabled: bo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !enabled }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.success) {
         setEnabled(!enabled);
@@ -900,6 +901,7 @@ function CronControlBar({ cronId, isDisabled }: { cronId: string; isDisabled: bo
     setLoadingLogs(true);
     try {
       const res = await fetch(`/api/crons/${cronId}/logs?lines=80`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setLogs(data.sections || []);
       setShowLogs(true);
@@ -945,7 +947,7 @@ function CronControlBar({ cronId, isDisabled }: { cronId: string; isDisabled: bo
       {showLogs && logs && (
         <div style={{ marginTop: 10, maxHeight: 300, overflowY: 'auto' }}>
           {logs.map((section, i) => (
-            <div key={i} style={{ marginBottom: 10 }}>
+            <div key={`${section.title}-${i}`} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{section.title}</div>
               <pre style={{
                 fontSize: 11, color: '#8b949e', background: 'rgba(0,0,0,0.4)',

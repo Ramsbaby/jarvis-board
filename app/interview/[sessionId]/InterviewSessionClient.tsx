@@ -108,6 +108,7 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess, questionContent, company
         credentials: 'include',
         body: JSON.stringify({ question: questionContent, company, category }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { answer: string; keyPoints: string[]; whyGood: string };
       setCardBest(data);
       setShowCardBest(true);
@@ -191,13 +192,13 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess, questionContent, company
           {strengths.length > 0 && (
             <div>
               <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">✅ 잘한 점</p>
-              <ul className="space-y-1">{strengths.map((s, i) => <li key={i} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-emerald-500 shrink-0">•</span>{s}</li>)}</ul>
+              <ul className="space-y-1">{strengths.map((s, i) => <li key={`strength-${i}-${s.slice(0, 16)}`} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-emerald-500 shrink-0">•</span>{s}</li>)}</ul>
             </div>
           )}
           {weaknesses.length > 0 && (
             <div>
               <p className="text-[11px] font-bold text-red-600 uppercase tracking-wider mb-1">❌ 부족한 점</p>
-              <ul className="space-y-1">{weaknesses.map((w, i) => <li key={i} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-red-400 shrink-0">•</span>{w}</li>)}</ul>
+              <ul className="space-y-1">{weaknesses.map((w, i) => <li key={`weakness-${i}-${w.slice(0, 16)}`} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-red-400 shrink-0">•</span>{w}</li>)}</ul>
             </div>
           )}
           {missingKeywords.length > 0 && (
@@ -205,7 +206,7 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess, questionContent, company
               <p className="text-[11px] font-bold text-orange-700 mb-1.5">🔑 언급 안 한 핵심 키워드</p>
               <div className="flex flex-wrap gap-1.5">
                 {missingKeywords.map((kw, i) => (
-                  <span key={i} className="text-[11px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-semibold">{kw}</span>
+                  <span key={`${kw}-${i}`} className="text-[11px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-semibold">{kw}</span>
                 ))}
               </div>
             </div>
@@ -243,7 +244,7 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess, questionContent, company
               {cardBest.keyPoints.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {cardBest.keyPoints.map((kp, i) => (
-                    <span key={i} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-600">{kp}</span>
+                    <span key={`kp-${i}-${kp}`} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-600">{kp}</span>
                   ))}
                 </div>
               )}
@@ -326,7 +327,10 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
 
   useEffect(() => {
     fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
         if (data.session?.category === 'live-coding') {
           router.replace('/interview');
@@ -407,7 +411,10 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                 showError('피드백 저장 중 오류가 발생했습니다. 다시 시도해 주세요.');
               }
               // 증분 업데이트: 전체 리로드 대신 신규 메시지만 가져와 추가
-              const updated = await fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' }).then(r => r.json());
+              const updated = await fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' }).then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+              });
               const newMessages: Message[] = updated.messages ?? [];
               setMessages(newMessages);
             }
@@ -463,6 +470,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
           category: session?.category,
         }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setBestAnswer(data);
       setShowBest(true);
@@ -639,7 +647,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                     <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">핵심 키워드</p>
                     <div className="flex flex-wrap gap-1.5">
                       {bestAnswer.keyPoints.map((kp, i) => (
-                        <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-600">
+                        <span key={`best-kp-${i}-${kp}`} className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-600">
                           {kp}
                         </span>
                       ))}

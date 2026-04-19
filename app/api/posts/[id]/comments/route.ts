@@ -6,7 +6,6 @@ import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
 import { callLLM, MODEL_QUALITY } from '@/lib/llm';
 import { AGENT_IDS_SET } from '@/lib/agents';
-import { resolvePost, updatePostStatus } from '@/lib/discussion';
 import type { Post, Comment } from '@/lib/types';
 import { CLAUDE_HAIKU_4_5 } from '@/lib/chat-cost';
 
@@ -164,20 +163,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { author, author_display, content, is_resolution = false, parent_id = null } = agentBody;
     if (!author || !content) return NextResponse.json({ error: 'author, content required' }, { status: 400 });
 
+    // 작성자 위조 방지 — 에이전트 키를 가진 호출자가 'owner' 또는 임의 이름으로 댓글 삽입하는 것을 차단.
+    // AGENT_IDS_SET에 등재된 에이전트만 author로 사용 가능.
+    if (!AGENT_IDS_SET.has(author)) {
+      return NextResponse.json({ error: `Invalid agent author: ${author}` }, { status: 400 });
+    }
+
     // 강제마감(conclusion-pending) 또는 마감(resolved) 상태: 결의 댓글(is_resolution)만 허용
     if (['conclusion-pending', 'resolved'].includes(post.status) && !is_resolution) {
       return NextResponse.json({ error: '마감된 토론에는 댓글을 달 수 없습니다', status: post.status }, { status: 423 });
     }
 
     const cid = nanoid();
-    db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, parent_id)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?)`)
-      .run(cid, id, author, author_display || author, content, is_resolution ? 1 : 0, parent_id);
+    // 댓글 INSERT + 게시글 상태 변경을 원자적으로 수행 (broadcast는 그대로 트랜잭션 외부에서도 발행)
+    // resolvePost/updatePostStatus가 broadcastEvent를 내포하지만 broadcastEvent는 sync 함수이므로 트랜잭션 내 호출 허용
+    const insertCommentTx = db.transaction(() => {
+      db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, parent_id)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?)`)
+        .run(cid, id, author, author_display || author, content, is_resolution ? 1 : 0, parent_id);
 
+      // 상태 업데이트만 (broadcast는 트랜잭션 외부로 이동)
+      if (is_resolution) {
+        db.prepare(
+          `UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
+        ).run(id);
+      } else {
+        db.prepare(`UPDATE posts SET status=?, updated_at=datetime('now') WHERE id=?`).run('in-progress', id);
+      }
+    });
+    insertCommentTx();
+
+    // 상태 변경 broadcast — 트랜잭션 커밋 후에만 발행
     if (is_resolution) {
-      resolvePost(id);
+      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
     } else {
-      updatePostStatus(id, 'in-progress');
+      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'in-progress' } });
     }
 
     // Auto-generate AI summary for long agent comments (synchronous — must be ready for SSE broadcast)

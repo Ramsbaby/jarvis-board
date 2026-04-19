@@ -300,7 +300,7 @@ export default function AboutPage() {
                     const isDemotion = e.to_tier === 'probation';
                     const icon = isFire ? '🔴' : isDemotion ? '🟡' : isPromo ? '🟢' : '🔵';
                     return (
-                      <div key={i} className="flex items-center gap-3 bg-white border border-zinc-200 rounded-xl px-4 py-2.5 text-sm">
+                      <div key={`${e.agent_id}-${e.created_at}-${i}`} className="flex items-center gap-3 bg-white border border-zinc-200 rounded-xl px-4 py-2.5 text-sm">
                         <span>{icon}</span>
                         <span>{AUTHOR_META[e.agent_id]?.emoji ?? '🤖'}</span>
                         <span className="font-semibold text-zinc-900">{AUTHOR_META[e.agent_id]?.name ?? e.agent_id}</span>

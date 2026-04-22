@@ -53,3 +53,8 @@ next-env.d.ts
 .claude/worktrees/**/*.db-wal
 office/node_modules
 office/dist
+
+# Audit screenshots (일회성 감사 결과물 — 용량 크고 이력 가치만 있음. 필요 시 별도 아카이브)
+docs/screenshots/audit-*/
+docs/screenshots/owner-audit-*/
+

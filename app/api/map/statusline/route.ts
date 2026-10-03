@@ -1,6 +1,8 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { getDiskUsage, getMemoryUsage, getCpuUsage } from '@/lib/map/system-metrics';
 import { CLAUDE_USAGE_CACHE } from '@/lib/jarvis-paths';
 import { listAutomations, lastRunAtMs, runStatus } from '@/lib/openclaw-automations';
@@ -71,6 +73,37 @@ async function getCron24hRate(): Promise<{ rate: number; success: number; failed
 
 const USAGE_MAX_AGE_MS = 6 * 3600_000;
 
+// ── 당직 폭주 차단기 (duty-pause.sh) ──
+// PAUSE 파일이 있으면 '정지' — AI 수리 잡이 멈춘 상태다. 장부(ledger.jsonl)는 최근 24h 건수만 센다.
+const DUTY_DIR = process.env.DUTY_STATE_DIR || join(homedir(), '.openclaw', 'workspace', 'state', 'duty');
+
+function getDutyStatus(): { paused: boolean; since: string; total24h: number; real24h: number } | null {
+  if (!existsSync(DUTY_DIR)) return null;
+  let paused = false;
+  let since = '';
+  try {
+    const pause = join(DUTY_DIR, 'PAUSE');
+    if (existsSync(pause)) {
+      paused = true;
+      since = readFileSync(pause, 'utf8').split('\n')[0].split('\t')[0].trim().slice(0, 40);
+    }
+  } catch { paused = true; }
+  let total24h = 0, real24h = 0;
+  try {
+    const cutoff = Date.now() - 24 * 3600_000;
+    for (const line of readFileSync(join(DUTY_DIR, 'ledger.jsonl'), 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const row = JSON.parse(line) as { ts?: string; verdict?: string };
+        if (!row.ts || Date.parse(row.ts) < cutoff) continue;
+        total24h++;
+        if (row.verdict === 'real') real24h++;
+      } catch { /* 깨진 줄은 건너뜀 */ }
+    }
+  } catch { /* 장부 없음 — 건수 0 */ }
+  return { paused, since, total24h, real24h };
+}
+
 function isUsageFresh(u: ClaudeUsageCache | null): u is ClaudeUsageCache {
   if (!u || u.ok === false || !u.fiveH) return false;
   const ts = u.ts ? Date.parse(u.ts) : NaN;
@@ -108,6 +141,7 @@ export async function GET() {
     const mem = getMemoryUsage();
     const disk = getDiskUsage();
     const cron = await getCron24hRate();
+    const duty = getDutyStatus();
 
     // Claude 구독 사용량 — 사용한 % 기준 (pct 자체가 used%)
     const fiveHPct = usage?.fiveH?.pct ?? 0;
@@ -183,6 +217,14 @@ export async function GET() {
         raw: cron.rate,
         status: statusByRate(cron.rate),
         tooltip: `Cron 24h: 최근 24시간 OpenClaw 자동화 성공률 — 성공 ${cron.success}건 / 실패 ${cron.failed}건`,
+      } satisfies StatuslineBlock] : []),
+      ...(duty ? [{
+        label: '당직',
+        icon: '🛡',
+        value: duty.paused ? '정지' : '동작',
+        raw: duty.paused ? 100 : 0,
+        status: duty.paused ? 'RED' : 'GREEN',
+        tooltip: `당직(AI 자동 수리): ${duty.paused ? `비상 정지 중${duty.since ? ` — ${duty.since}부터` : ''}` : '동작 중'} · 최근 24시간 장부 ${duty.total24h}건 (실제 문제 ${duty.real24h}건)`,
       } satisfies StatuslineBlock] : []),
     ];
 

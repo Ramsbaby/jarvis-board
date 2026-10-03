@@ -1,26 +1,36 @@
 /**
  * wiki.ts — LLM Wiki CRUD 유틸리티
  *
- * ~/.jarvis/wiki/ 파일시스템 기반 위키 읽기/검색.
- * Discord봇과 Board가 공유하는 SSoT.
+ * 파일시스템 기반 위키 읽기/검색. 2026-09-12 이관 후 위키 정본은 ~/.openclaw-data/wiki 다.
+ * (~/.jarvis/wiki 는 그곳을 가리키는 심볼릭 링크 — 링크 경로를 그대로 쓰면 아래 경로 검사가
+ *  realpath 와 어긋나 모든 페이지를 거부했고, /wiki 가 '0개 페이지'로 보였다.)
  */
 
 import { readFileSync, readdirSync, existsSync, statSync, realpathSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 
-const WIKI_DIR = process.env.WIKI_DIR || join(homedir(), '.jarvis', 'wiki');
+const WIKI_DIR_CONFIGURED = process.env.WIKI_DIR || join(homedir(), '.openclaw-data', 'wiki');
 
-// Path traversal 방어 — 해결된 경로가 WIKI_DIR 하위인지 검증
+/** 심볼릭 링크를 푼 위키 루트. 모든 경로 계산과 검사는 이 실제 경로 기준으로 한다. */
+function wikiRoot(): string {
+  try {
+    return realpathSync(WIKI_DIR_CONFIGURED);
+  } catch {
+    return WIKI_DIR_CONFIGURED;
+  }
+}
+const WIKI_DIR = wikiRoot();
+
+// Path traversal 방어 — 실제 경로(realpath)가 위키 루트 하위인지 검증 (symlink 우회 포함)
 function _safeWikiPath(pagePath: string): string | null {
   try {
     const resolved = resolve(WIKI_DIR, pagePath);
-    const wikiReal = existsSync(WIKI_DIR) ? realpathSync(WIKI_DIR) : WIKI_DIR;
-    // 해결된 경로가 WIKI_DIR 하위가 아니면 거부 (symlink 우회 포함)
-    if (!resolved.startsWith(wikiReal + '/') && resolved !== wikiReal) {
+    const real = existsSync(resolved) ? realpathSync(resolved) : resolved;
+    if (!real.startsWith(WIKI_DIR + '/') && real !== WIKI_DIR) {
       return null;
     }
-    return resolved;
+    return real;
   } catch {
     return null;
   }

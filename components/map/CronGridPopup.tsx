@@ -118,7 +118,7 @@ function CronCard({ cron, onOpen }: CronCardProps) {
         >
           {cron.name}
         </span>
-        <span style={{ fontSize: 13 }}>{cron.teamEmoji}</span>
+        <span style={{ fontSize: 13 }} title={cron.team} aria-label={cron.team}>{cron.teamEmoji}</span>
       </div>
       <div
         style={{

@@ -38,6 +38,13 @@ export interface TeamEntityDef {
   description?: string;
   /** cron.log 매칭용 키워드 — SSoT. 여기 한 곳만 수정한다. */
   keywords: string[];
+  /**
+   * 크론 센터 팀 분류 전용 추가 키워드 (OpenClaw 자동화 이름용, 2026-10-03).
+   * lib/cron-team.ts 만 keywords 와 합쳐 쓰고, 이름에 든 키워드 중 '가장 긴 것'의 팀을 고른다.
+   * keywords 에 넣지 않은 이유: 브리핑·채팅은 cron.log 를 팀별 단순 포함 검사로 걸러,
+   * 'maintenance' 같은 넓은 말을 넣으면 다른 팀 작업('oss-maintenance')이 SRE 실적으로 섞였다.
+   */
+  cronKeywords?: string[];
   /** 담당 Discord 채널 */
   discordChannel?: string;
   /** 스케줄 요약 */
@@ -71,6 +78,14 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
       'infra', 'sync-system-metrics', 'log-cleanup', 'update-usage-cache',
       'token-sync', 'daily-usage-check', 'security-scan', 'scorecard-enforcer',
     ],
+    cronKeywords: [
+      // 감시·당직·정리·백업·회전·유지보수
+      'watch', 'launchd', 'process-guard', 'resilience', 'error-spike', 'heartbeat',
+      'supervisor', 'orchestrator', 'duty-round', 'suppressed-digest',
+      'cleanup', 'zombie', 'trash', 'worktree', 'backup', 'rotate', 'retention',
+      'maintenance', 'auto-update', 'token-refresh', 'env-key', 'version-drift',
+      'github-actions', 'claude-usage', 'growth-monitor', 'memory-trend',
+    ],
     discordChannel: 'jarvis-system',
     schedule: '매일 09:00',
     persona: '나는 SRE실장 이준혁입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 예방적 신뢰성 엔지니어링을 추구하며, 장애 발생 전에 선제 조치를 취합니다. 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.',
@@ -98,6 +113,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
       'tqqq', 'market-alert', 'market', 'stock', 'macro',
       'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule', 'boram',
     ],
+    cronKeywords: [
+      'lotto', 'payslip', 'retirement', 'tax-doc', 'token-ledger',
+    ],
     discordChannel: 'jarvis-ceo',
     schedule: '매일',
     persona: '나는 재무실장 장원석입니다. 자비스 AI 운영 비용, TQQQ·시장 포지션, 오너 Preply 수입, 손익 추적을 담당합니다. 숫자와 통화는 정확하게 전달합니다.',
@@ -110,6 +128,10 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     title: '메모리·RAG 아카이빙',
     avatar: '🗄️',
     keywords: ['record-daily', 'record', 'memory', 'session-sum', 'session', 'compact', 'rag-index', 'rag', 'vault', 'gen-system-overview'],
+    cronKeywords: [
+      'wiki', 'dreaming', 'entity-graph', 'gen-index', 'gen-inventory',
+      'insight', 'profile-extract', 'judgments-extract', 'ajqe',
+    ],
     discordChannel: 'jarvis-system',
     schedule: '매일 22:30',
     persona: '나는 데이터실장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 백엔드 업무를 담당합니다. 사용자 검색 UI는 자료실(문지아) 소관입니다.',
@@ -137,6 +159,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
       'career', 'commitment', 'growth', 'job', 'resume', 'interview',
       'academy', 'learning', 'study', 'lecture', 'isg',
     ],
+    cronKeywords: [
+      'work-log',
+    ],
     discordChannel: 'jarvis-ceo',
     schedule: '매주',
     persona: '나는 인재개발실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다.',
@@ -149,6 +174,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     title: 'OSS·블로그·콘텐츠 전략',
     avatar: '📣',
     keywords: ['brand', 'openclaw', 'blog', 'oss', 'github-star', 'stars'],
+    cronKeywords: [
+      'oss-maintenance', 'gostop',
+    ],
     discordChannel: 'jarvis-blog',
     schedule: '매주 화 08:00',
     persona: '나는 마케팅실장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.',
@@ -161,6 +189,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     title: '품질·감사·E2E 테스트',
     avatar: '🔍',
     keywords: ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync', 'doc-supervisor', 'code-auditor', 'cron-auditor', 'stale-task', 'roi'],
+    cronKeywords: [
+      'mistake', 'effectiveness', 'ghost-tool', 'canary', 'coverage', 'budget', 'learning-loop',
+    ],
     discordChannel: 'jarvis-system',
     schedule: '매일 23:00',
     persona: '나는 QA실장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.',
@@ -175,6 +206,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     keywords: [
       'bot-quality', 'bot-self-critique', 'auto-diagnose',
       'skill-eval', 'ask-claude', 'weekly-usage-stats',
+    ],
+    cronKeywords: [
+      'skill', 'self-evolution', 'self-retrospective',
     ],
     discordChannel: 'jarvis',
     schedule: '상시',
@@ -194,6 +228,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
       'connections', 'connections-weekly', 'weekly-kpi', 'monthly-review',
       'daily-summary', 'schedule-coherence', 'private-sync',
       'weekly-code-review', 'jarvis-coder',
+    ],
+    cronKeywords: [
+      'owner-state', 'personal-snapshot', 'deadline', 'inbox', 'followup', 'report',
     ],
     discordChannel: 'jarvis-ceo',
     schedule: '매일',
@@ -274,6 +311,9 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     icon: '📋',
     description: 'AI 자동 코딩 태스크 대기열',
     keywords: ['dev-runner', 'agent-batch-commit'],
+    cronKeywords: [
+      'dev-task',
+    ],
     persona: '나는 개발 큐 담당입니다. AI 자동 코딩 태스크 대기열을 관리합니다.',
   },
 };

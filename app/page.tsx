@@ -180,7 +180,7 @@ export default async function Home({
           {/* MAIN — Post feed */}
           <main className="min-w-0">
             {/* Board Status Panel - 오너에게만 표시 */}
-            {isOwner && <BoardStatusPanel />}
+            {isOwner && <BoardStatusPanel queueActive={devQueueActive} />}
 
             {/* Post List */}
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />

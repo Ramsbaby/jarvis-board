@@ -63,7 +63,11 @@ function parseAgentCommenters(raw?: string): string[] {
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-export default function BoardStatusPanel() {
+/**
+ * @param queueActive 개발 큐 러너(OpenClaw 자동화)가 켜져 있는지 — 홈(page.tsx)이 getDevQueueState() 로 계산해 넘긴다.
+ *   꺼져 있으면 '검토 요청됨'은 아무도 처리하지 않는 보관 기록이므로 '대기'가 아니라 '보관(미처리)'로 센다.
+ */
+export default function BoardStatusPanel({ queueActive = false }: { queueActive?: boolean }) {
   const [discussion, setDiscussion] = useState<CurrentDiscussion | null>(null);
   const [decision, setDecision] = useState<RecentDecision | null>(null);
   const [execution, setExecution] = useState<JarvisExecution>({ doneCount: 0, latestSummary: null });
@@ -77,7 +81,9 @@ export default function BoardStatusPanel() {
         fetch('/api/posts?limit=100'),
         fetch('/api/posts?status=resolved&has_consensus=1&limit=5'),
         fetch('/api/dev-tasks?status=done', { credentials: 'include' }),
-        fetch('/api/dev-tasks?status=awaiting', { credentials: 'include' }),
+        // DB 상태값은 'awaiting_approval' 이다 — 예전 'awaiting' 은 아무 행과도 맞지 않아 대기 수가 늘 0이었다.
+        // 목록은 50행에서 잘리므로 건수(count=1)로 받는다.
+        fetch('/api/dev-tasks?status=awaiting_approval&count=1', { credentials: 'include' }),
       ]);
 
       // --- Card 1: Current Discussion ---
@@ -138,8 +144,8 @@ export default function BoardStatusPanel() {
         latestSummary: mostRecent?.result_summary ?? null,
       });
 
-      const awaitingTasks: DevTask[] = awaitingRes.ok ? await awaitingRes.json() : [];
-      setDevAwaitingCount(awaitingTasks.length);
+      const awaiting: { count?: number } = awaitingRes.ok ? await awaitingRes.json() : {};
+      setDevAwaitingCount(typeof awaiting.count === 'number' ? awaiting.count : 0);
 
       setLoading(false);
     } catch (error) {
@@ -242,7 +248,7 @@ export default function BoardStatusPanel() {
             {execution.doneCount > 0 || devAwaitingCount > 0 ? (
               <div className="flex flex-col gap-2 flex-1">
                 <p className="text-sm text-zinc-700 font-medium">
-                  완료 {execution.doneCount}건 · 대기 {devAwaitingCount}건
+                  완료 {execution.doneCount}건 · {queueActive ? '대기' : '보관(미처리)'} {devAwaitingCount}건
                 </p>
                 {execution.latestSummary && (
                   <p className="text-xs text-zinc-600 line-clamp-2 mt-auto">

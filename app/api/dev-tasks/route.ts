@@ -14,6 +14,14 @@ export async function GET(req: NextRequest) {
   const statusFilter = url.searchParams.get('status');
   const db = getDb();
 
+  // ?count=1 — 목록(최대 50행) 대신 전체 건수만. 목록 길이로 세면 50에서 잘린다.
+  if (url.searchParams.get('count') === '1') {
+    const row = (statusFilter
+      ? db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks WHERE status = ?').get(statusFilter)
+      : db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks').get()) as { cnt: number } | undefined;
+    return NextResponse.json({ status: statusFilter, count: row?.cnt ?? 0 });
+  }
+
   let tasks: DevTask[];
   if (statusFilter) {
     tasks = db.prepare(

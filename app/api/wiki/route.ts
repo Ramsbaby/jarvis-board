@@ -2,7 +2,7 @@
  * /api/wiki — 위키 검색 + 통계
  *
  * GET /api/wiki?q=검색어&domain=ops&type=incident&limit=10
- * GET /api/wiki (q 없으면 전체 통계 + 도메인별 페이지 목록)
+ * GET /api/wiki (q 없으면 전체 통계 + 페이지 목록 — 하위 폴더 문서 포함, 각 항목에 folder·modified)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,8 +23,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ results, total: results.length, query: q });
   }
 
-  // No query → return stats + all pages
-  const stats = wikiStats();
-  const pages = listPages(domain);
+  // No query → return stats + all pages (하위 폴더 포함). 파일은 한 번만 읽는다.
+  const all = listPages();
+  const stats = wikiStats(all);
+  const pages = domain ? all.filter(p => p.folder === domain || p.folder.startsWith(domain + '/')) : all;
   return NextResponse.json({ stats, pages });
 }

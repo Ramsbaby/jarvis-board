@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 interface WikiPage {
   path: string;
@@ -10,7 +10,13 @@ interface WikiPage {
   updated: string;
   confidence: string;
   relevance: number;
+  /** 문서가 든 폴더 (예: "career/interviews"), 최상위는 "" */
+  folder?: string;
+  /** 파일 수정 시각 ISO */
+  modified?: string;
 }
+
+type SortMode = 'folder' | 'recent';
 
 interface WikiStats {
   totalPages: number;
@@ -30,6 +36,26 @@ const DOMAIN_EMOJI: Record<string, string> = {
   briefings: '📋', family: '👨‍👩‍👧', health: '💪', meta: '⚙️',
 };
 
+/** 문서 폴더 — 옛 응답(folder 없음)도 경로에서 계산 */
+function folderOf(p: WikiPage): string {
+  if (typeof p.folder === 'string') return p.folder;
+  const i = p.path.lastIndexOf('/');
+  return i >= 0 ? p.path.slice(0, i) : '';
+}
+
+/** 최신순 정렬 키 — 화면에 보이는 날짜(updated)가 날짜 꼴이면 그것, 아니면 파일 수정일 */
+function dateKey(p: WikiPage): string {
+  return /^\d{4}-\d{2}-\d{2}/.test(p.updated) ? p.updated.slice(0, 10) : (p.modified || '').slice(0, 10);
+}
+
+/** 이보다 문서가 많으면 폴더 묶음을 처음엔 접어 둔다 (검색 결과는 항상 펼침) */
+const COLLAPSE_THRESHOLD = 60;
+
+/** 위키 본문을 HTML 로 넣기 전에 태그를 글자로 바꾼다 — 위키에 섞여 들어온 HTML·스크립트가 실행되지 않게 */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 export default function WikiBrowserPage() {
   const [stats, setStats] = useState<WikiStats | null>(null);
   const [pages, setPages] = useState<WikiPage[]>([]);
@@ -38,6 +64,10 @@ export default function WikiBrowserPage() {
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('folder');
+  const [isSearchResult, setIsSearchResult] = useState(false);
+  /** 폴더별 접힘 상태 — 값이 없으면 기본값(문서 수에 따라)을 쓴다 */
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const fetchPages = useCallback(async (domain?: string, q?: string) => {
     setLoading(true);
@@ -49,8 +79,11 @@ export default function WikiBrowserPage() {
       const res = await fetch(`/api/wiki?${params}`);
       if (!res.ok) throw new Error(res.status === 403 ? '접근 권한 없음' : `HTTP ${res.status}`);
       const data = await res.json();
-      setStats(data.stats || null);
+      // 검색 응답에는 stats 가 없다 — 그때 도메인 버튼이 사라지지 않도록 기존 통계를 유지
+      if (data.stats) setStats(data.stats);
       setPages(data.results || data.pages || []);
+      setIsSearchResult(!!q);
+      setCollapsed({});
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -76,6 +109,34 @@ export default function WikiBrowserPage() {
   };
 
   useEffect(() => { fetchPages(); }, [fetchPages]);
+
+  const recentPages = useMemo(
+    () => [...pages].sort((a, b) =>
+      dateKey(b).localeCompare(dateKey(a)) || (b.modified || '').localeCompare(a.modified || '') || a.path.localeCompare(b.path)),
+    [pages],
+  );
+
+  const folderGroups = useMemo(() => {
+    const map = new Map<string, WikiPage[]>();
+    for (const p of pages) {
+      const f = folderOf(p);
+      const list = map.get(f);
+      if (list) list.push(p);
+      else map.set(f, [p]);
+    }
+    // 최상위 문서('') 먼저, 그다음 폴더 이름순. 폴더 안은 검색이면 관련도순(받은 순서), 아니면 경로순
+    return [...map.entries()]
+      .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+      .map(([folder, list]) => ({
+        folder,
+        pages: isSearchResult ? list : [...list].sort((x, y) => x.path.localeCompare(y.path)),
+      }));
+  }, [pages, isSearchResult]);
+
+  const defaultCollapsed = !isSearchResult && pages.length > COLLAPSE_THRESHOLD;
+  const isCollapsed = (folder: string) => collapsed[folder] ?? defaultCollapsed;
+  const toggleFolder = (folder: string) =>
+    setCollapsed(prev => ({ ...prev, [folder]: !(prev[folder] ?? defaultCollapsed) }));
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,6 +204,27 @@ export default function WikiBrowserPage() {
           ))}
         </div>
 
+        {/* 정렬 — 폴더별 묶음 / 최신순 */}
+        <div style={{ padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 4, borderBottom: '1px solid #30363d', fontSize: 11 }}>
+          <span style={{ color: '#8b949e', marginRight: 4 }}>정렬</span>
+          {([['folder', '📁 폴더별'], ['recent', '🕒 최신순']] as Array<[SortMode, string]>).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={sortMode === mode}
+              onClick={() => setSortMode(mode)}
+              style={{
+                padding: '3px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 11,
+                background: sortMode === mode ? '#1f6feb' : '#21262d',
+                color: sortMode === mode ? '#fff' : '#8b949e',
+              }}
+            >{label}</button>
+          ))}
+          {!loading && !error && (
+            <span style={{ marginLeft: 'auto', color: '#8b949e' }}>{pages.length}개</span>
+          )}
+        </div>
+
         {/* 페이지 목록 */}
         <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
           {loading && <p style={{ textAlign: 'center', color: '#8b949e', padding: 16 }}>로딩 중...</p>}
@@ -163,26 +245,34 @@ export default function WikiBrowserPage() {
             </div>
           )}
           {!loading && !error && pages.length === 0 && <p style={{ textAlign: 'center', color: '#8b949e', padding: 16 }}>페이지 없음</p>}
-          {pages.map(p => (
-            <div
-              key={p.path}
-              onClick={() => fetchPage(p.path)}
-              style={{
-                padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid #21262d',
-                background: selectedPage?.path === p.path ? '#161b22' : 'transparent',
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f6fc' }}>
-                {DOMAIN_EMOJI[p.path.split('/')[0]] || '📄'} {p.title}
-              </div>
-              <div style={{ fontSize: 11, color: '#8b949e', marginTop: 2 }}>
-                {p.path} · {p.updated} · {p.confidence}
-              </div>
-              <div style={{ fontSize: 11, color: '#6e7681', marginTop: 4, lineHeight: 1.4 }}>
-                {p.snippet.slice(0, 100)}...
-              </div>
-            </div>
+          {!loading && !error && sortMode === 'recent' && recentPages.map(p => (
+            <WikiListItem key={p.path} p={p} selected={selectedPage?.path === p.path} showFolder onOpen={fetchPage} />
           ))}
+          {!loading && !error && sortMode === 'folder' && folderGroups.map(g => {
+            const closed = isCollapsed(g.folder);
+            const top = g.folder.split('/')[0];
+            return (
+              <div key={g.folder || '(root)'}>
+                <button
+                  type="button"
+                  onClick={() => toggleFolder(g.folder)}
+                  aria-expanded={!closed}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '8px 16px', border: 'none', cursor: 'pointer',
+                    background: '#161b22', color: '#c9d1d9', fontSize: 12, fontWeight: 600,
+                    borderBottom: '1px solid #21262d', display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <span style={{ color: '#8b949e', width: 10 }}>{closed ? '▸' : '▾'}</span>
+                  <span>{g.folder ? `${DOMAIN_EMOJI[top] || '📁'} ${g.folder}` : '🏠 최상위'}</span>
+                  <span style={{ marginLeft: 'auto', color: '#8b949e', fontWeight: 400 }}>{g.pages.length}</span>
+                </button>
+                {!closed && g.pages.map(p => (
+                  <WikiListItem key={p.path} p={p} selected={selectedPage?.path === p.path} onOpen={fetchPage} />
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -212,7 +302,7 @@ export default function WikiBrowserPage() {
             <div
               style={{ lineHeight: 1.8, fontSize: 14 }}
               dangerouslySetInnerHTML={{
-                __html: selectedPage.content
+                __html: escapeHtml(selectedPage.content)
                   .replace(/^### (.+)$/gm, '<h3 style="color:#f0f6fc;margin-top:24px">$1</h3>')
                   .replace(/^## (.+)$/gm, '<h2 style="color:#f0f6fc;margin-top:32px;border-bottom:1px solid #30363d;padding-bottom:8px">$1</h2>')
                   .replace(/^# (.+)$/gm, '<h1 style="color:#f0f6fc;margin-top:0">$1</h1>')
@@ -224,6 +314,37 @@ export default function WikiBrowserPage() {
             />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function WikiListItem({ p, selected, showFolder, onOpen }: {
+  p: WikiPage;
+  selected: boolean;
+  showFolder?: boolean;
+  onOpen: (path: string) => void;
+}) {
+  const folder = folderOf(p);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(p.path)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(p.path); } }}
+      style={{
+        padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid #21262d',
+        background: selected ? '#161b22' : 'transparent',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f6fc' }}>
+        {DOMAIN_EMOJI[p.path.split('/')[0]] || '📄'} {p.title}
+      </div>
+      <div style={{ fontSize: 11, color: '#8b949e', marginTop: 2 }}>
+        {showFolder ? `${folder || '최상위'} · ` : ''}{p.updated} · {p.confidence}
+      </div>
+      <div style={{ fontSize: 11, color: '#6e7681', marginTop: 4, lineHeight: 1.4 }}>
+        {p.snippet.slice(0, 100)}...
       </div>
     </div>
   );

@@ -10,7 +10,15 @@
  */
 
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { totalmem, cpus, loadavg } from 'os';
 import { getDb } from '@/lib/db';
+
+// launchd(ai.jarvis.board) PATH 에는 /usr/sbin 이 없어 `sysctl` 이 command not found 였다.
+// 그 결과 RAM 0%, CPU 는 (전 프로세스 %cpu 합 / 1코어) 로 계산돼 항상 100% 로 보였다.
+// 셸 명령은 절대 경로로 부르고, 커널 값은 Node os 모듈에서 바로 읽는다.
+// macOS 의 '/' 는 읽기 전용 시스템 볼륨이라 실제 데이터 사용량은 Data 볼륨에서 잰다.
+const DATA_VOLUME = '/System/Volumes/Data';
 
 function safeExec(cmd: string, timeoutMs = 2000): string {
   try {
@@ -39,7 +47,8 @@ export interface CpuUsage {
 }
 
 export function getDiskUsage(): DiskUsage {
-  const out = safeExec("df -h / | awk 'NR==2{print $3,$2,$5}'");
+  const mount = existsSync(DATA_VOLUME) ? DATA_VOLUME : '/';
+  const out = safeExec(`/bin/df -h ${mount} | /usr/bin/awk 'NR==2{print $3,$2,$5}'`);
   if (!out) return { percent: 0, used: '?', total: '?' };
   const [used, total, pct] = out.split(/\s+/);
   return { percent: parseInt(pct) || 0, used: used || '?', total: total || '?' };
@@ -47,14 +56,14 @@ export function getDiskUsage(): DiskUsage {
 
 export function getMemoryUsage(): MemoryUsage {
   try {
-    // Total memory via sysctl (bytes) — instant, no TTY needed
-    const totalBytes = parseInt(safeExec('sysctl -n hw.memsize')) || 0;
+    const totalBytes = totalmem();
     if (!totalBytes) return { percent: 0, usedGb: 0, totalGb: 0 };
     const totalGb = totalBytes / (1024 ** 3);
 
     // Used memory: sum active + wired + compressed pages via vm_stat
-    const vmOut = safeExec('vm_stat');
-    const pageSize = 16384; // macOS default 16KB page
+    const vmOut = safeExec('/usr/bin/vm_stat');
+    if (!vmOut) return { percent: 0, usedGb: 0, totalGb };
+    const pageSize = parseInt(vmOut.match(/page size of (\d+) bytes/)?.[1] ?? '', 10) || 16384;
     const getPages = (label: string) => {
       const m = vmOut.match(new RegExp(label + '[^:]*:\\s+(\\d+)'));
       return m ? parseInt(m[1]) : 0;
@@ -70,13 +79,11 @@ export function getMemoryUsage(): MemoryUsage {
 
 export function getCpuUsage(): CpuUsage {
   try {
-    // Load average via sysctl — instant
-    const loadOut = safeExec('sysctl -n vm.loadavg');
-    const loadAvg = parseFloat(loadOut.replace(/[{}]/g, '').trim().split(/\s+/)[0]) || 0;
+    const loadAvg = loadavg()[0] || 0;
 
     // CPU usage: sum all process %cpu / logical cores
-    const psOut = safeExec('ps -A -o %cpu', 2000);
-    const nCores = parseInt(safeExec('sysctl -n hw.logicalcpu')) || 1;
+    const psOut = safeExec('/bin/ps -A -o %cpu', 2000);
+    const nCores = cpus().length || 1;
     const totalCpu = psOut.trim().split('\n').slice(1).reduce((s, l) => s + (parseFloat(l) || 0), 0);
     const usage = Math.min(100, Math.round(totalCpu / nCores));
 

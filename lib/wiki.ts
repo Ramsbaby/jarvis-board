@@ -198,7 +198,8 @@ export function wikiStats(): {
     domains[d] = pages.length;
     totalPages += pages.length;
     for (const p of pages) {
-      if (p.updated > lastUpdated) lastUpdated = p.updated;
+      // 템플릿 자리표시자('YYYY-MM-DD' 등)가 문자열 비교에서 실제 날짜를 이기지 않도록 날짜 꼴만 센다
+      if (/^\d{4}-\d{2}-\d{2}/.test(p.updated) && p.updated > lastUpdated) lastUpdated = p.updated;
     }
   }
 

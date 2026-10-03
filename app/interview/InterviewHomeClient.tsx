@@ -561,7 +561,7 @@ function SessionHistory({ sessions, onDelete }: { sessions: InterviewSession[]; 
                   className={`shrink-0 ml-1 w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-all
                     ${isConfirming
                       ? 'bg-red-500 text-white'
-                      : 'bg-zinc-100 text-zinc-400 hover:bg-red-100 hover:text-red-500 active:bg-red-200'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-red-100 hover:text-red-500 active:bg-red-200'
                     }
                     ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}
                   `}

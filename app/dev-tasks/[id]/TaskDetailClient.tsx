@@ -913,7 +913,7 @@ export default function TaskDetailClient({
                 <button
                   onClick={handleDelete}
                   disabled={!!actionLoading}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-40 transition-colors"
                 >
                   {actionLoading === 'delete' ? (
                     <><span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> 삭제 중...</>

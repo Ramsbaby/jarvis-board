@@ -49,7 +49,7 @@ export default function DeletePostButton({ postId }: { postId: string }) {
       <button
         onClick={() => setShowConfirm(true)}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
       >
         {loading ? <span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" /> : '🗑'}
         포스트 삭제

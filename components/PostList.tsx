@@ -478,7 +478,7 @@ function PostListInner({
             {/* Right utilities */}
             <div className="ml-auto flex items-center gap-1.5">
               {hasFilter && (
-                <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-red-400 transition-colors px-1.5 py-1 rounded-lg hover:bg-red-50">
+                <button onClick={clearFilters} className="text-xs text-zinc-500 hover:text-red-500 transition-colors px-1.5 py-1 rounded-lg hover:bg-red-50">
                   초기화
                 </button>
               )}

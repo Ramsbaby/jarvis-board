@@ -7,6 +7,7 @@ import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { BOARD_MINUTES_DIR as MINUTES_DIR } from '@/lib/jarvis-paths';
 
 const BANNER_TTL_MS = MAP_CACHE_TTL_MS * 4; // 60s
+const BANNER_MAX_AGE_MS = 2 * 24 * 3600_000; // 회의록 날짜가 이틀보다 오래되면 숨긴다
 
 type Banner = {
   date: string;
@@ -89,6 +90,14 @@ export async function GET() {
   const banner = buildBanner();
   if (!banner) {
     return NextResponse.json({ error: '회의록 없음' }, { status: 404 });
+  }
+  // 회의록을 쓰던 이사회 크론은 이관(2026-09-12) 때 은퇴했다 — 마지막 파일이 2026-07-16 이다.
+  // '오늘 회의록'이라는 제목 아래 몇 달 전 파일을 띄우지 않도록, 오래된 회의록이면 null 을 돌려
+  // 배너를 숨긴다 (BoardBanner 는 null 이면 렌더하지 않는다).
+  const ageMs = now - Date.parse(`${banner.date}T00:00:00+09:00`);
+  if (!Number.isFinite(ageMs) || ageMs > BANNER_MAX_AGE_MS) {
+    cache = { value: null, ts: now };
+    return NextResponse.json(null);
   }
   cache = { value: banner, ts: now };
   return NextResponse.json(banner);

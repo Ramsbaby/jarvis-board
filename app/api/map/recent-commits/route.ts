@@ -25,7 +25,8 @@ interface RepoConfig {
 const HOME = homedir();
 const REPOS: RepoConfig[] = [
   { name: 'jarvis-board', path: path.join(HOME, 'jarvis-board') },
-  { name: 'jarvis', path: path.join(HOME, 'jarvis') },
+  // 2026-09-12 이관 후 자비스 코드는 ~/projects/jarvis 에 있다 (~/jarvis 는 죽은 경로 — 디렉터리가 아님)
+  { name: 'jarvis', path: process.env.JARVIS_REPO_DIR || path.join(HOME, 'projects', 'jarvis') },
 ];
 
 function safeGitLog(repoPath: string): Commit[] {

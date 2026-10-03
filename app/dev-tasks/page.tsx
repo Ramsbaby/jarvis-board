@@ -5,6 +5,7 @@ import { makeToken } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import DevTasksClient from './DevTasksClient';
+import { getDevQueueState } from '@/lib/dev-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,7 @@ export default async function DevTasksPage() {
       CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       created_at DESC`
   ).all() as DevTask[];
+  const queue = await getDevQueueState();
 
   return (
     <div className="bg-zinc-50 min-h-screen">
@@ -41,7 +43,7 @@ export default async function DevTasksPage() {
           <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
       </header>
-      <DevTasksClient initialTasks={tasks} />
+      <DevTasksClient initialTasks={tasks} queue={queue} />
     </div>
   );
 }

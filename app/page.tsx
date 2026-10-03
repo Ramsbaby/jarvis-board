@@ -6,6 +6,7 @@ import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
 import WritePostButton from '@/components/WritePostButton';
 import RightSidebar from '@/components/sidebar/RightSidebar';
+import { getDevQueueState } from '@/lib/dev-queue';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
@@ -48,7 +49,9 @@ export default async function Home({
   const ownerPassword = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
 
-  const awaitingCount = isOwner
+  // 개발 큐 러너가 꺼져 있으면 '검토 요청됨'은 아무도 처리하지 않는 보관 기록이다 — 배지·사이드바 카드를 끈다
+  const devQueueActive = isOwner ? (await getDevQueueState()).active : false;
+  const awaitingCount = isOwner && devQueueActive
     ? (db.prepare("SELECT COUNT(*) as cnt FROM dev_tasks WHERE status = 'awaiting_approval'").get() as CountRow)?.cnt ?? 0
     : 0;
   const autoPostPaused = isOwner
@@ -182,14 +185,14 @@ export default async function Home({
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />
             {/* Mobile sidebar - shown below posts on small screens */}
             <div className="md:hidden mt-4 space-y-4">
-              <RightSidebar isOwner={isOwner} isGuest={isGuest} />
+              <RightSidebar isOwner={isOwner} isGuest={isGuest} showDevTasks={devQueueActive} />
             </div>
           </main>
 
           {/* RIGHT — Activity, Dev tasks, Insights */}
           <aside className="hidden md:block">
             <div className="sticky top-20">
-              <RightSidebar isOwner={isOwner} isGuest={isGuest} />
+              <RightSidebar isOwner={isOwner} isGuest={isGuest} showDevTasks={devQueueActive} />
             </div>
           </aside>
 

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
+import type { DevQueueState } from '@/lib/dev-queue';
 import type { DevTask } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 
@@ -132,6 +133,15 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
   },
 };
 
+// 큐 러너가 꺼져 있을 때의 '검토 요청됨' — 아무도 집어 가지 않는 보관 기록이다
+const ARCHIVED_STYLE: StatusStyle = {
+  outerBorder: 'border-zinc-200',
+  stripe: null,
+  innerBg: 'bg-white',
+  badgeCls: 'bg-zinc-100 border-zinc-200 text-zinc-600',
+  badgeLabel: '📦 보관(미처리)',
+};
+
 const TAB_BADGE_CLS: Record<string, string> = {
   awaiting_approval: 'bg-amber-500 text-white',
   approved:          'bg-teal-500 text-white',
@@ -230,18 +240,21 @@ function GroupStatusSummary({ tasks }: { tasks: DevTask[] }) {
 
 /* ─── 개별 태스크 카드 ─── */
 function TaskCard({
-  task, isGrouped, actionLoading, onAction, onDelete, onDetailUpdate,
+  task, isGrouped, queueActive, actionLoading, onAction, onDelete, onDetailUpdate,
 }: {
   task: DevTask;
   isGrouped: boolean;
+  queueActive: boolean;
   actionLoading: string | null;
   onAction: (taskId: string, status: 'approved' | 'rejected' | 'awaiting_approval') => void;
   onDelete: (taskId: string) => void;
   onDetailUpdate: (id: string, detail: string) => void;
 }) {
   const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.low;
-  const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.awaiting_approval;
-  const isWaiting = task.status === 'awaiting_approval';
+  const isArchived = task.status === 'awaiting_approval' && !queueActive;
+  const st = isArchived ? ARCHIVED_STYLE : (STATUS_STYLE[task.status] ?? STATUS_STYLE.awaiting_approval);
+  // 승인/반려 버튼은 러너가 살아 있을 때만 — 꺼져 있으면 눌러도 아무 일도 일어나지 않는다
+  const isWaiting = task.status === 'awaiting_approval' && queueActive;
   const isLoading = actionLoading === task.id;
   const diffCfg = task.difficulty ? DIFFICULTY_CONFIG[task.difficulty] : null;
   const impactAreas = parseImpactAreas(task.impact_areas);
@@ -400,9 +413,10 @@ function TaskCard({
 
 /* ─── 그루핑된 태스크 그룹 ─── */
 function TaskGroupCard({
-  group, actionLoading, batchLoading, onAction, onBatchAction, onDelete, onDetailUpdate,
+  group, queueActive, actionLoading, batchLoading, onAction, onBatchAction, onDelete, onDetailUpdate,
 }: {
   group: TaskGroup;
+  queueActive: boolean;
   actionLoading: string | null;
   batchLoading: string | null;
   onAction: (taskId: string, status: 'approved' | 'rejected' | 'awaiting_approval') => void;
@@ -411,7 +425,7 @@ function TaskGroupCard({
   onDetailUpdate: (id: string, detail: string) => void;
 }) {
   const hasActiveTask = group.tasks.some(t =>
-    t.status === 'awaiting_approval' || t.status === 'approved' || t.status === 'in-progress'
+    (queueActive && t.status === 'awaiting_approval') || t.status === 'approved' || t.status === 'in-progress'
   );
   const [open, setOpen] = useState(hasActiveTask);
   const awaitingTasks = group.tasks.filter(t => t.status === 'awaiting_approval');
@@ -487,7 +501,7 @@ function TaskGroupCard({
       </button>
 
       {/* Batch actions for awaiting_approval tasks */}
-      {open && awaitingTasks.length > 1 && (
+      {open && queueActive && awaitingTasks.length > 1 && (
         <div className="flex items-center justify-end gap-2 px-5 py-2 border-t border-indigo-50 bg-amber-50/30">
           <span className="text-[11px] text-amber-600 mr-auto">
             {awaitingTasks.length}개 태스크 대기 중
@@ -519,6 +533,7 @@ function TaskGroupCard({
               key={task.id}
               task={task}
               isGrouped
+              queueActive={queueActive}
               actionLoading={actionLoading}
               onAction={onAction}
               onDelete={onDelete}
@@ -531,8 +546,9 @@ function TaskGroupCard({
   );
 }
 
-export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask[] }) {
+export default function DevTasksClient({ initialTasks, queue }: { initialTasks: DevTask[]; queue: DevQueueState }) {
   const router = useRouter();
+  const queueActive = queue.active;
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
   const [tab, setTab] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -714,9 +730,11 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   }, [filtered]);
 
   const STATS = [
-    { label: '검토 요청됨',      key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
-    { label: '승인됨',           key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: true  },
-    { label: 'Jarvis 작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: true },
+    queueActive
+      ? { label: '검토 요청됨',    key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true }
+      : { label: '보관(미처리)',   key: 'awaiting_approval', color: 'bg-zinc-50 border-zinc-200 text-zinc-600',      dot: 'bg-zinc-400',    pulse: false },
+    { label: '승인됨',           key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: queueActive },
+    { label: 'Jarvis 작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: queueActive },
     { label: '완료',             key: 'done',               color: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-400', pulse: false },
     { label: '반려',             key: 'rejected',           color: 'bg-zinc-50 border-zinc-200 text-zinc-500',    dot: 'bg-zinc-300',    pulse: false },
     { label: '실패',             key: 'failed',             color: 'bg-red-50 border-red-200 text-red-600',       dot: 'bg-red-400',     pulse: false },
@@ -734,6 +752,19 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
           <span>{actionError}</span>
           <button onClick={() => setActionError(null)} className="ml-4 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
+      {/* 큐 종료 안내 — 러너 자동화가 꺼져 있으면 이 화면은 보관 기록이다 */}
+      {!queueActive && (
+        <div role="status" className="rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-700">
+          <p className="font-semibold text-zinc-900">개발 태스크 큐는 지금 운영되지 않습니다 — 아래는 보관 기록입니다.</p>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+            {queue.reason === 'disabled' && <>작업을 집어 가던 자동화 <code className="font-mono">{queue.runner}</code>가 꺼져 있습니다{queue.lastRunAt ? ` (마지막 실행 ${queue.lastRunAt.slice(0, 16)})` : ''}. </>}
+            {queue.reason === 'missing' && <>작업을 집어 가던 자동화 <code className="font-mono">{queue.runner}</code>가 OpenClaw에 없습니다. </>}
+            {queue.reason === 'unknown' && <>OpenClaw에서 러너 상태를 읽지 못해, 안전하게 보관 모드로 표시합니다. </>}
+            그래서 승인 버튼을 숨겼습니다. 처리되지 않은 {grouped.awaiting_approval.length}건은 &lsquo;보관(미처리)&rsquo;로 표시하며, 데이터는 지우지 않았습니다.
+          </p>
         </div>
       )}
 
@@ -766,10 +797,12 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                 : 'text-zinc-500 hover:text-zinc-700'
             }`}
           >
-            {t.label}
+            {t.key === 'awaiting_approval' && !queueActive ? '보관(미처리)' : t.label}
             {(grouped[t.key]?.length ?? 0) > 0 && (
               <span className={`ml-1.5 text-[10px] px-1 py-0.5 rounded-full font-bold ${
-                t.key === 'all' ? 'bg-zinc-100 text-zinc-500' : (TAB_BADGE_CLS[t.key] ?? 'bg-zinc-100 text-zinc-500')
+                t.key === 'all' || (t.key === 'awaiting_approval' && !queueActive)
+                  ? 'bg-zinc-100 text-zinc-600'
+                  : (TAB_BADGE_CLS[t.key] ?? 'bg-zinc-100 text-zinc-500')
               }`}>
                 {t.key === 'all' ? tasks.length : (grouped[t.key]?.length ?? 0)}
               </span>
@@ -790,6 +823,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
             <TaskGroupCard
               key={group.key}
               group={group}
+              queueActive={queueActive}
               actionLoading={actionLoading}
               batchLoading={batchLoading}
               onAction={handleAction}
@@ -811,6 +845,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                 key={task.id}
                 task={task}
                 isGrouped={false}
+                queueActive={queueActive}
                 actionLoading={actionLoading}
                 onAction={handleAction}
                 onDelete={handleDelete}

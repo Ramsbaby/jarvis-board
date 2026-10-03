@@ -304,12 +304,14 @@ function FollowUpTaskForm({ taskId, taskTitle, sourceId, boardUrl }: {
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function TaskDetailClient({
-  initialTask, isOwner, isGuest, sourcePost,
+  initialTask, isOwner, isGuest, sourcePost, queueActive = true,
 }: {
   initialTask: DevTask;
   isOwner: boolean;
   isGuest: boolean;
   sourcePost?: SourcePost | null;
+  /** 개발 큐 러너 자동화가 켜져 있는가 — 꺼져 있으면 승인 카드를 숨긴다 */
+  queueActive?: boolean;
 }) {
   const router = useRouter();
   const [task, setTask] = useState<DevTask>(initialTask);
@@ -932,8 +934,16 @@ export default function TaskDetailClient({
           </div>
         )}
 
+        {/* ── 큐 종료 안내 — 러너가 꺼져 있으면 승인해도 아무 일도 일어나지 않는다 ── */}
+        {isAwaiting && !queueActive && (
+          <div role="status" className="bg-white border border-zinc-300 rounded-2xl px-5 py-4 text-sm text-zinc-700">
+            <p className="font-semibold text-zinc-900">📦 보관(미처리) — 개발 태스크 큐는 지금 운영되지 않습니다.</p>
+            <p className="mt-1 text-xs text-zinc-600">작업을 집어 가던 자동화가 꺼져 있어 승인 버튼을 숨겼습니다. 기록은 그대로 남아 있습니다.</p>
+          </div>
+        )}
+
         {/* ── Approval card (awaiting_approval) ── */}
-        {isAwaiting && (
+        {isAwaiting && queueActive && (
           isOwner ? (
             <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
               {/* Header */}

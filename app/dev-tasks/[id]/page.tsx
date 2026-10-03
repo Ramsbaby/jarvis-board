@@ -5,6 +5,7 @@ import { getDb } from '@/lib/db';
 import type { DevTask } from '@/lib/types';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import TaskDetailClient from './TaskDetailClient';
+import { getDevQueueState } from '@/lib/dev-queue';
 
 export interface SourcePost {
   id: string;
@@ -44,12 +45,15 @@ export default async function DevTaskDetailPage({ params }: { params: Promise<{ 
     if (row) sourcePost = row;
   }
 
+  const queue = await getDevQueueState();
+
   return (
     <TaskDetailClient
       initialTask={task}
       isOwner={isOwner}
       isGuest={isGuest}
       sourcePost={sourcePost}
+      queueActive={queue.active}
     />
   );
 }

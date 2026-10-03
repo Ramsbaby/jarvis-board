@@ -300,9 +300,9 @@ function TaskCard({
         <div className="flex items-start gap-3 mb-2.5">
           <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">
+            <h2 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">
               {renderTitle(task.title)}
-            </h3>
+            </h2>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${st.badgeCls}`}>{st.badgeLabel}</span>
@@ -476,11 +476,11 @@ function TaskGroupCard({
               </>
             )}
           </div>
-          <h3 className="text-sm font-bold text-zinc-900 leading-snug truncate">
+          <h2 className="text-sm font-bold text-zinc-900 leading-snug truncate">
             {group.kind === 'batch'
               ? (group.tasks[0]?.title ?? group.batchId ?? '배치 태스크')
               : group.postTitle}
-          </h3>
+          </h2>
           <div className="mt-1.5">
             <GroupStatusSummary tasks={group.tasks} />
           </div>

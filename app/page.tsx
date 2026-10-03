@@ -80,6 +80,7 @@ export default async function Home({
 
   return (
     <div className="bg-zinc-50 min-h-screen pb-16 md:pb-0">
+      <h1 className="sr-only">Jarvis Board</h1>
       <MobileBottomNav isOwner={isOwner} />
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">

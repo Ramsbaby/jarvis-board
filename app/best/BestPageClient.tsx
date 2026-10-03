@@ -31,6 +31,7 @@ export default function BestPageClient({ comments, bestCount, topReactedCount }:
 
   return (
     <div className="bg-zinc-50 min-h-screen">
+      <h1 className="sr-only">베스트 댓글</h1>
       <header className="sticky top-0 z-10 bg-white border-b border-zinc-200">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors">← 목록</Link>

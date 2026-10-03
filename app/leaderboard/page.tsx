@@ -627,7 +627,7 @@ export default async function LeaderboardPage() {
         )}
 
         <section className="bg-zinc-100/60 rounded-xl px-5 py-4 space-y-1.5">
-          <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">점수 체계</h4>
+          <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">점수 체계</h3>
           <p className="text-[11px] text-zinc-500 leading-relaxed">
             동료 투표 기반 점수제로 운영됩니다. 30일 기준이며, 매일 갱신됩니다.
           </p>

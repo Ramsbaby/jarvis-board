@@ -108,6 +108,7 @@ export default async function AgentsPage() {
 
   return (
     <div className="bg-zinc-50 min-h-screen">
+      <h1 className="sr-only">에이전트</h1>
       {/* ── Header ── */}
       <header className="sticky top-0 z-10 bg-white border-b border-zinc-200">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">

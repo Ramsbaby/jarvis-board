@@ -1,15 +1,18 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { readFileSync, existsSync, readdirSync } from 'fs';
-import path from 'path';
-import { CRON_LOG, CIRCUIT_BREAKER_DIR } from '@/lib/jarvis-paths';
-import { safeRead } from '@/lib/file-utils';
+import {
+  listAutomations, lastRunAtMs, runStatus, lastMessage, toKstString, type AutomationJob,
+} from '@/lib/openclaw-automations';
 
 /**
  * 실시간 활동 피드 + 긴급 알림 트레이 데이터
- * - 최근 크론 실행 이력 (최대 20건)
- * - 현재 실패 중인 팀 목록 (RED 상태)
- * - 서킷브레이커 발동 태스크
+ * - 최근 24시간 자동화 실행 (최대 20건, 자동화별 최신 1건)
+ * - 최근 24시간 실패 중인 팀 목록 (RED 상태)
+ * - 연속 실패 3회 이상 자동화 (예전 서킷브레이커 자리)
+ *
+ * 소스: OpenClaw automations (2026-09-12 이관 후 정본).
+ * 예전 cron.log 는 09-10 이후 거의 기록되지 않아, 시간 제한 없이 읽으면
+ * 3주 전 실패가 '최근 실행 ❌'로 계속 떠 있었다.
  */
 
 interface FeedItem {
@@ -35,39 +38,31 @@ interface CircuitBroken {
   lastFailureAt?: string;
 }
 
-// cron.log 파싱 → 최근 20건 실행 이력
-function parseFeed(cronLog: string, limit = 20): FeedItem[] {
-  if (!cronLog) return [];
-  const lines = cronLog.split('\n').filter(Boolean);
-  const seen = new Map<string, FeedItem>();
-  const result: FeedItem[] = [];
+const WINDOW_MS = 24 * 3600_000;
 
-  for (let i = lines.length - 1; i >= 0 && result.length < limit * 3; i--) {
-    const line = lines[i];
-    const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] (.+)$/);
-    if (!m) continue;
-    const [, ts, cronId, msg] = m;
-    // task_N_ 패턴 제외 (내부 서브태스크)
-    if (/^task_\d+_/.test(cronId)) continue;
+function recentRuns(jobs: AutomationJob[]): AutomationJob[] {
+  const cutoff = Date.now() - WINDOW_MS;
+  return jobs
+    .filter(j => (lastRunAtMs(j) ?? 0) >= cutoff)
+    .sort((a, b) => (lastRunAtMs(b) ?? 0) - (lastRunAtMs(a) ?? 0));
+}
 
-    let status: FeedItem['status'] = 'running';
-    if (/\bSUCCESS\b|\bDONE\b/.test(line)) status = 'success';
-    else if (/FAILED|ERROR|CRITICAL/.test(line)) status = 'failed';
-    else if (/SKIP|skipped/i.test(line)) status = 'skipped';
-    else continue; // 중간 로그 라인은 제외, 완료/실패 라인만
-
-    if (seen.has(cronId)) continue; // 같은 크론의 가장 최근 것만
-    const item: FeedItem = {
-      cronId,
-      status,
+function buildFeed(recent: AutomationJob[], limit = 20): FeedItem[] {
+  const out: FeedItem[] = [];
+  for (const j of recent) {
+    const st = runStatus(j);
+    if (st === 'unknown') continue;
+    const ts = toKstString(lastRunAtMs(j)!);
+    out.push({
+      cronId: j.name,
+      status: st,
       time: ts.slice(11, 16),
       timeIso: ts,
-      message: msg.slice(0, 80),
-    };
-    seen.set(cronId, item);
-    result.push(item);
+      message: lastMessage(j).slice(0, 80),
+    });
+    if (out.length >= limit) break;
   }
-  return result.slice(0, limit);
+  return out;
 }
 
 // 팀별 키워드 → 최근 24h 실패 집계
@@ -82,74 +77,54 @@ const TEAM_KEYWORDS: Record<string, { label: string; keywords: string[] }> = {
   'president':    { label: '대표실',    keywords: ['president', 'report', 'digest'] },
 };
 
-function detectAlertTeams(cronLog: string): AlertTeam[] {
-  if (!cronLog) return [];
-  const cutoffMs = Date.now() - 24 * 3600_000;
-  const lines = cronLog.split('\n').filter(Boolean).slice(-3000);
-  const failMap = new Map<string, { time: string; msg: string }>();
-
-  for (const line of lines) {
-    if (!/FAILED|ERROR|CRITICAL/.test(line)) continue;
-    const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] (.+)$/);
-    if (!m) continue;
-    const [, ts, cronId, msg] = m;
-    if (/^task_\d+_/.test(cronId)) continue;
-    const tsMs = Date.parse(ts + '+09:00');
-    if (!isNaN(tsMs) && tsMs < cutoffMs) continue;
-    failMap.set(cronId, { time: ts, msg: msg.slice(0, 120) });
-  }
-
+function detectAlertTeams(recent: AutomationJob[]): AlertTeam[] {
+  const fails = recent.filter(j => j.enabled && runStatus(j) === 'failed');
+  if (fails.length === 0) return [];
   const alerts: AlertTeam[] = [];
   for (const [teamId, { label, keywords }] of Object.entries(TEAM_KEYWORDS)) {
-    const kwLower = keywords.map(k => k.toLowerCase());
-    const teamFails = Array.from(failMap.entries())
-      .filter(([cid]) => kwLower.some(kw => cid.toLowerCase().includes(kw)));
+    const teamFails = fails.filter(j => {
+      const n = j.name.toLowerCase().replace(/^(jarvis|openclaw)-/, '');
+      return keywords.some(kw => n.includes(kw));
+    });
     if (teamFails.length === 0) continue;
     alerts.push({
       teamId,
       teamLabel: label,
       failCount: teamFails.length,
-      failingCronIds: teamFails.map(([id]) => id).slice(0, 5),
-      topError: teamFails[0]?.[1].msg ?? '',
+      failingCronIds: teamFails.map(j => j.name).slice(0, 5),
+      topError: lastMessage(teamFails[0]).slice(0, 120),
     });
   }
   return alerts.sort((a, b) => b.failCount - a.failCount);
 }
 
-function detectCircuitBreakers(): CircuitBroken[] {
-  if (!existsSync(CIRCUIT_BREAKER_DIR)) return [];
-  try {
-    const files = readdirSync(CIRCUIT_BREAKER_DIR).filter(f => f.endsWith('.json'));
-    const broken: CircuitBroken[] = [];
-    for (const f of files) {
-      try {
-        const data = JSON.parse(readFileSync(path.join(CIRCUIT_BREAKER_DIR, f), 'utf8')) as {
-          failures?: number; state?: string; lastFailureAt?: string;
-        };
-        if ((data.failures || 0) >= 3) {
-          broken.push({
-            taskId: f.replace('.json', ''),
-            failures: data.failures || 0,
-            state: data.state || 'unknown',
-            lastFailureAt: data.lastFailureAt,
-          });
-        }
-      } catch { /* skip */ }
-    }
-    return broken.sort((a, b) => b.failures - a.failures).slice(0, 10);
-  } catch { return []; }
+function detectRepeatedFailures(jobs: AutomationJob[]): CircuitBroken[] {
+  return jobs
+    .filter(j => j.enabled && (j.state?.consecutiveErrors ?? 0) >= 3)
+    .map(j => ({
+      taskId: j.name,
+      failures: j.state?.consecutiveErrors ?? 0,
+      state: 'repeated-failure',
+      lastFailureAt: lastRunAtMs(j) ? toKstString(lastRunAtMs(j)!) : undefined,
+    }))
+    .sort((a, b) => b.failures - a.failures)
+    .slice(0, 10);
 }
 
 export async function GET() {
-  const cronLog = safeRead(CRON_LOG);
-  const feed = parseFeed(cronLog, 20);
-  const alertTeams = detectAlertTeams(cronLog);
-  const circuitBreakers = detectCircuitBreakers();
-
+  const jobs = await listAutomations();
+  if (!jobs) {
+    return NextResponse.json(
+      { feed: [], alertTeams: [], circuitBreakers: [], error: 'OpenClaw 자동화 목록을 읽지 못했습니다.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+  const recent = recentRuns(jobs);
   return NextResponse.json({
-    feed,
-    alertTeams,
-    circuitBreakers,
+    feed: buildFeed(recent, 20),
+    alertTeams: detectAlertTeams(recent),
+    circuitBreakers: detectRepeatedFailures(jobs),
+    source: 'openclaw-automations',
     generatedAt: new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }),
   }, {
     headers: { 'Cache-Control': 'no-store' },

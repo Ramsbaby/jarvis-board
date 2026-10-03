@@ -2,7 +2,8 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync } from 'fs';
 import { getDiskUsage, getMemoryUsage, getCpuUsage } from '@/lib/map/system-metrics';
-import { CRON_LOG, CLAUDE_USAGE_CACHE } from '@/lib/jarvis-paths';
+import { CLAUDE_USAGE_CACHE } from '@/lib/jarvis-paths';
+import { listAutomations, lastRunAtMs, runStatus } from '@/lib/openclaw-automations';
 /**
  * 자비스맵 통합 statusline — 좌상단에 붙는 Claude Code statusline 스타일.
  *
@@ -12,7 +13,10 @@ import { CRON_LOG, CLAUDE_USAGE_CACHE } from '@/lib/jarvis-paths';
  *  3. Mac Mini CPU 사용률
  *  4. Mac Mini 메모리 사용률
  *  5. Disk 사용률
- *  6. 24h 크론 성공률 (from cron.log)
+ *  6. 24h 자동화 성공률 (OpenClaw automations — 최근 24h 안에 돈 자동화의 마지막 결과 기준)
+ *
+ * Claude 사용량 블록(1·2·Sonnet)은 캐시가 ok=false 이거나 6시간 넘게 갱신되지 않았으면 뺀다 —
+ * 예전에는 값이 없을 때 0% 초록으로 보여 '여유 있음'처럼 오해하게 만들었다.
  */
 
 interface StatuslineBlock {
@@ -50,25 +54,27 @@ function getClaudeUsage(): ClaudeUsageCache | null {
   }
 }
 
-function getCron24hRate(): { rate: number; success: number; failed: number } {
-  try {
-    const raw = readFileSync(CRON_LOG, 'utf8');
-    const lines = raw.split('\n').filter(Boolean).slice(-3000);
-    const KST_OFFSET = 9 * 3600_000;
-    const cutoff = new Date(Date.now() - 24 * 3600_000 + KST_OFFSET).toISOString().replace('T', ' ').slice(0, 19);
-    let success = 0, failed = 0;
-    for (const line of lines) {
-      const m = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\]/);
-      if (!m || m[1] < cutoff) continue;
-      if (/^task_\d+_/.test(m[2])) continue;
-      if (/\bSUCCESS\b|\bDONE\b/.test(line)) success++;
-      else if (/FAILED|ERROR|CRITICAL/.test(line)) failed++;
-    }
-    const total = success + failed;
-    return { rate: total > 0 ? Math.round((success / total) * 100) : 100, success, failed };
-  } catch {
-    return { rate: 0, success: 0, failed: 0 };
+async function getCron24hRate(): Promise<{ rate: number; success: number; failed: number } | null> {
+  const jobs = await listAutomations();
+  if (!jobs) return null;
+  const cutoff = Date.now() - 24 * 3600_000;
+  let success = 0, failed = 0;
+  for (const j of jobs) {
+    if ((lastRunAtMs(j) ?? 0) < cutoff) continue;
+    const st = runStatus(j);
+    if (st === 'success') success++;
+    else if (st === 'failed') failed++;
   }
+  const total = success + failed;
+  return { rate: total > 0 ? Math.round((success / total) * 100) : 100, success, failed };
+}
+
+const USAGE_MAX_AGE_MS = 6 * 3600_000;
+
+function isUsageFresh(u: ClaudeUsageCache | null): u is ClaudeUsageCache {
+  if (!u || u.ok === false || !u.fiveH) return false;
+  const ts = u.ts ? Date.parse(u.ts) : NaN;
+  return Number.isFinite(ts) && Date.now() - ts < USAGE_MAX_AGE_MS;
 }
 
 // ── 상태 결정 ─────────────────────────────────────────────────────────
@@ -96,11 +102,12 @@ export async function GET() {
   }
 
   try {
-    const usage = getClaudeUsage();
+    const rawUsage = getClaudeUsage();
+    const usage = isUsageFresh(rawUsage) ? rawUsage : null;
     const cpu = getCpuUsage();
     const mem = getMemoryUsage();
     const disk = getDiskUsage();
-    const cron = getCron24hRate();
+    const cron = await getCron24hRate();
 
     // Claude 구독 사용량 — 사용한 % 기준 (pct 자체가 used%)
     const fiveHPct = usage?.fiveH?.pct ?? 0;
@@ -116,7 +123,7 @@ export async function GET() {
     const sonnetPct = usage?.sonnet?.pct ?? 0;
     const sonnetRemain = usage?.sonnet?.remain ?? 100;
 
-    const blocks: StatuslineBlock[] = [
+    const usageBlocks: StatuslineBlock[] = !usage ? [] : [
       {
         label: '5h',
         icon: '⏱',
@@ -141,6 +148,10 @@ export async function GET() {
         status: statusByPercent(sonnetPct, 70, 90),
         tooltip: `Sonnet: Sonnet 모델 할당량 — ${sonnetPct}% 사용 (${sonnetRemain}% 남음)`,
       },
+    ];
+
+    const blocks: StatuslineBlock[] = [
+      ...usageBlocks,
       {
         label: 'CPU',
         icon: '⚡',
@@ -165,14 +176,14 @@ export async function GET() {
         status: statusByPercent(disk.percent, 80, 90),
         tooltip: `Disk: Mac Mini 디스크 — ${disk.used} / ${disk.total} 사용 중`,
       },
-      {
+      ...(cron ? [{
         label: 'Cron 24h',
         icon: '⏱',
         value: `${cron.rate}%`,
         raw: cron.rate,
         status: statusByRate(cron.rate),
-        tooltip: `Cron 24h: 최근 24시간 크론잡 성공률 — 성공 ${cron.success}건 / 실패 ${cron.failed}건`,
-      },
+        tooltip: `Cron 24h: 최근 24시간 OpenClaw 자동화 성공률 — 성공 ${cron.success}건 / 실패 ${cron.failed}건`,
+      } satisfies StatuslineBlock] : []),
     ];
 
     const data: StatuslineResponse = {

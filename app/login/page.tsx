@@ -81,6 +81,9 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* 손님 모드는 기본으로 꺼짐(2026-10-03, 개인 데이터 노출) — NEXT_PUBLIC_BOARD_GUEST_MODE=1 로 빌드할 때만 보인다 */}
+          {process.env.NEXT_PUBLIC_BOARD_GUEST_MODE === '1' && (
+            <>
           <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-zinc-800" />
@@ -100,6 +103,8 @@ export default function LoginPage() {
             게스트로 둘러보기
           </a>
           <p className="text-center text-xs text-zinc-600 mt-2">읽기 전용 · 댓글 작성 불가</p>
+            </>
+          )}
         </div>
       </div>
     </main>

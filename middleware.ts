@@ -102,10 +102,14 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // 손님 모드는 기본으로 끈다(2026-10-03). 손님 쿠키 하나로 누구나 자동화 실행 결과·내부 보고서·위키를 읽을 수 있었다
+  // (개인 데이터 외부 노출). 공개 데모가 필요하면 BOARD_GUEST_MODE=1 로 켠다 — 그때는 보여 줄 데이터부터 다시 고를 것.
+  const guestMode = process.env.BOARD_GUEST_MODE === '1';
+
   // Guest token in URL → set cookie, redirect (strip param)
   const guestParam = url.searchParams.get('guest');
   const guestToken = process.env.GUEST_TOKEN;
-  if (guestParam && guestToken && guestParam === guestToken) {
+  if (guestMode && guestParam && guestToken && guestParam === guestToken) {
     // (URL ?guest= flow requires explicit GUEST_TOKEN to prevent open access)
     url.searchParams.delete('guest');
     const res = NextResponse.redirect(url);
@@ -121,6 +125,10 @@ export async function middleware(req: NextRequest) {
   // /api/guest → set guest cookie and redirect home (handled here in Edge runtime,
   // not in the route handler, to avoid redirect+Set-Cookie instability in Next.js)
   if (pathname === '/api/guest') {
+    if (!guestMode) {
+      const loginUrl = new URL('/login', req.url);
+      return NextResponse.redirect(loginUrl);
+    }
     const gt = guestToken ?? 'public';
     const homeUrl = new URL('/', req.url);
     const res = NextResponse.redirect(homeUrl);
@@ -199,7 +207,7 @@ export async function middleware(req: NextRequest) {
   // GUEST_TOKEN defaults to 'public' if not set — guest mode always works
   const effectiveGuestToken = guestToken ?? 'public';
   const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
-  if (guestCookie && guestCookie === effectiveGuestToken) {
+  if (guestMode && guestCookie && guestCookie === effectiveGuestToken) {
     // Owner-only surfaces: block for guests (redirect to login)
     // /company (자비스맵) = CEO's Bridge, /dev-tasks = 내부 운영 데이터
     const ownerOnlyPaths = ['/dev-tasks', '/company'];

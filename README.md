@@ -1,3 +1,5 @@
+> **Status (2026-10-13):** this public copy was last updated on 2026-07-25 and is not actively maintained. The author still runs the board privately, but newer changes are not published here, and the guest demo linked below is no longer open. Issues are read, but replies may be slow.
+
 <div align="center">
 
 <img src="https://img.shields.io/badge/Next.js-16.2-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />

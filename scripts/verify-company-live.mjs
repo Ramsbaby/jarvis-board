@@ -16,7 +16,7 @@ assert.ok(c.issues.every(i=>ids.has(i.taskId)));assert.ok(c.reports.every(r=>ids
 assert.ok(c.tasks.every(t=>!t.parentId||ids.has(t.parentId)));assert.ok(c.reports.every(r=>r.receipt==='received'&&r.review==='not_reviewed'));
 const sourceDb=new Database(process.env.JARVIS_OFFICE_SOURCE_DB,{readonly:true,fileMustExist:true});let sourceRows;try{sourceRows=sourceDb.prepare('SELECT id FROM dev_tasks ORDER BY created_at DESC LIMIT 1000').all();}finally{sourceDb.close();}
 assert.ok(sourceRows.every(r=>ids.has(`development:${r.id}`)));
-const scheduler=JSON.parse(execFileSync(path.join(os.homedir(),'bin/openclaw'),['automations','list','--all','--json'],{encoding:'utf8',timeout:25000,maxBuffer:32*1024*1024,env:{HOME:'/Users/ramsbaby',PATH:'/usr/bin:/bin'}}));
+const scheduler=JSON.parse(execFileSync(path.join(os.homedir(),'bin/openclaw'),['automations','list','--all','--json'],{encoding:'utf8',timeout:25000,maxBuffer:32*1024*1024,env:{HOME:os.homedir(),PATH:'/usr/bin:/bin'}}));
 assert.ok(scheduler.jobs.every(j=>ids.has(`automation:${j.id}`)));
 const b=await snapshot();const existingIds=new Set(c.reports.map(r=>r.id));const repeats=b.company.reports.filter(r=>existingIds.has(r.id));assert.ok(repeats.every(r=>c.reports.find(old=>old.id===r.id).receivedAt===r.receivedAt));
 const evidence={checkedAt:new Date().toISOString(),anonymousStatus:anonymous.status,developmentSourceRows:sourceRows.length,automationSourceRows:scheduler.jobs.length,tasks:c.tasks.length,openIssueRecords:c.issues.filter(i=>i.state==='open').length,receiptRecords:c.reports.length,unlinkedTasks:0,unlinkedIssues:0,unlinkedReports:0,stableExistingReceipts:repeats.length,coverage:c.coverage};

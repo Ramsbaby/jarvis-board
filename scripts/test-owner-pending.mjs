@@ -27,3 +27,9 @@ test('tasks are stable owner decisions and never spend AI review budget',()=>{
  assert.equal(needsDeepReview({id:'r',taskId:a[0].id,state:'decision',summary:a[0].summary,title:a[0].title,ownerId:'secretary'}),false);
  assert.equal(ownerPendingTasks('- [ ] 없음','2026-11-16T14:00:00.000Z').length,0);
 });
+test('owner desk counts decisions and keeps the old order badge off decision/problem cards',async()=>{
+ const src=(await import('node:fs')).readFileSync('components/command-room/CommandRoom.tsx','utf8');
+ assert.match(src,/decisionTasks=tasks\.filter\(t=>t\.state==='decision'&&!t\.archived\)\.sort\(\(a,b\)=>b\.priority-a\.priority\)/);
+ assert.match(src,/주인님 결정이 필요합니다\$\{decisionTasks\.length>1/);
+ assert.match(src,/owner\.latest&&!priorityTask&&!priorityIssue&&<DeploymentBadge order=\{owner\.latest\} compact\/>/);
+});

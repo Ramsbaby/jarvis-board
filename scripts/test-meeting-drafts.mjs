@@ -14,7 +14,7 @@ const questions=meetingActions().filter(a=>a.kind==='question');
 const direct=meetingActions().find(a=>a.kind==='instruction');
 const repair=meetingActions({stage:'failed',goal:'버튼 수정',error:'검사 실패'}).find(a=>a.id==='repair');
 function harness(storage=new Map(),initial={},respond,documentOverride){
- const draftModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/company/meeting-drafts.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:draftModule,exports:draftModule.exports,window:{localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)}}});
+ const draftModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/company/meeting-drafts.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:draftModule,exports:draftModule.exports,require:()=>({pushDraft(){}}),window:{localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)}}});
  const cells=[],effects=[],calls=[];let cursor=0,tree;
  const props={visible:true,request:{employeeId:'jarvis',name:'자비스',token:1},orders:[],motion:null,onClose(){},onGather(){},onReturn(){},onOrder(){},onResult(){}};
  Object.assign(props,initial);
@@ -26,6 +26,7 @@ function harness(storage=new Map(),initial={},respond,documentOverride){
  const jsx=(type,props)=>({type,props});const mod={exports:{}};
  vm.runInNewContext(source,{module:mod,exports:mod.exports,require(name){
   if(name==='@/lib/company/meeting-drafts')return draftModule.exports;
+  if(name==='@/lib/company/draft-sync-client')return {pullDraft:async()=>null,pushDraft(){}};
   if(name==='react')return react;
   if(name==='react/jsx-runtime')return {jsx,jsxs:jsx};
   if(name==='./DeploymentBadge')return {default:'DeploymentBadge'};

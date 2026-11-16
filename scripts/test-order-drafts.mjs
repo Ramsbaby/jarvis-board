@@ -92,11 +92,12 @@ function hookHarness(store) {
   let states=[], cursor=0, effects=[], mounted=false;
   const react={useState(initial){const i=cursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;
     return [states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];},
+    useRef(initial){const i=cursor++;return states[i]??(states[i]={current:initial});},
     useEffect(fn){if(!mounted)effects.push(fn);}};
   const mod={exports:{}};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/command-room/use-order-draft.ts','utf8'),{
     compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
-    {module:mod,exports:mod.exports,require:name=>name==='react'?react:{orderDrafts:store,draftKey}});
+    {module:mod,exports:mod.exports,require:name=>name==='react'?react:name==='@/lib/company/draft-sync-client'?{pullDraft:async()=>null,pushDraft(){}}:{orderDrafts:store,draftKey,ORDER_DRAFTS_KEY:'jarvis.order-drafts.v1'}});
   return {render(){cursor=0;let value=mod.exports.useOrderDraft();if(!mounted){mounted=true;for(const effect of effects)effect();cursor=0;value=mod.exports.useOrderDraft();}return value;}};
 }
 
@@ -155,7 +156,7 @@ function deskHarness(store, request, orders=[], send=async()=>{throw Error('offl
       document:{activeElement:null,addEventListener(){},removeEventListener(){}}});
     return mod.exports;
   };
-  const hook=compile('components/command-room/use-order-draft.ts',name=>name==='react'?react:{orderDrafts:store,draftKey});
+  const hook=compile('components/command-room/use-order-draft.ts',name=>name==='react'?react:name==='@/lib/company/draft-sync-client'?{pullDraft:async()=>null,pushDraft(){}}:{orderDrafts:store,draftKey,ORDER_DRAFTS_KEY:'jarvis.order-drafts.v1'});
   const Desk=compile('components/command-room/OrderDesk.tsx',name=>{
     if(name==='react')return react;
     if(name==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'fragment'};

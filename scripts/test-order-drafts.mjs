@@ -464,16 +464,17 @@ test('new and report-follow-up hint acceptance saves real drafts without assignm
    assert.equal(hintKey(props,key,extra),false);assert.equal(input(ui).props.value,'');
   }
   assert.equal(hintKey(props,key),true);
-  assert.equal(input(ui).props.value,props.placeholder);
+  // 예시 표지('예:')는 채우지 않는다 — 지시 제목이 예시처럼 남지 않게.
+  assert.equal(input(ui).props.value,props.placeholder.replace(/^예:\s*/,''));assert.ok(!input(ui).props.value.startsWith('예'));
   assert.equal(hintKey(input(ui).props,'Tab'),false);
   assert.equal(hintKey(input(ui).props,'ArrowRight'),false);
   assert.equal(calls.length,0);
   const restored=createOrderDraftStore(access).restore();
-  assert.equal(restored.instruction,props.placeholder);
+  assert.equal(restored.instruction,props.placeholder.replace(/^예:\s*/,''));
   assert.equal(restored.parent?.parentId,followup?report.id:undefined);
   const reloaded=deskHarness(createOrderDraftStore(access),followup?{mode:'result',id:report.id}:{mode:'order'},[report]);
   if(followup)button(reloaded,'이 업무에 추가 개발 지시').props.onClick();
-  assert.equal(input(reloaded).props.value,props.placeholder);
+  assert.equal(input(reloaded).props.value,props.placeholder.replace(/^예:\s*/,''));
   input(ui).props.onChange({target:{value:'작성 중인 지시'}});
   assert.equal(hintKey(input(ui).props,key),false);assert.equal(input(ui).props.value,'작성 중인 지시');
  }

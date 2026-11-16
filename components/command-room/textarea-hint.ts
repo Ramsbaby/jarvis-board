@@ -9,7 +9,8 @@ export function acceptTextareaHint(event:KeyboardEvent<HTMLTextAreaElement>,valu
     event.nativeEvent.isComposing||event.nativeEvent.keyCode===229||
     (event.key!=='ArrowRight'&&event.key!=='Tab')||field.disabled||field.readOnly||
     value!==''||field.value!=='')return;
- const hint=field.placeholder;
+ // 자리표시자는 '예:' 처럼 예시 표지를 달고 있다 — 표지까지 채우면 실제 지시 제목이 '예: …' 로 남아 예시처럼 보인다(11-15 실제 지시 f6c53140).
+ const hint=field.placeholder.replace(/^\s*예(?:시)?\s*[:)]\s*/,'');
  if(!hint.trim()||(field.maxLength>=0&&hint.length>field.maxLength))return;
  event.preventDefault();
  write(hint);

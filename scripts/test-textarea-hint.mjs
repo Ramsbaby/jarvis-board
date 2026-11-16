@@ -27,3 +27,13 @@ test('hint acceptance requires an empty editable field, a valid hint and an unmo
  // A controlled value not yet reflected in the DOM must be preserved too.
  assert.equal(hintKey({value:'',placeholder:'힌트',onKeyDown:e=>acceptTextareaHint(e,'기존 글',()=>assert.fail())}),false);
 });
+
+test('an example-labelled hint fills only the instruction, never the "예:" label',()=>{
+ for(const [placeholder,expected] of [['예: 목록이 비어 보이지 않게 고쳐줘.','목록이 비어 보이지 않게 고쳐줘.'],['예시) 재시도 버튼 추가','재시도 버튼 추가'],['예 : 로딩 표시','로딩 표시'],['예약 화면 고쳐줘','예약 화면 고쳐줘']]){
+  let written='';
+  assert.equal(hintKey({value:'',placeholder,maxLength:1200,onKeyDown:e=>acceptTextareaHint(e,'',v=>{written=v;})},'Tab'),true);
+  assert.equal(written,expected);
+ }
+ // A hint that is only the label has nothing to fill.
+ assert.equal(hintKey({value:'',placeholder:'예:',onKeyDown:e=>acceptTextareaHint(e,'',()=>assert.fail())},'Tab'),false);
+});

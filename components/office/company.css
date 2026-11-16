@@ -83,3 +83,16 @@
 
 /* The desk report is light paper; deployment evidence must retain readable contrast. */
 .company-owner-desk .company-deployment{color:#294239;border-left-color:#63754b}.company-owner-desk .company-deployment li{color:#40594c;border-color:#778671}.company-owner-desk .company-deployment li[data-done="true"]{background:#294c38;color:#edf7e6}.company-owner-desk .company-deployment summary{color:#40594c}
+
+/* 2026-11-16 지도에서 상태를 한눈에: 이름표 왼쪽 점 — 빨강 지금 문제 / 초록 작업 중 / 호박 과거 실패(영향 미확인) */
+.company-stage .office-label[data-tone]>strong::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.company-stage .office-label[data-tone=alert]{border-color:#e0786b}
+.company-stage .office-label[data-tone=alert]>strong::before{background:#e0786b;box-shadow:0 0 0 3px #e0786b40}
+.company-stage .office-label[data-tone=active]>strong::before{background:#7fd19b}
+.company-stage .office-label[data-tone=history]>strong::before{background:#d9b25f}
+.company-tone-legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.company-tone-legend>i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:4px}
+.company-tone-legend>i:first-child{margin-left:0}
+.company-tone-legend>i[data-tone=alert]{background:#e0786b}
+.company-tone-legend>i[data-tone=active]{background:#7fd19b}
+.company-tone-legend>i[data-tone=history]{background:#d9b25f}

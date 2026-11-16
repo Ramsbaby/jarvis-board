@@ -16,7 +16,8 @@ def tree_hash(base,paths):
   elif p.is_dir():files.extend(x for x in p.rglob('*') if x.is_file())
  h=hashlib.sha256()
  for p in sorted(set(files)):
-  if '__pycache__' in p.parts or p.name=='.DS_Store':continue
+  # route-cache 는 서버가 요청을 받을 때 런타임에 쓰는 페이지 캐시라 배포물 동일성 판단에서 뺀다(첫 요청만으로 verify 가 깨지던 원인)
+  if '__pycache__' in p.parts or 'route-cache' in p.parts or p.name=='.DS_Store':continue
   if p.is_symlink():raise ValueError('Source/artifact symlink requires explicit review: '+str(p.relative_to(base)))
   content=p.read_bytes()
   if p.relative_to(base)==Path('tsconfig.json'):

@@ -9,6 +9,8 @@ export interface OfficeEmployee {
   mode: 'working' | 'reported' | 'waiting' | 'attention' | 'unknown';
   status: string; task: string; next: string; observedAt: string | null;
   activity?: string; hasActiveWork?: boolean; evidence: string; stationId?: Station['id'];
+  /** 끝나지 않았지만 지금 영향은 확인되지 않은 과거 실패 수 (상세 화면 '막힌 점'과 같은 기준) */
+  historyIssues?: number;
 }
 export function deriveEmployees(stations: Station[], snapshot: { jobs: unknown[] | null; freshness: string; observedAt: string | null }, now: number): OfficeEmployee[] {
   const staff: OfficeEmployee[] = stations.map(s => ({

@@ -3,6 +3,8 @@ import type { CompanyReport, CompanyReview } from './types';
 /** This is routing, never a claim that a report is correct or its task is done. */
 export function needsDeepReview(r: CompanyReport): boolean {
   if(internalHeartbeat(r))return false;
+  // 지시함의 답 대기 항목은 권고까지 원문에 있다. AI 검토 예산을 쓰지 않는다.
+  if(r.taskId.startsWith('owner-pending:'))return false;
   const c=r.context;
   // Structured collectors already supply the issue and responsible party's next action.
   const structured=/^(qa|workflow|automation):/.test(r.taskId)&&!!c?.next&&c.body===r.summary&&!c.events?.length;

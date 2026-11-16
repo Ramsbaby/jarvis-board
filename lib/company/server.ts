@@ -10,6 +10,8 @@ import { attachReviews } from './reviews';
 import { readCodex } from './codex';
 import { readWorkReports } from './work-reports';
 import { reconcileCompany } from './journal';
+import { ownerPendingTasks } from './owner-pending';
+import { readFile } from 'node:fs/promises';
 import type { CompanySnapshot } from './types';
 export async function loadCompany(base: CommandRoomSnapshot, source: OpenclawSnapshot): Promise<CompanySnapshot> {
   const now = Date.now(), observed = new Date(now).toISOString();
@@ -40,8 +42,13 @@ export async function loadCompany(base: CommandRoomSnapshot, source: OpenclawSna
   coverage.push({ source: 'QA 개별 실행', status: !qa.value ? 'unavailable' : qa.source.freshness !== 'fresh' ? 'partial' : 'connected', detail: '최근 최대 80개 실행 기록 · 진행 프로세스 최대 8개 정체성 확인 · 영역 요약은 중복 집계 제외' });
   const parallel = await readWorkReports(process.env.JARVIS_WORK_REPORTS_DIR || join(homedir(), '.openclaw/workspace/state/command-room/work-reports'), now);
   coverage.push(parallel.coverage);
+  let ownerPending: CompanySnapshot['tasks'] = [];
+  try {
+    ownerPending = ownerPendingTasks(await readFile(process.env.JARVIS_OWNER_PENDING_FILE || join(homedir(), '.openclaw/workspace/state/duty/orders.md'), 'utf8'), observed);
+    coverage.push({ source: '주인님 답 대기 항목', status: 'connected', detail: '당직 지시함의 답 대기 표시만 연결 · 대화에서만 나온 결정 거리는 포함하지 못함' });
+  } catch { coverage.push({ source: '주인님 답 대기 항목', status: 'unavailable', detail: '지시함 조회 실패 · 결정할 일이 없다는 뜻이 아님' }); }
   const observedTasks = [
-    ...summaries, ...individualQa, ...parallel.tasks, ...codex.tasks,
+    ...ownerPending, ...summaries, ...individualQa, ...parallel.tasks, ...codex.tasks,
     ...automationTasks(source.jobs ?? [], source.freshness === 'fresh', source.observedAt, now),
     ...developmentTasks(development, observed, source.freshness === 'fresh' && !source.hasMore ? (source.jobs ?? []).some(j => { const row = j as JsonRecord; return row.name === DEV_TASK_RUNNER_JOB && row.enabled === true; }) : null),
   ];

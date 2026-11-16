@@ -12,7 +12,8 @@ export function readMeetingDraft(key:string):MeetingDraft|undefined{
 /** touched=주인님이 실제로 글자를 바꾼 경우만. 자동 추천 채우기·복원·열기는 시각을 바꾸지 않아 다른 기기의 초안을 덮지 않는다. */
 export function saveMeetingDraft(key:string,draft:MeetingDraft,touched=false){
  const previous=memory.get(key);
- const updatedAt=touched?Date.now():Math.max(draft.updatedAt??0,previous?.updatedAt??0)||undefined;
+ // 다른 기기 시계가 조금 앞서 있어도 새 입력이 항상 더 나중 시각이 되게 한다.
+ const updatedAt=touched?Math.max(Date.now(),(previous?.updatedAt??draft.updatedAt??0)+1):Math.max(draft.updatedAt??0,previous?.updatedAt??0)||undefined;
  const value={...draft,updatedAt};memory.set(key,value);
  if(touched&&updatedAt)pushDraft(key,{question:draft.question,instruction:draft.instruction} satisfies SyncedMeetingText,updatedAt);
  try{window.localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;}

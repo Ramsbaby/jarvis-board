@@ -26,7 +26,7 @@ function harness(storage=new Map(),initial={},respond,documentOverride){
  const jsx=(type,props)=>({type,props});const mod={exports:{}};
  vm.runInNewContext(source,{module:mod,exports:mod.exports,require(name){
   if(name==='@/lib/company/meeting-drafts')return draftModule.exports;
-  if(name==='@/lib/company/draft-sync-client')return {pullDraft:async()=>null,pushDraft(){}};
+  if(name==='@/lib/company/draft-sync-client')return {pullDraft:async()=>null,pushDraft(){},onDraftResume:()=>()=>{},unsentState:()=>'none',discardUnsent(){}};
   if(name==='react')return react;
   if(name==='react/jsx-runtime')return {jsx,jsxs:jsx};
   if(name==='./DeploymentBadge')return {default:'DeploymentBadge'};

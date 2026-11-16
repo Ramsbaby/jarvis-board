@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const file = store(); if (!file) return NextResponse.json({ error: '초안 저장소 미설정' }, { status: 503, headers });
   const key = req.nextUrl.searchParams.get('key') || '';
   if (!DRAFT_KEY.test(key)) return NextResponse.json({ error: '초안 이름 확인 필요' }, { status: 400, headers });
-  try { return NextResponse.json({ draft: readDraft(file, key) }, { headers }); }
+  const mine = Number(req.nextUrl.searchParams.get('mine') || 0);
+  try { return NextResponse.json({ draft: readDraft(file, key, Number.isSafeInteger(mine) && mine > 0 ? mine : undefined) }, { headers }); }
   catch { return NextResponse.json({ error: '초안 조회 실패' }, { status: 500, headers }); }
 }
 export async function PUT(req: NextRequest) {

@@ -75,3 +75,52 @@ test('meeting drafts: auto-filled proposal does not bump time or push; typing do
   assert.equal(mod.readMeetingDraft(key).updatedAt,t,'a later non-edit save keeps the edit time');
  }finally{client.pushDraft=original;delete globalThis.window;}
 });
+
+test('server remembers which drafts it accepted, so a device that lost the reply can tell delivered from never-arrived',()=>{
+ const file=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'drafts-')),'drafts.sqlite');
+ assert.equal(writeDraft(file,meetingKey,{question:'PC',instruction:''},1000).accepted,true);
+ assert.equal(writeDraft(file,meetingKey,{question:'폰',instruction:''},2000).accepted,true);
+ const again=writeDraft(file,meetingKey,{question:'PC',instruction:''},1000);
+ assert.equal(again.stored,false);assert.equal(again.accepted,true,'re-sent copy of an already delivered draft is not a conflict');
+ const lost=writeDraft(file,meetingKey,{question:'끊긴 PC',instruction:''},1500);
+ assert.equal(lost.stored,false);assert.equal(lost.accepted,false,'never-arrived older draft is a conflict');
+ assert.equal(readDraft(file,meetingKey,1000).mineAccepted,true);assert.equal(readDraft(file,meetingKey,1500).mineAccepted,false);
+ assert.equal(readDraft(file,meetingKey).mineAccepted,undefined);
+});
+
+// 브라우저 쪽 보낼 함: fetch·저장소를 갈아 끼운 새 인스턴스로 끊김·새로고침을 흉내 낸다.
+import ts from 'typescript';import vm from 'node:vm';
+const clientSource=ts.transpileModule(fs.readFileSync('lib/company/draft-sync-client.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+function client(net,storage){const mod={exports:{}};const timers=[];const ctx={module:mod,exports:mod.exports,JSON,Math,Map,Set,Object,Promise,encodeURIComponent,
+ localStorage:storage,fetch:(...a)=>net(...a),setTimeout:(f)=>{timers.push(f);return timers.length;},clearTimeout:()=>{}};ctx.globalThis=ctx;vm.runInNewContext(clientSource,ctx);
+ return {...mod.exports,runTimers(){const t=timers.splice(0);for(const f of t)f();}};}
+const store=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),m};};
+const tick=()=>new Promise(r=>setImmediate(r));
+const okJson=(body)=>Promise.resolve({ok:true,status:200,json:async()=>body});
+
+test('offline push stays in the outbox, survives reload and is re-sent when the network returns',async()=>{
+ const disk=store();let online=false;const sent=[];
+ const net=(url,opt)=>{if(!online)return Promise.reject(new TypeError('offline'));if(opt?.method==='PUT'){sent.push(JSON.parse(opt.body));return okJson({draft:{accepted:true}});}return okJson({draft:null});};
+ const a=client(net,disk);a.pushDraft('jarvis.order-drafts.v1',{drafts:[]},1000);a.runTimers();await tick();await tick();
+ assert.equal(a.unsentState('jarvis.order-drafts.v1'),'pending');assert.ok(disk.m.get('jarvis.draft-sync.outbox.v1').includes('1000'));
+ const reopened=client(net,disk);assert.equal(reopened.unsentState('jarvis.order-drafts.v1'),'pending','closing the window does not lose it');
+ online=true;await reopened.pullDraft('jarvis.order-drafts.v1');await tick();await tick();
+ assert.equal(sent.length,1);assert.equal(sent[0].updatedAt,1000);assert.equal(reopened.unsentState('jarvis.order-drafts.v1'),'none');
+});
+test('a reply lost after delivery is recognised; a draft overtaken while offline becomes a conflict, not a silent loss',async()=>{
+ const disk=store();const key='jarvis.order-drafts.v1';
+ let remote={value:{drafts:[]},updatedAt:1000,mineAccepted:true};
+ const net=(url)=>String(url).includes('?')?okJson({draft:remote}):Promise.reject(new TypeError('lost'));
+ const a=client(net,disk);a.pushDraft(key,{drafts:[]},1000);a.runTimers();await tick();await tick();
+ assert.equal(a.unsentState(key),'pending');await a.pullDraft(key);assert.equal(a.unsentState(key),'none','delivered before the reply was lost');
+ a.pushDraft(key,{drafts:[]},1500);remote={value:{drafts:[]},updatedAt:2000,mineAccepted:false};await a.pullDraft(key);
+ assert.equal(a.unsentState(key),'conflict');
+ a.pushDraft(key,{drafts:[]},2500);assert.equal(a.unsentState(key),'pending','typing again resolves the conflict in favour of this device');
+ a.discardUnsent(key);assert.equal(a.unsentState(key),'none');
+});
+test('server refusing an older never-delivered draft marks a conflict and wakes the screens',async()=>{
+ const disk=store();let woke=0;
+ const net=()=>okJson({draft:{accepted:false,stored:false,updatedAt:9000}});
+ const a=client(net,disk);a.onDraftResume(()=>woke++);a.pushDraft('jarvis.order-drafts.v1',{drafts:[]},1000);a.runTimers();await tick();await tick();
+ assert.equal(a.unsentState('jarvis.order-drafts.v1'),'conflict');assert.equal(woke,1);
+});

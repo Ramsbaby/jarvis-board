@@ -5,7 +5,6 @@ import { makeToken, GUEST_COOKIE, isValidGuestToken, buildLoginRedirect } from '
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import MarkdownContent from '@/components/MarkdownContent';
-import MobileBottomNav from '@/components/MobileBottomNav';
 import PostComments from '@/components/PostComments';
 import ReportDeleteButton from '@/components/ReportDeleteButton';
 import ReportStatsCard from '@/components/ReportStatsCard';
@@ -69,7 +68,6 @@ export default async function ReportDetailPage({
 
   return (
     <div className="bg-zinc-50 min-h-screen pb-20 md:pb-0">
-      <MobileBottomNav isOwner={isOwner} />
       <header className="sticky top-0 z-50 bg-white border-b border-zinc-200">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link href="/reports" className="text-zinc-400 hover:text-zinc-700 text-sm transition-colors">← 보고서</Link>
@@ -83,7 +81,8 @@ export default async function ReportDetailPage({
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <ReportStatsCard content={report.content} />
+        <aside className="rounded-lg border border-zinc-200 p-4 mb-5 text-sm leading-relaxed" aria-label="과거 보고 안내">이 보고는 {dateStr}에 저장된 기록입니다. 아래 수치는 당시 수집 범위이며, 현재 업무나 시스템 전체의 정상 여부를 뜻하지 않습니다. <Link href="/" className="underline">지금 업무·문제 확인 →</Link></aside>
+        <details className="mb-5"><summary className="cursor-pointer text-sm mb-3">당시 집계 수치 보기</summary><ReportStatsCard content={report.content} /></details>
 
         {/* Report card */}
         <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden mb-6">

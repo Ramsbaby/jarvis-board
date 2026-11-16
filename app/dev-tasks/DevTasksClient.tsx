@@ -551,6 +551,8 @@ export default function DevTasksClient({ initialTasks, queue }: { initialTasks: 
   const queueActive = queue.active;
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
   const [tab, setTab] = useState<string>('all');
+  const [visibleCount,setVisibleCount] = useState(20);
+  const changeTab=(next:string)=>{setTab(next);setVisibleCount(20);};
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [batchLoading, setBatchLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -773,7 +775,7 @@ export default function DevTasksClient({ initialTasks, queue }: { initialTasks: 
         {STATS.map(s => (
           <button
             key={s.key}
-            onClick={() => setTab(s.key)}
+            onClick={() => changeTab(s.key)}
             className={`rounded-lg border p-3 flex flex-col gap-1 text-left transition-opacity hover:opacity-80 ${s.color} ${tab === s.key ? 'ring-2 ring-offset-1 ring-current' : ''}`}
           >
             <div className="flex items-center gap-1.5">
@@ -790,7 +792,7 @@ export default function DevTasksClient({ initialTasks, queue }: { initialTasks: 
         {STATUS_TABS.map(t => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => changeTab(t.key)}
             className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors relative -mb-px ${
               tab === t.key
                 ? 'text-indigo-600 border border-zinc-200 border-b-white bg-white'
@@ -819,7 +821,7 @@ export default function DevTasksClient({ initialTasks, queue }: { initialTasks: 
       ) : (
         <div className="space-y-4">
           {/* Grouped tasks */}
-          {taskGroups.groups.map(group => (
+          {taskGroups.groups.slice(0,visibleCount).map(group => (
             <TaskGroupCard
               key={group.key}
               group={group}
@@ -840,7 +842,7 @@ export default function DevTasksClient({ initialTasks, queue }: { initialTasks: 
             </div>
           )}
           <div className="space-y-3">
-            {taskGroups.singles.map(task => (
+            {taskGroups.singles.slice(0,Math.max(0,visibleCount-taskGroups.groups.length)).map(task => (
               <TaskCard
                 key={task.id}
                 task={task}
@@ -853,6 +855,7 @@ export default function DevTasksClient({ initialTasks, queue }: { initialTasks: 
               />
             ))}
           </div>
+          {taskGroups.groups.length+taskGroups.singles.length>visibleCount&&<button className="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm text-zinc-700" onClick={()=>setVisibleCount(n=>n+20)}>기록 20개 더 보기 ({Math.min(visibleCount,taskGroups.groups.length+taskGroups.singles.length)} / {taskGroups.groups.length+taskGroups.singles.length} 묶음)</button>}
         </div>
       )}
     </div>

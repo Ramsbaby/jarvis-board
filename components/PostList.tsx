@@ -171,13 +171,23 @@ function PostListInner({
   );
   const [hasMore, setHasMore] = useState(initialPosts.length >= 50);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
+  const loadingMoreRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // #1 Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<PostWithCommentCount[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [searchState, setSearchState] = useState<{
+    query: string;
+    status: 'loading' | 'success' | 'error';
+    results: PostWithCommentCount[];
+  } | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const trimmedQuery = searchQuery.trim();
+  // Hide results from a different query even before its effect has run.
+  const currentSearch = searchState?.query === trimmedQuery ? searchState : null;
+  const searching = !!trimmedQuery && (!currentSearch || currentSearch.status === 'loading');
+  const searchError = !!trimmedQuery && currentSearch?.status === 'error';
 
   const { subscribe } = useEvent();
 
@@ -185,28 +195,36 @@ function PostListInner({
     if ('Notification' in window) setNotifPerm(Notification.permission);
   }, []);
 
-  // #1 Debounced search
+  // #1 Debounced search. Cleanup also guards responses that ignore abort.
   useEffect(() => {
-    clearTimeout(searchDebounce.current);
     setVisibleCount(10);
-    if (!searchQuery.trim()) {
-      setSearchResults(null);
-      setSearching(false);
+    if (!trimmedQuery) {
+      setSearchState(null);
       return;
     }
-    setSearching(true);
-    searchDebounce.current = setTimeout(async () => {
+    let active = true;
+    const controller = new AbortController();
+    setSearchState({ query: trimmedQuery, status: 'loading', results: [] });
+    const timeout = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/posts?search=${encodeURIComponent(searchQuery.trim())}`);
-        if (!res.ok) { setSearchResults([]); return; }
+        const res = await fetch(`/api/posts?search=${encodeURIComponent(trimmedQuery)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Search request failed');
         const data = await res.json();
-        setSearchResults(data.posts ?? data);
-      } finally {
-        setSearching(false);
+        const results = data?.posts ?? data;
+        if (!Array.isArray(results)) throw new Error('Invalid search response');
+        if (active) setSearchState({ query: trimmedQuery, status: 'success', results });
+      } catch {
+        if (active) setSearchState({ query: trimmedQuery, status: 'error', results: [] });
       }
     }, 300);
-    return () => clearTimeout(searchDebounce.current);
-  }, [searchQuery]);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [trimmedQuery, searchAttempt]);
 
   function pushFilter(t: string, s: string, a: string, tag: string, ch = channelFilter) {
     const p = new URLSearchParams();
@@ -216,7 +234,7 @@ function PostListInner({
     if (tag) p.set('tag', tag);
     if (ch) p.set('channel', ch);
     const q = p.toString();
-    router.replace(q ? `/?${q}` : '/', { scroll: false });
+    router.replace(q ? `/board?${q}` : '/board', { scroll: false });
   }
 
   useEffect(() => {
@@ -272,27 +290,36 @@ function PostListInner({
 
   // #5 Load more posts
   async function loadMore() {
-    if (!cursor || loadingMore || !hasMore) return;
+    if (!cursor || loadingMoreRef.current || !hasMore) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
+    setLoadMoreError(false);
     try {
       const res = await fetch(`/api/posts?cursor=${cursor}&limit=50`);
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('Post list request failed');
       const data = await res.json();
-      const newPosts: PostWithCommentCount[] = data.posts ?? [];
+      if (!Array.isArray(data?.posts) ||
+          (data.nextCursor != null && (typeof data.nextCursor !== 'string' || !data.nextCursor || data.nextCursor === cursor))) {
+        throw new Error('Invalid post list response');
+      }
+      const newPosts: PostWithCommentCount[] = data.posts;
       setPosts(prev => {
         const ids = new Set(prev.map((p) => p.id));
         return [...prev, ...newPosts.filter((p) => !ids.has(p.id))];
       });
       setCursor(data.nextCursor ?? null);
       setHasMore(!!data.nextCursor);
+    } catch {
+      setLoadMoreError(true);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   }
 
   // #5 IntersectionObserver
   useEffect(() => {
-    if (!sentinelRef.current) return;
+    if (!sentinelRef.current || loadMoreError || trimmedQuery || !hasMore) return;
     const obs = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) loadMore(); },
       { rootMargin: '200px' }
@@ -300,7 +327,7 @@ function PostListInner({
     obs.observe(sentinelRef.current);
     return () => obs.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, hasMore, loadingMore]);
+  }, [cursor, hasMore, loadingMore, loadMoreError, trimmedQuery]);
 
   // 실제 포스트에 있는 유형만 동적으로 추출 (순서: ALL_TYPE_ORDER 기준)
   const typeCounts = Object.fromEntries(
@@ -309,7 +336,9 @@ function PostListInner({
   const activeTypes = ALL_TYPE_ORDER.filter(t => typeCounts[t] > 0);
 
   // Determine display list: search overrides local filtering
-  const baseList = searchQuery.trim() && searchResults !== null ? searchResults : posts;
+  const baseList = trimmedQuery
+    ? (currentSearch?.status === 'success' ? currentSearch.results : [])
+    : posts;
 
   const filtered = baseList.filter((p) => {
     if (p.type === 'report') return false;
@@ -354,7 +383,7 @@ function PostListInner({
     setChannelFilter('');
     setShowBookmarksOnly(false);
     setVisibleCount(10);
-    router.replace('/', { scroll: false });
+    router.replace('/board', { scroll: false });
   }
 
   const [showTagPanel, setShowTagPanel] = useState(false);
@@ -581,8 +610,8 @@ function PostListInner({
       {/* Search mode header */}
       {isSearching && (
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs text-zinc-500">
-            {searching ? '검색 중...' : `"${searchQuery}" 검색 결과 ${sorted.length}개`}
+          <span role="status" className="text-xs text-zinc-500">
+            {searching ? '검색 중...' : searchError ? '검색에 실패했습니다' : `"${searchQuery}" 검색 결과 ${sorted.length}개`}
           </span>
           <button onClick={() => setSearchQuery('')} className="text-xs text-indigo-500 hover:underline">
             검색 취소
@@ -591,7 +620,7 @@ function PostListInner({
       )}
 
       {/* ── MAIN FEED ── */}
-      <main>
+      <main aria-busy={searching || (!isSearching && loadingMore)}>
         <div className="flex items-center justify-between mb-3 px-0.5">
           {!isSearching && (
             <span className="text-zinc-400 text-xs">
@@ -600,7 +629,18 @@ function PostListInner({
           )}
         </div>
 
-        {sorted.length === 0 && !searching ? (
+        {searchError ? (
+          <div role="alert" className="text-center py-16">
+            <p className="text-sm text-zinc-600 mb-3">검색에 실패했습니다. 잠시 후 다시 시도해주세요.</p>
+            <button
+              type="button"
+              onClick={() => { setSearchState(null); setSearchAttempt(n => n + 1); }}
+              className="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : searching ? null : sorted.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-100 flex items-center justify-center">
               <svg className="w-8 h-8 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -705,10 +745,11 @@ function PostListInner({
               const isResolved = post.status === 'resolved';
               const isPaused = !!post.paused_at;
               const timerBase = post.restarted_at ?? post.created_at;
+              const isHistorical = clockNow - new Date(timerBase.endsWith('Z')?timerBase:timerBase+'Z').getTime() > 30*24*60*60*1000;
               const extraMs = post.extra_ms ?? 0;
               const expiresMs = new Date(timerBase + 'Z').getTime() + getDiscussionWindow(post.type) + extraMs;
               const expiresAt = new Date(expiresMs).toISOString();
-              const isTimedOut = post.status === 'open' && !isPaused && clockNow > expiresMs;
+              const isTimedOut = !isHistorical && post.status === 'open' && !isPaused && clockNow > expiresMs;
               // Remaining time when paused (frozen at moment of pause)
               const pausedAtMs = isPaused ? new Date((post.paused_at! as string).endsWith('Z') ? post.paused_at! : post.paused_at! + 'Z').getTime() : 0;
               const pausedRemainMs = isPaused ? Math.max(0, expiresMs - pausedAtMs) : 0;
@@ -721,7 +762,7 @@ function PostListInner({
 
               // Live countdown (reactive via clockNow)
               const diffMs = expiresMs - clockNow;
-              const isActiveNow = !isResolved && !isTimedOut;
+              const isActiveNow = !isHistorical && !isResolved && !isTimedOut;
               const countMin = isActiveNow ? Math.max(0, Math.floor(diffMs / 60000)) : 0;
               const countSec = isActiveNow ? Math.max(0, Math.floor((diffMs % 60000) / 1000)) : 0;
               const countPct = isActiveNow ? Math.max(0, Math.min(100, (diffMs / getDiscussionWindow(post.type)) * 100)) : 0;
@@ -745,8 +786,9 @@ function PostListInner({
                       ? 'bg-white border-2 border-amber-300 shadow-md shadow-amber-100'
                       : 'bg-white border-2 border-indigo-200 hover:border-indigo-300 shadow-sm shadow-indigo-50'
                   }`}>
-                    {/* ── Countdown header — only for non-resolved posts ── */}
-                    {!isResolved && (
+                    {isHistorical&&<p className="px-4 py-2 text-xs text-zinc-500 border-b border-zinc-200">이전 논의 기록 · 당시 상태이며 현재 실행·긴급도를 뜻하지 않습니다.</p>}
+                    {/* ── Countdown header — only for recent non-resolved posts ── */}
+                    {!isResolved && !isHistorical && (
                       <div className={`select-none overflow-hidden ${
                         isTimedOut ? 'bg-gradient-to-r from-red-600 to-red-800' :
                         isUrgent   ? 'bg-gradient-to-r from-red-500 to-rose-700' :
@@ -951,7 +993,7 @@ function PostListInner({
                       </div>
                     </div>
                     {/* Progress bar at card bottom — all active posts */}
-                    {!isResolved && (
+                    {!isResolved && !isHistorical && (
                       <CountdownTimer expiresAt={expiresAt} variant="bar" paused={post.paused_at != null} />
                     )}
                   </article>
@@ -974,9 +1016,17 @@ function PostListInner({
         {!searchQuery.trim() && (
           <div ref={sentinelRef} className="py-4 text-center">
             {loadingMore && (
-              <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
+              <div role="status" className="flex items-center justify-center gap-2 text-xs text-zinc-400">
                 <div className="w-3 h-3 border-2 border-zinc-300 border-t-indigo-400 rounded-full animate-spin" />
                 더 불러오는 중...
+              </div>
+            )}
+            {loadMoreError && (
+              <div role="alert" className="text-sm text-zinc-600">
+                <p>논의 목록을 더 불러오지 못했습니다. 기존 목록은 유지했습니다.</p>
+                <button type="button" onClick={() => void loadMore()} className="mt-2 rounded-lg border border-indigo-200 px-3 py-1.5 text-indigo-600">
+                  다시 시도
+                </button>
               </div>
             )}
             {!hasMore && posts.length > 50 && (

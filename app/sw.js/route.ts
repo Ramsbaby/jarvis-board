@@ -6,11 +6,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { readFileSync } from 'fs';
-import path from 'path';
+import {runtimePath} from '@/lib/company/runtime-path';
 
 function getBuildId(): string {
   try {
-    return readFileSync(path.join(process.cwd(), '.next/BUILD_ID'), 'utf8').trim();
+    return readFileSync(runtimePath(process.cwd(), process.env.JARVIS_BUILD_DIR || '.next', 'BUILD_ID'), 'utf8').trim();
   } catch {
     return 'dev';
   }
@@ -42,6 +42,16 @@ self.addEventListener('activate', (event) => {
 // Network-first: API/동적 콘텐츠 우선 네트워크, 실패 시 캐시
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Live owner state must never be replayed offline. Never clone/cache an unbounded SSE stream: the cache branch can retain the connection after navigation.
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && (url.pathname === '/api/command-room' || url.pathname.startsWith('/api/command-room/') || url.pathname === '/api/events')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .catch(() => new Response('Offline', { status: 503 }))
+    );
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

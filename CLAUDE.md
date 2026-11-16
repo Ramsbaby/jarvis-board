@@ -26,19 +26,19 @@
 | 5 | `find_referencing_symbols` | 수정 후 영향 범위 재확인 |
 
 ### 절대 금지
-- `Read VirtualOffice.tsx` 통째 (2,780줄 = ~20K 토큰)
-- `Read TeamBriefingPopup.tsx` 통째 (1,413줄 = ~10K 토큰)
+- `Read VirtualOffice.tsx` 통째 (3,088줄 = ~20K 토큰)
+- `Read TeamBriefingPopup.tsx` 통째 (1,949줄 = ~10K 토큰)
 - 500줄+ 파일을 Serena 도구 시도 없이 Read
 
 ### 토큰 비교 (자비스맵 핵심 파일)
 
 | 파일 | 줄 수 | Read 비용 | Serena 비용 | 절약 |
 |---|---:|---:|---:|---:|
-| `VirtualOffice.tsx` | 2,780 | ~20K | ~2K | 90% |
-| `TeamBriefingPopup.tsx` | 1,413 | ~10K | ~1.5K | 85% |
-| `canvas-draw.ts` | 911 | ~7K | ~1K | 86% |
+| `VirtualOffice.tsx` | 3,088 | ~20K | ~2K | 90% |
+| `TeamBriefingPopup.tsx` | 1,949 | ~10K | ~1.5K | 85% |
+| `canvas-draw.ts` | 1,559 | ~7K | ~1K | 86% |
 | `briefing/route.ts` | 874 | ~6K | ~0.8K | 87% |
-| `game/chat/route.ts` | 860 | ~6K | ~0.8K | 87% |
+| `game/chat/route.ts` | 960 | ~6K | ~0.8K | 87% |
 | `CronDetailPopup.tsx` | 774 | ~5.5K | ~0.7K | 87% |
 
 ### Serena가 못하는 것 (이건 Read 사용)
@@ -62,7 +62,7 @@ npx next build            # 빌드 (타입 에러 + 런타임 에러 모두 잡�
 - Co-Authored-By 줄 포함
 
 ### 파일 크기 주의
-VirtualOffice.tsx(2,780줄)는 이미 한계. 새 기능은 components/map/ 또는 lib/map/에 분리.
+VirtualOffice.tsx(3,088줄)는 이미 한계. 새 기능은 components/map/ 또는 lib/map/에 분리.
 
 ### API 라우트 (69개)
 변경 전 반드시 관련 라우트 확인. Serena `find_referencing_symbols`로 호출자 추적.

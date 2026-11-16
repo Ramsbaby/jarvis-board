@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Link from 'next/link';
+import './wiki.css';
+import MarkdownContent from '@/components/MarkdownContent';
 
 interface WikiPage {
   path: string;
@@ -31,6 +34,7 @@ interface WikiPageDetail {
   lastModified: string;
 }
 
+const DOMAIN_LABEL:Record<string,string>={'05-career':'취업 자료',career:'경력·지원',briefings:'비서 브리핑',family:'가족',health:'건강',knowledge:'참고 지식',meta:'운영 기준',ops:'운영',owner:'사장 정보',personal:'개인 자료',realestate:'부동산',retros:'회고',skills:'작업 지침',trading:'투자'};
 const DOMAIN_EMOJI: Record<string, string> = {
   career: '💼', trading: '📈', ops: '🔧', knowledge: '📚',
   briefings: '📋', family: '👨‍👩‍👧', health: '💪', meta: '⚙️',
@@ -51,12 +55,10 @@ function dateKey(p: WikiPage): string {
 /** 이보다 문서가 많으면 폴더 묶음을 처음엔 접어 둔다 (검색 결과는 항상 펼침) */
 const COLLAPSE_THRESHOLD = 60;
 
-/** 위키 본문을 HTML 로 넣기 전에 태그를 글자로 바꾼다 — 위키에 섞여 들어온 HTML·스크립트가 실행되지 않게 */
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 export default function WikiBrowserPage() {
+  const detailRef=useRef<HTMLDivElement>(null);
+  const listRequest=useRef(0),detailRequest=useRef(0);
+  const [opening,setOpening]=useState(false);
   const [stats, setStats] = useState<WikiStats | null>(null);
   const [pages, setPages] = useState<WikiPage[]>([]);
   const [selectedPage, setSelectedPage] = useState<WikiPageDetail | null>(null);
@@ -70,6 +72,7 @@ export default function WikiBrowserPage() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const fetchPages = useCallback(async (domain?: string, q?: string) => {
+    const request=++listRequest.current;
     setLoading(true);
     setError(null);
     try {
@@ -79,36 +82,40 @@ export default function WikiBrowserPage() {
       const res = await fetch(`/api/wiki?${params}`);
       if (!res.ok) throw new Error(res.status === 403 ? '접근 권한 없음' : `HTTP ${res.status}`);
       const data = await res.json();
+      if(request!==listRequest.current)return;
       // 검색 응답에는 stats 가 없다 — 그때 도메인 버튼이 사라지지 않도록 기존 통계를 유지
       if (data.stats) setStats(data.stats);
       setPages(data.results || data.pages || []);
       setIsSearchResult(!!q);
       setCollapsed({});
     } catch (e) {
-      setError((e as Error).message);
+      if(request===listRequest.current)setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if(request===listRequest.current)setLoading(false);
     }
   }, []);
 
   const fetchPage = async (path: string) => {
-    setError(null);
+    const request=++detailRequest.current;
+    setError(null);setOpening(true);
     try {
       const res = await fetch(`/api/wiki/page?path=${encodeURIComponent(path)}`);
       if (!res.ok) {
         throw new Error(res.status === 403 ? '접근 권한 없음' : `HTTP ${res.status}`);
       }
       const data = await res.json();
-      setSelectedPage(data.page);
+      if(request===detailRequest.current)setSelectedPage(data.page);
     } catch (err) {
       // 빈 catch였던 자리 — 실패 시 사용자에게 피드백을 주고
       // 기존 선택 상태는 유지하지 않는다 (잘못된 본문 잔상 방지).
+      if(request!==detailRequest.current)return;
       setSelectedPage(null);
       setError(`위키 페이지를 불러오지 못했습니다: ${(err as Error).message}`);
-    }
+    } finally {if(request===detailRequest.current)setOpening(false);}
   };
 
   useEffect(() => { fetchPages(); }, [fetchPages]);
+  useEffect(()=>{if(selectedPage){detailRef.current?.focus();if(detailRef.current)detailRef.current.scrollTop=0;}},[selectedPage]);
 
   const recentPages = useMemo(
     () => [...pages].sort((a, b) =>
@@ -140,6 +147,7 @@ export default function WikiBrowserPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    detailRequest.current++;setOpening(false);setSelectedPage(null);
     if (searchQuery.trim()) {
       fetchPages(selectedDomain || undefined, searchQuery.trim());
     } else {
@@ -149,17 +157,18 @@ export default function WikiBrowserPage() {
 
   const handleDomainFilter = (domain: string | null) => {
     setSelectedDomain(domain);
-    setSelectedPage(null);
+    detailRequest.current++;setOpening(false);setSelectedPage(null);
     fetchPages(domain || undefined, searchQuery || undefined);
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif', background: '#0d1117', color: '#c9d1d9' }}>
+    <div className={`wiki-browser ${selectedPage?'has-selection':''}`} style={{ display: 'flex', height: 'calc(100dvh - 84px)', fontFamily: 'system-ui, sans-serif', background: '#0d1117', color: '#c9d1d9' }}>
       {/* 사이드바 */}
-      <div style={{ width: 320, borderRight: '1px solid #30363d', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="wiki-sidebar" style={{ width: 320, borderRight: '1px solid #30363d', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ padding: 16, borderBottom: '1px solid #30363d' }}>
-          <h1 style={{ margin: 0, fontSize: 18, color: '#f0f6fc' }}>📚 Jarvis Wiki</h1>
+          <h1 style={{ margin: 0, fontSize: 18, color: '#f0f6fc' }}>업무 근거 자료실</h1>
+          <p className="wiki-purpose">업무 판단에 쓰인 문서와 기준을 찾습니다. 현재 실행 상태는 <Link href="/">게임 본사</Link>에서 확인하세요.</p>
           {stats && (
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8b949e' }}>
               {stats.totalPages}개 페이지 · 마지막 갱신 {stats.lastUpdated}
@@ -170,16 +179,18 @@ export default function WikiBrowserPage() {
         {/* 검색 */}
         <form onSubmit={handleSearch} style={{ padding: '12px 16px', borderBottom: '1px solid #30363d' }}>
           <input
-            type="text"
+            type="search"
+            aria-label="업무 근거 문서 검색"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="위키 검색..."
+            placeholder="제목·본문에서 검색"
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 6,
               border: '1px solid #30363d', background: '#161b22', color: '#c9d1d9',
               fontSize: 14, outline: 'none', boxSizing: 'border-box',
             }}
           />
+          <div className="wiki-search-actions"><button type="submit" disabled={loading}>검색</button><button type="button" onClick={()=>{setSearchQuery('');detailRequest.current++;setOpening(false);setSelectedPage(null);void fetchPages(selectedDomain||undefined);}}>검색 초기화</button></div>
         </form>
 
         {/* 도메인 필터 */}
@@ -200,7 +211,7 @@ export default function WikiBrowserPage() {
                 background: selectedDomain === d ? '#1f6feb' : '#21262d',
                 color: selectedDomain === d ? '#fff' : '#8b949e',
               }}
-            >{DOMAIN_EMOJI[d] || '📄'} {d} ({stats.domains[d]})</button>
+            >{DOMAIN_EMOJI[d] || '📄'} {DOMAIN_LABEL[d]||d} ({stats.domains[d]})</button>
           ))}
         </div>
 
@@ -227,6 +238,7 @@ export default function WikiBrowserPage() {
 
         {/* 페이지 목록 */}
         <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+          {opening&&<p role="status" className="wiki-opening">문서를 여는 중입니다…</p>}
           {loading && <p style={{ textAlign: 'center', color: '#8b949e', padding: 16 }}>로딩 중...</p>}
           {error && !loading && (
             <div style={{ textAlign: 'center', padding: 16 }}>
@@ -277,14 +289,15 @@ export default function WikiBrowserPage() {
       </div>
 
       {/* 본문 */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 32 }}>
+      <div ref={detailRef} tabIndex={-1} className="wiki-document" aria-label="선택한 근거 문서" style={{ flex: 1, overflow: 'auto', padding: 32 }}>
+        {selectedPage&&<button className="wiki-back" onClick={()=>setSelectedPage(null)}>← 문서 목록으로</button>}
         {!selectedPage ? (
           <div style={{ textAlign: 'center', marginTop: '20vh', color: '#8b949e' }}>
             <p style={{ fontSize: 48 }}>📚</p>
-            <p>왼쪽에서 페이지를 선택하세요</p>
+            <p>문서를 검색하거나 목록에서 선택하세요</p>
           </div>
         ) : (
-          <div style={{ maxWidth: 800 }}>
+          <div style={{ maxWidth: 800, overflowWrap: 'anywhere' }}>
             {/* 메타데이터 */}
             <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ padding: '2px 8px', borderRadius: 12, background: '#1f6feb22', color: '#58a6ff', fontSize: 11 }}>
@@ -298,20 +311,7 @@ export default function WikiBrowserPage() {
               </span>
             </div>
 
-            {/* 마크다운 본문 (간단 렌더링) */}
-            <div
-              style={{ lineHeight: 1.8, fontSize: 14 }}
-              dangerouslySetInnerHTML={{
-                __html: escapeHtml(selectedPage.content)
-                  .replace(/^### (.+)$/gm, '<h3 style="color:#f0f6fc;margin-top:24px">$1</h3>')
-                  .replace(/^## (.+)$/gm, '<h2 style="color:#f0f6fc;margin-top:32px;border-bottom:1px solid #30363d;padding-bottom:8px">$1</h2>')
-                  .replace(/^# (.+)$/gm, '<h1 style="color:#f0f6fc;margin-top:0">$1</h1>')
-                  .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#f0f6fc">$1</strong>')
-                  .replace(/^- (.+)$/gm, '<li style="margin-left:16px">$1</li>')
-                  .replace(/\n{2,}/g, '<br/><br/>')
-                  .replace(/\n/g, '<br/>')
-              }}
-            />
+            <MarkdownContent content={selectedPage.content} variant="dark" className="wiki-markdown"/>
           </div>
         )}
       </div>

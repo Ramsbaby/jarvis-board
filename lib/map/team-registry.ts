@@ -30,6 +30,8 @@ export interface TeamEntityDef {
   name: string;
   /** 한 줄 타이틀 */
   title?: string;
+  /** 본사 이름표에 표시할 실제 담당 직책. */
+  roleLabel?: string;
   /** 이모지 아바타 */
   avatar?: string;
   /** 시스템 메트릭용 아이콘 */
@@ -69,6 +71,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'infra-lead',
     type: 'team-lead',
     name: 'SRE실 · 이준혁',
+    roleLabel: '시스템 운영 담당',
     title: '신뢰성 엔지니어링 · 예방적 시스템 운영',
     avatar: '🛡️',
     keywords: [
@@ -95,6 +98,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'trend-lead',
     type: 'team-lead',
     name: '전략기획실 · 강나연',
+    roleLabel: '기술 동향 담당',
     title: '뉴스·기술 트렌드 분석',
     avatar: '📡',
     keywords: ['trend', 'news', 'calendar-alert', 'github-monitor', 'recon'],
@@ -107,6 +111,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'finance',
     type: 'team-lead',
     name: '재무실 · 장원석',
+    roleLabel: '비용·자산 담당',
     title: 'AI 운영 비용 + 시장 포지션 + 개인 수입 통합',
     avatar: '💰',
     keywords: [
@@ -125,6 +130,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'record-lead',
     type: 'team-lead',
     name: '데이터실 · 한소희',
+    roleLabel: '기억 보관 담당',
     title: '메모리·RAG 아카이빙',
     avatar: '🗄️',
     keywords: ['record-daily', 'record', 'memory', 'session-sum', 'session', 'compact', 'rag-index', 'rag', 'vault', 'gen-system-overview'],
@@ -141,6 +147,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'library',
     type: 'team-lead',
     name: '자료실 · 문지아',
+    roleLabel: '지식 검색 담당',
     title: '전사 지식 베이스 프론트엔드',
     avatar: '📖',
     keywords: ['rag-index', 'rag-bench'],
@@ -153,6 +160,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'growth-lead',
     type: 'team-lead',
     name: '인재개발실 · 김서연',
+    roleLabel: '학습·커리어 담당',
     title: '커리어·면접·기술 학습 통합',
     avatar: '🌱',
     keywords: [
@@ -171,6 +179,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'brand-lead',
     type: 'team-lead',
     name: '마케팅실 · 정하은',
+    roleLabel: '오픈소스·콘텐츠 담당',
     title: 'OSS·블로그·콘텐츠 전략',
     avatar: '📣',
     keywords: ['brand', 'openclaw', 'blog', 'oss', 'github-star', 'stars'],
@@ -186,6 +195,7 @@ export const TEAM_REGISTRY: Record<string, TeamEntityDef> = {
     id: 'audit-lead',
     type: 'team-lead',
     name: 'QA실 · 류태환',
+    roleLabel: '품질 감사 담당',
     title: '품질·감사·E2E 테스트',
     avatar: '🔍',
     keywords: ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync', 'doc-supervisor', 'code-auditor', 'cron-auditor', 'stale-task', 'roi'],

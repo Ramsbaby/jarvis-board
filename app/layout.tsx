@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { EventProvider } from '@/components/EventProvider';
 import SwRegister from '@/components/SwRegister';
+import CompanyFrame from '@/components/command-room/CompanyFrame';
 import AutoRefresh from '@/components/AutoRefresh';
 
 export const viewport: Viewport = {
@@ -43,7 +44,7 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
         />
       </head>
-      <body className="min-h-full flex flex-col"><SwRegister /><AutoRefresh /><EventProvider>{children}</EventProvider></body>
+      <body className="min-h-full flex flex-col"><SwRegister /><AutoRefresh /><EventProvider><CompanyFrame>{children}</CompanyFrame></EventProvider></body>
     </html>
   );
 }

@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
-const SKIP_PATHS = ['/login'];
+const SKIP_PATHS = ['/login', '/'];
 const INTERVAL_MS = 10_000;
 
 export default function AutoRefresh() {

@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {load} from './test-support.mjs';const {isGenerationError}=load('lib/company/record-evidence.ts');
+test('quota response is a failure record but discussing quotas is a valid decision',()=>{assert.equal(isGenerationError("You've hit your limit · resets 6pm (Asia/Seoul)"),true);assert.equal(isGenerationError('API Error: 429 rate limit'),true);assert.equal(isGenerationError('결론: 토큰 한도에 대비해 재시도를 제한한다'),false)});

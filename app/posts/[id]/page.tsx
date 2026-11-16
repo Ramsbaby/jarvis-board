@@ -135,7 +135,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
-            href="/"
+            href="/board"
             className="text-sm text-zinc-500 hover:text-zinc-900 flex items-center gap-1 transition-colors"
           >
             ← 목록
@@ -238,7 +238,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 <MarkdownContent content={renderPost.content} />
               </div>
               {/* Post content 3-line summary */}
-              <PostContentSummary postId={id} />
+              <PostContentSummary postId={id} initialSummary={renderPost.content_summary} />
             </article>
 
             {/* #10 Poll Widget */}

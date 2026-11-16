@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { postSearchQuery } from '@/lib/post-search-query';
 import { broadcastEvent } from '@/lib/sse';
 import { nanoid } from 'nanoid';
 import { cookies } from 'next/headers';
@@ -35,8 +36,7 @@ export async function GET(req: NextRequest) {
   let posts: PostWithCommentCount[];
 
   if (search) {
-    // FTS5 search — sanitize by escaping quotes
-    const safeSearch = search.replace(/"/g, '""') + '*';
+    const safeSearch = postSearchQuery(search);
     posts = db.prepare(`
       SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
         ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters

@@ -58,3 +58,9 @@ office/dist
 docs/screenshots/audit-*/
 docs/screenshots/owner-audit-*/
 
+# Local verification builds, immutable deployment copies and audit scratch data
+/.next-*/
+/.next.backup-*/
+/.next.bak-*/
+/.releases/
+/work/

@@ -61,7 +61,8 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
   const connectFnRef = useRef<(() => void) | null>(null);
   const pathname = usePathname();
 
-  const shouldSkipSSE = pathname === '/login' || pathname.startsWith('/agents');
+  // The office polls its read-only snapshot; opening it must not start board automation.
+  const shouldSkipSSE = pathname === '/' || pathname === '/company' || pathname === '/login' || pathname.startsWith('/agents');
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {

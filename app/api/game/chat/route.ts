@@ -1,3 +1,4 @@
+import {runtimePath} from '@/lib/company/runtime-path';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -71,16 +72,16 @@ function latestFileIn(dir: string, pattern: RegExp): string {
     if (!existsSync(dir)) return '';
     const files = readdirSync(dir)
       .filter(f => pattern.test(f))
-      .map(f => ({ f, t: statSync(path.join(dir, f)).mtimeMs }))
+      .map(f => ({ f, t: statSync(runtimePath(dir, f)).mtimeMs }))
       .sort((a, b) => b.t - a.t);
-    return files[0] ? path.join(dir, files[0].f) : '';
+    return files[0] ? runtimePath(dir, files[0].f) : '';
   } catch {
     return '';
   }
 }
 
 function readCronLog(): string {
-  return safeRead(path.join(JARVIS_HOME, 'logs', 'cron.log'), 32_000);
+  return safeRead(runtimePath(JARVIS_HOME, 'logs', 'cron.log'), 32_000);
 }
 
 function cronStats(log: string): { total: number; fail: number } {
@@ -141,7 +142,7 @@ function cronStats7d(keywords: string[], cronLog: string): { days: number; succe
 }
 
 function listCircuitBreakers(keywords: string[]): string {
-  const dir = path.join(JARVIS_HOME, 'state', 'circuit-breaker');
+  const dir = runtimePath(JARVIS_HOME, 'state', 'circuit-breaker');
   if (!existsSync(dir)) return '';
   try {
     const files = readdirSync(dir).filter(f => f.endsWith('.json'));
@@ -152,7 +153,7 @@ function listCircuitBreakers(keywords: string[]): string {
       const tidLower = taskId.toLowerCase();
       if (keywords.length > 0 && !kwLower.some(kw => tidLower.includes(kw))) continue;
       try {
-        const data = JSON.parse(readFileSync(path.join(dir, f), 'utf8')) as {
+        const data = JSON.parse(readFileSync(runtimePath(dir, f), 'utf8')) as {
           failures?: number; state?: string; cooldownUntil?: string; lastFailureAt?: string;
         };
         if ((data.failures || 0) >= 2) {
@@ -171,17 +172,17 @@ function listCircuitBreakers(keywords: string[]): string {
 }
 
 function recentResultsFor(taskId: string, maxFiles = 2, maxBytesPerFile = 1500): string {
-  const dir = path.join(JARVIS_HOME, 'results', taskId);
+  const dir = runtimePath(JARVIS_HOME, 'results', taskId);
   if (!existsSync(dir)) return '';
   try {
     const files = readdirSync(dir)
       .filter(f => f.endsWith('.md') || f.endsWith('.txt'))
-      .map(f => ({ f, t: statSync(path.join(dir, f)).mtimeMs }))
+      .map(f => ({ f, t: statSync(runtimePath(dir, f)).mtimeMs }))
       .sort((a, b) => b.t - a.t)
       .slice(0, maxFiles);
     const snippets: string[] = [];
     for (const { f } of files) {
-      const content = safeRead(path.join(dir, f), maxBytesPerFile);
+      const content = safeRead(runtimePath(dir, f), maxBytesPerFile);
       if (!content) continue;
       snippets.push(`▼ ${f}:\n${tailLines(content, 15).slice(-maxBytesPerFile)}`);
     }
@@ -197,13 +198,13 @@ function sampleRecentResults(ownedTasks: TaskDef[], maxSamples = 2): string {
   // results/ 디렉토리가 존재하는 태스크 우선
   const candidates: Array<{ id: string; mtime: number }> = [];
   for (const t of ownedTasks) {
-    const dir = path.join(JARVIS_HOME, 'results', t.id);
+    const dir = runtimePath(JARVIS_HOME, 'results', t.id);
     if (!existsSync(dir)) continue;
     try {
       const files = readdirSync(dir).filter(f => f.endsWith('.md') || f.endsWith('.txt'));
       if (files.length === 0) continue;
       const latestMtime = Math.max(...files.map(f => {
-        try { return statSync(path.join(dir, f)).mtimeMs; } catch { return 0; }
+        try { return statSync(runtimePath(dir, f)).mtimeMs; } catch { return 0; }
       }));
       candidates.push({ id: t.id, mtime: latestMtime });
     } catch { /* skip */ }
@@ -338,14 +339,14 @@ function gatherFailureDetails(keywords: string[], cronLog: string, maxTasks = 3)
     parts.push(`  실패 시각: ${info.time}`);
     parts.push(`  cron 로그 메시지: ${info.msg}`);
     // Claude stderr 로그 시도
-    const stderrFile = path.join(JARVIS_HOME, 'logs', `claude-stderr-${taskId}.log`);
+    const stderrFile = runtimePath(JARVIS_HOME, 'logs', `claude-stderr-${taskId}.log`);
     const stderrTxt = safeRead(stderrFile, 3000);
     if (stderrTxt) {
       const stderrTail = tailLines(stderrTxt, 12).slice(-1500);
       if (stderrTail) parts.push(`  Claude stderr tail:\n${stderrTail.split('\n').map(l => '    ' + l).join('\n')}`);
     }
     // 태스크 전용 로그 시도
-    const taskLog = path.join(JARVIS_HOME, 'logs', `${taskId}.log`);
+    const taskLog = runtimePath(JARVIS_HOME, 'logs', `${taskId}.log`);
     if (existsSync(taskLog)) {
       const taskLogTxt = safeRead(taskLog, 2000);
       const tail = tailLines(taskLogTxt, 8);
@@ -375,7 +376,7 @@ function gatherTeamContext(teamId: string): string {
     case 'infra-lead': {
       const kw = TEAM_KEYWORDS['infra-lead'];
       const base = buildRichBase(teamId, kw, cronLog);
-      const minutesFile = latestFileIn(path.join(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
+      const minutesFile = latestFileIn(runtimePath(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
       const minutes = minutesFile ? safeRead(minutesFile, 4000) : '';
       const infraSection = grepLines(minutes, ['인프라', 'Infra', 'infra', 'SRE', '디스크', '서버'], 10);
       const extras: string[] = [];
@@ -387,10 +388,10 @@ function gatherTeamContext(teamId: string): string {
     case 'finance': {
       const kw = TEAM_KEYWORDS.finance;
       const base = buildRichBase(teamId, kw, cronLog);
-      const preplyDir = path.join(JARVIS_HOME, 'results', 'personal-schedule-daily');
+      const preplyDir = runtimePath(JARVIS_HOME, 'results', 'personal-schedule-daily');
       const preplyFile = latestFileIn(preplyDir, /\.md$/);
       const preplyContent = preplyFile ? safeRead(preplyFile, 2000) : '';
-      const tqqqDir = path.join(JARVIS_HOME, 'results', 'tqqq-monitor');
+      const tqqqDir = runtimePath(JARVIS_HOME, 'results', 'tqqq-monitor');
       const tqqqFile = latestFileIn(tqqqDir, /\.md$/);
       const tqqqContent = tqqqFile ? safeRead(tqqqFile, 1500) : '';
       const extras: string[] = [];
@@ -402,7 +403,7 @@ function gatherTeamContext(teamId: string): string {
     case 'trend-lead': {
       const kw = TEAM_KEYWORDS['trend-lead'];
       const base = buildRichBase(teamId, kw, cronLog);
-      const reportFile = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^trend.*\.md$/);
+      const reportFile = latestFileIn(runtimePath(JARVIS_HOME, 'rag', 'teams', 'reports'), /^trend.*\.md$/);
       const report = reportFile ? safeRead(reportFile, 3000) : '';
       const extras: string[] = [];
       if (report) extras.push(`## 최근 트렌드 리포트 (${path.basename(reportFile)})\n${tailLines(report, 25)}`);
@@ -418,15 +419,15 @@ function gatherTeamContext(teamId: string): string {
     case 'library': {
       const kw = TEAM_KEYWORDS.library;
       const base = buildRichBase(teamId, kw, cronLog);
-      const ragData = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'rag', 'data')]);
+      const ragData = safeExec('du', ['-sh', runtimePath(JARVIS_HOME, 'rag', 'data')]);
       value = `${base}\n\n## RAG 데이터 물리 크기\n${ragData || 'unknown'}\n\n## 자료실의 포지션\n- 데이터실(한소희)이 쌓은 RAG 인덱스·메모리 파일을 오너가 검색·탐색하도록 돕는 프론트엔드 레이어`;
       break;
     }
     case 'growth-lead': {
       const kw = TEAM_KEYWORDS['growth-lead'];
       const base = buildRichBase(teamId, kw, cronLog);
-      const careerReport = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^career.*\.md$/);
-      const academyReport = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^academy.*\.md$/);
+      const careerReport = latestFileIn(runtimePath(JARVIS_HOME, 'rag', 'teams', 'reports'), /^career.*\.md$/);
+      const academyReport = latestFileIn(runtimePath(JARVIS_HOME, 'rag', 'teams', 'reports'), /^academy.*\.md$/);
       const careerContent = careerReport ? safeRead(careerReport, 2000) : '';
       const academyContent = academyReport ? safeRead(academyReport, 2000) : '';
       const extras: string[] = [];
@@ -450,9 +451,9 @@ function gatherTeamContext(teamId: string): string {
     case 'president': {
       const kw = TEAM_KEYWORDS.president;
       const base = buildRichBase(teamId, kw, cronLog);
-      const minutesFile = latestFileIn(path.join(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
+      const minutesFile = latestFileIn(runtimePath(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
       const minutes = minutesFile ? safeRead(minutesFile, 5000) : '';
-      const contextBus = safeRead(path.join(JARVIS_HOME, 'state', 'context-bus.md'), 3000);
+      const contextBus = safeRead(runtimePath(JARVIS_HOME, 'state', 'context-bus.md'), 3000);
       const stats = cronStats(cronLog);
       const extras: string[] = [];
       extras.push(`## 전사 운영 스냅샷\n- 오늘 크론 실행: ${stats.total}\n- 실패/에러: ${stats.fail}\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}`);
@@ -472,8 +473,8 @@ function gatherTeamContext(teamId: string): string {
       break;
     }
     case 'disk-storage': {
-      const ragData = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'rag', 'data')]);
-      const logs = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'logs')]);
+      const ragData = safeExec('du', ['-sh', runtimePath(JARVIS_HOME, 'rag', 'data')]);
+      const logs = safeExec('du', ['-sh', runtimePath(JARVIS_HOME, 'logs')]);
       value = `디스크 스토리지 상태:\n- / 파티션: ${diskUsage()}\n- RAG 데이터: ${ragData || 'unknown'}\n- 로그 디렉토리: ${logs || 'unknown'}`;
       break;
     }
@@ -508,11 +509,11 @@ function gatherTeamContext(teamId: string): string {
     'president': ['career', 'ops', 'trading'], 'meeting-room': ['ops'],
   };
   const wikiDomains = TEAM_WIKI_MAP[teamId] || [];
-  const wikiDir = path.join(JARVIS_HOME, 'wiki');
+  const wikiDir = runtimePath(JARVIS_HOME, 'wiki');
   if (wikiDomains.length > 0 && existsSync(wikiDir)) {
     const wikiParts: string[] = [];
     for (const domain of wikiDomains) {
-      const summaryPath = path.join(wikiDir, domain, '_summary.md');
+      const summaryPath = runtimePath(wikiDir, domain, '_summary.md');
       if (!existsSync(summaryPath)) continue;
       let summary = readFileSync(summaryPath, 'utf-8');
       summary = summary.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
@@ -582,18 +583,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Cost cap
-  try {
-    const [today, cap] = await Promise.all([getTodayCost(), getDailyCap()]);
-    if (today >= cap) {
-      return NextResponse.json(
-        { error: `비용 상한 도달 (오늘 $${today.toFixed(4)} / 상한 $${cap.toFixed(2)})` },
-        { status: 429 },
-      );
+  // Claude Max 구독(CLI) 경로는 실과금이 없어 가상 cap을 적용하지 않는다.
+  const claudeCliPath = MODEL.startsWith('claude-') && existsSync(CLAUDE_CLI);
+  if (!claudeCliPath) {
+    try {
+      const [today, cap] = await Promise.all([getTodayCost(), getDailyCap()]);
+      if (today >= cap) {
+        return NextResponse.json(
+          { error: `비용 상한 도달 (오늘 $${today.toFixed(4)} / 상한 $${cap.toFixed(2)})` },
+          { status: 429 },
+        );
+      }
+    } catch (err) {
+      console.error('[game-chat] cost check failed:', err);
     }
-  } catch (err) {
-    console.error('[game-chat] cost check failed:', err);
-    // 비용 파일 읽기 실패 시에는 통과 (hard-block 아님)
   }
 
   // Groq API 키는 Claude CLI/SDK 경로일 때는 불필요 — Groq 경로에서만 검증
@@ -921,8 +924,8 @@ ${teamContext || '(수집된 데이터 없음)'}
           console.error('[game-chat] finalize completed failed:', upErr);
         }
 
-        // Record cost (best-effort) — usage가 비어 있으면 skip
-        if (inputTokens > 0 || outputTokens > 0) {
+        // CLI(Max 구독)는 실과금이 없어 비용 장부에 기록하지 않는다.
+        if (!useClaudeCLI && (inputTokens > 0 || outputTokens > 0)) {
           try {
             await recordCost({ model: MODEL, inputTokens, outputTokens });
           } catch (costErr) {

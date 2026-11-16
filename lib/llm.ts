@@ -16,6 +16,8 @@ export class LLMError extends Error {
     message: string,
     public readonly status?: number,
     public readonly isTimeout = false,
+    public readonly retryAfterMs = 0,
+    public readonly limitKind?: 'tokens_day'|'tokens_minute'|'requests_day'|'requests_minute',
   ) {
     super(message);
     this.name = 'LLMError';
@@ -31,6 +33,9 @@ export async function callLLM(
     timeoutMs?: number;
     systemPrompt?: string;
     temperature?: number;
+    responseFormat?: Record<string, unknown>;
+    reasoningEffort?: 'low' | 'medium' | 'high';
+    onUsage?: (usage: {promptTokens:number;completionTokens:number;totalTokens:number}) => void;
   } = {},
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -69,7 +74,9 @@ export async function callLLM(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
+        ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
         messages,
+        ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
         ...(temperature !== undefined ? { temperature } : {}),
       }),
       signal,
@@ -77,10 +84,14 @@ export async function callLLM(
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new LLMError(`Groq API 오류 (${res.status}): ${body.slice(0, 200)}`, res.status);
+      const retryHeader = res.headers.get('retry-after');
+      const retryAfterMs = retryHeader ? (/^\d+(\.\d+)?$/.test(retryHeader) ? Number(retryHeader)*1000 : Math.max(0,Date.parse(retryHeader)-Date.now())) : 0;
+      const limitKind=/tokens per day|\bTPD\b/i.test(body)?'tokens_day':/tokens per minute|\bTPM\b/i.test(body)?'tokens_minute':/requests per day|\bRPD\b/i.test(body)?'requests_day':/requests per minute|\bRPM\b/i.test(body)?'requests_minute':undefined;
+      throw new LLMError(`Groq API 오류 (${res.status}): ${body.slice(0, 200)}`, res.status, false, Number.isFinite(retryAfterMs) ? retryAfterMs : 0, limitKind);
     }
 
-    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
+    const data = await res.json() as { choices: Array<{ message: { content: string } }>; usage?: {prompt_tokens:number;completion_tokens:number;total_tokens:number} };
+    if(data.usage) options.onUsage?.({promptTokens:data.usage.prompt_tokens,completionTokens:data.usage.completion_tokens,totalTokens:data.usage.total_tokens});
     const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
     if (!text) throw new LLMError('빈 응답');
     return text;

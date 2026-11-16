@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {load} from './test-support.mjs';
+const {ownerOrdersProjection}=load('lib/company/order-presentation.ts');
+const now=Date.now(),base={id:'one',kind:'office-render-verify',goal:'현재 렌더링 검사',assignee:'독립 검증 워커',stage:'building',createdAt:new Date(now-1000).toISOString(),updatedAt:new Date(now).toISOString(),leaseUntil:now+30000,events:[],worker:{summary:'검사 요청',findings:[],actions:['검사'],evidence:['source'],limitations:[]}};
+test('actual build and review animate work but never emit premature completion reports',()=>{for(const stage of ['running','reviewing','building']){const p=ownerOrdersProjection([{...base,stage}],true,now);assert.equal(p.employees[0].hasActiveWork,true);assert.equal(p.tasks[0].state,'running');assert.equal(p.reports.length,0);}});
+test('unreachable or expired execution never animates active work',()=>{assert.equal(ownerOrdersProjection([base],false,now).employees[0].hasActiveWork,false);assert.equal(ownerOrdersProjection([{...base,leaseUntil:now-1}],true,now).employees[0].hasActiveWork,false);assert.equal(ownerOrdersProjection([],true,now).employees.length,0);});
+test('failed worker is a problem report and never a completed report',()=>{const p=ownerOrdersProjection([{...base,stage:'failed',error:'type check failed'}],true,now);assert.equal(p.reports[0].state,'blocked');assert.equal(p.reports[0].context.executionStatus,'failed');assert.equal(p.employees[0].hasActiveWork,false);});
+test('one execution identity connects task employee report and deep linked action',()=>{const p=ownerOrdersProjection([{...base,stage:'reported',review:{verdict:'accepted',summary:'검사 통과',findings:['타입 검사 통과'],actions:['다음 검사'],limitations:[],evidence:['source']}}],true,now);assert.equal(p.tasks[0].ownerId,p.employees[0].id);assert.equal(p.reports[0].ownerId,p.employees[0].id);assert.equal(p.reports[0].taskId,p.tasks[0].id);assert.equal(p.tasks[0].href,'/?order=one');assert.equal(p.reports[0].assessment.problems.length,0);});
+test('owner failures appear as issues; successful candidate retries do not create duplicate unresolved issues',()=>{
+ const failed={...base,stage:'failed',error:'검사 실패'},retry={...failed,id:'retry',parent:{id:'one',actionIndex:-1}};
+ assert.equal(ownerOrdersProjection([failed]).issues.length,1);assert.equal(ownerOrdersProjection([retry,failed]).issues.length,1);
+ assert.equal(ownerOrdersProjection([{...retry,stage:'reported'},failed]).issues.length,0);
+ assert.equal(ownerOrdersProjection([{...retry,stage:'cancelled'},failed]).issues.length,1);
+ assert.equal(ownerOrdersProjection([{...retry,stage:'reported',parent:{id:'one',actionIndex:0}},failed]).issues.length,1,'unrelated follow-up cannot close a failure');
+});
+test('completed work offers an owner action instead of repeating status or implying failure',()=>{const p=ownerOrdersProjection([{...base,stage:'reported',review:{verdict:'accepted',summary:'완료',actions:[],findings:[],limitations:[],evidence:[]}}]);assert.match(p.employees[0].next,/확인.*지시/);assert.doesNotMatch(p.reports[0].context.next,/실패/);assert.equal(p.tasks[0].next,p.employees[0].next);});

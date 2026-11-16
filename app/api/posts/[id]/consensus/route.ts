@@ -7,7 +7,7 @@ import { broadcastEvent } from '@/lib/sse';
 import { parseConsensusTasks } from '@/lib/consensus-parser';
 import type { Post, Comment } from '@/lib/types';
 
-export const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결의 담당자입니다.
+const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결의 담당자입니다.
 
 ## 역할
 토론의 모든 의견을 분석하여 두 독자가 즉시 활용할 수 있는 결의안을 작성합니다.

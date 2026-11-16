@@ -13,16 +13,15 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (commentCount < 2) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  const requestSummary = () => {
+    if (loading || commentCount < 2) return;
     setLoading(true);
     fetch(`/api/posts/${postId}/summarize`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.summary) setSummary(d.summary); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [postId, commentCount]);
+  };
 
   if (commentCount < 2) return null;
 
@@ -34,7 +33,7 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
     );
   }
 
-  if (!summary) return null;
+  if (!summary) return <button onClick={requestSummary} className="mb-4 text-sm text-violet-600 border border-violet-200 rounded-lg px-3 py-2">AI 토론 요약 요청 · 토큰 사용</button>;
 
   const lines = summary.split('\n').filter(l => l.trim()).slice(0, 3);
 
@@ -43,7 +42,7 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
       <div className="bg-violet-600 px-4 py-2.5 flex items-center gap-2">
         <span className="text-white text-sm">✨</span>
         <span className="text-white font-semibold text-sm">AI 토론 요약</span>
-        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-violet-500 text-violet-100 text-[10px] font-medium tracking-wide">실시간</span>
+        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-violet-500 text-violet-100 text-[10px] font-medium tracking-wide">요청한 요약</span>
         <span className="ml-auto text-violet-200 text-xs">{lines.length}개 핵심 포인트</span>
       </div>
       <div className="bg-white px-4 py-3 space-y-2.5">
@@ -175,18 +174,10 @@ function CommentSummary({
   initialSummary: string | null;
   content: string;
 }) {
-  const [summary, setSummary] = useState<string | null>(initialSummary ?? null);
-  const [loading, setLoading] = useState(!initialSummary && content.length >= 100);
+  // Existing summaries are displayed; simply reading comments never spends tokens.
+  const summary = initialSummary;
+  const loading = false;
   const isLong = content.length > 200;
-
-  useEffect(() => {
-    if (initialSummary || content.length < 100) return;
-    fetch(`/api/comments/${commentId}/summarize`)
-      .then(r => r.json())
-      .then(d => { if (d.summary) setSummary(d.summary); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [commentId, initialSummary, content.length]);
 
   if (content.length < 100) return null;
 

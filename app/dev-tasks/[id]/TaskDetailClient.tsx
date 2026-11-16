@@ -656,7 +656,7 @@ export default function TaskDetailClient({
   const cronSecDisplay = cronSecs % 60;
   const cronProgress = ((5 * 60 - cronSecs) / (5 * 60)) * 100;
 
-  const statusPill = STATUS_PILL[task.status] ?? STATUS_PILL.awaiting_approval;
+  const statusPill = isAwaiting&&!queueActive?{label:'📦 보관(미처리)',className:'text-zinc-500 bg-zinc-100'}:STATUS_PILL[task.status] ?? STATUS_PILL.awaiting_approval;
 
   const stripeClass = isDone     ? 'bg-gradient-to-r from-emerald-400 to-teal-400' :
                       isLive     ? 'bg-gradient-to-r from-indigo-400 to-violet-400' :
@@ -1374,17 +1374,17 @@ export default function TaskDetailClient({
             {/* Step 1: 검토 요청 */}
             <TimelineStep
               icon="📋"
-              label={isAwaiting ? '검토 요청됨 — 대표 검토 대기 중' : '검토 요청'}
+              label={isAwaiting ? queueActive?'검토 요청됨 — 대표 검토 대기 중':'보관된 요청 — 현재 승인·실행 대기 아님' : '검토 요청'}
               sublabel={isPending
                 ? '아직 검토를 요청하지 않았습니다'
                 : isAwaiting
-                ? '승인하면 Jarvis가 즉시 코드 작업을 시작합니다'
+                ? queueActive ? '승인된 업무는 활성 개발 큐에서 처리됩니다' : '개발 큐 비활성 · 보관 기록이며 현재 작업을 시작하지 않습니다'
                 : isRejected
                 ? '검토 요청 후 반려됨'
                 : '검토 요청 완료'}
               time={!isPending ? task.created_at : undefined}
               done={!isPending && !isAwaiting}
-              active={isAwaiting} pulse={isAwaiting}
+              active={isAwaiting&&queueActive} pulse={isAwaiting&&queueActive}
             />
 
             {/* Step 2: 대표 승인 */}

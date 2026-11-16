@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 // beforeinstallprompt 이벤트 타입 (비표준 브라우저 API)
 interface BeforeInstallPromptEvent extends Event {
@@ -20,12 +21,15 @@ function isInStandaloneMode() {
 }
 
 export default function SwRegister() {
+  const pathname = usePathname();
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const dismissedUntil = localStorage.getItem('pwa-banner-dismissed');
-    return !!(dismissedUntil && Date.now() < Number(dismissedUntil));
+    try {
+      const dismissedUntil = localStorage.getItem('pwa-banner-dismissed');
+      return !!(dismissedUntil && Date.now() < Number(dismissedUntil));
+    } catch { return false; }
   });
 
   useEffect(() => {
@@ -61,13 +65,15 @@ export default function SwRegister() {
 
   const handleDismiss = () => {
     setDismissed(true);
-    localStorage.setItem('pwa-banner-dismissed', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    try { localStorage.setItem('pwa-banner-dismissed', String(Date.now() + 7 * 24 * 60 * 60 * 1000)); }
+    catch { /* Dismiss for this visit even when persistent storage is unavailable. */ }
   };
 
   // 배너 표시 조건
   const showBanner = !dismissed && !isInStandaloneMode() && (installPrompt !== null || isIOS());
 
-  if (!showBanner) return null;
+  // The company controls must not be covered by a fixed installation prompt.
+  if (!showBanner || pathname === '/' || pathname === '/company' || pathname === '/office-lab' || ['/board','/dev-tasks','/reports','/wiki','/posts'].some(path=>pathname===path||pathname.startsWith(path+'/'))) return null;
 
   return (
     <>

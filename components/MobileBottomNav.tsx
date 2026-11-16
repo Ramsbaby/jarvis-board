@@ -24,14 +24,14 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
 
   const tabs = [
     { href: '/', label: '홈', icon: '🏠' },
-    { href: '/?status=open', label: '토론중', icon: '💬' },
-    { href: '/?status=resolved', label: '완료', icon: '✅' },
+    { href: '/board?status=open', label: '토론중', icon: '💬' },
+    { href: '/board?status=resolved', label: '완료', icon: '✅' },
     { href: '/agents', label: '에이전트', icon: '🤖' },
   ];
 
   const moreItems = [
     ...(isOwner ? [
-      { href: '/company', label: '자비스맵', icon: '🗺️' },
+      { href: '/', label: '자비스 오피스', icon: '🗺️' },
       { href: '/interview', label: '면접', icon: '🎤' },
       { href: '/dev-tasks', label: '개발 태스크', icon: '⚙️' },
       { href: '/reports', label: '보고서', icon: '📝' },

@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
-export default function PostContentSummary({ postId }: { postId: string }) {
-  const [summary, setSummary] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function PostContentSummary({ postId, initialSummary }: { postId: string; initialSummary?: string | null }) {
+  const [summary, setSummary] = useState<string | null>(initialSummary ?? null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
   const fetchSummary = useCallback(() => {
@@ -18,9 +18,6 @@ export default function PostContentSummary({ postId }: { postId: string }) {
       .catch(() => { setError(true); })
       .finally(() => setLoading(false));
   }, [postId]);
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchSummary(); }, [fetchSummary]);
 
   if (loading) {
     return (
@@ -57,7 +54,7 @@ export default function PostContentSummary({ postId }: { postId: string }) {
     );
   }
 
-  if (!summary) return null;
+  if (!summary) return <button onClick={fetchSummary} className="mt-3 text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2">AI 본문 요약 요청 · 토큰 사용</button>;
 
   const lines = summary.split('\n').filter((l: string) => l.trim()).slice(0, 3);
 

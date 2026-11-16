@@ -5,7 +5,7 @@
  *   2026-09-12 자비스가 OpenClaw로 이관되면서 스케줄러가 `~/.jarvis/config/effective-tasks.json`
  *   + `cron.log` 에서 OpenClaw automations 로 바뀌었다. 옛 파일은 09-13 이후 갱신되지 않아
  *   보드의 크론 센터·최근 실행·오늘 예정이 과거 상태를 보여 주고 있었다.
- *   이 모듈은 공개 CLI(`openclaw cron list --all --json`, `openclaw cron runs`)만 호출한다 —
+ *   이 모듈은 공개 CLI(`openclaw automations list --all --json`, `openclaw automations runs`)만 호출한다 —
  *   게이트웨이 내부 저장소(sqlite)를 직접 읽지 않으므로 OpenClaw 내부 스키마 변경에 안전하다.
  *
  * 규칙:
@@ -88,6 +88,8 @@ function runCli(args: string[]): Promise<string> {
 }
 
 let listCache: { jobs: AutomationJob[]; ts: number } | null = null;
+let listFailed = false;
+let listMeta: { total: number; hasMore: boolean } | null = null;
 let listInflight: Promise<AutomationJob[] | null> | null = null;
 
 /** 전체 자동화 목록(비활성 포함). 30초 캐시. 실패 시 마지막 성공 값, 없으면 null. */
@@ -96,13 +98,17 @@ export async function listAutomations(): Promise<AutomationJob[] | null> {
   if (listInflight) return listInflight;
   listInflight = (async () => {
     try {
-      const out = await runCli(['cron', 'list', '--all', '--json']);
-      const parsed = JSON.parse(out) as { jobs?: AutomationJob[] };
-      const jobs = Array.isArray(parsed.jobs) ? parsed.jobs : [];
+      const out = await runCli(['automations', 'list', '--all', '--json']);
+      const parsed = JSON.parse(out) as { jobs?: AutomationJob[]; total?: number; hasMore?: boolean };
+      if (!Array.isArray(parsed.jobs) || !parsed.jobs.every(job => typeof job.id === 'string' && typeof job.name === 'string' && typeof job.enabled === 'boolean' && !!job.schedule)) throw new Error('Invalid automation list schema');
+      const jobs = parsed.jobs;
+      listMeta = { total: typeof parsed.total === 'number' ? parsed.total : jobs.length, hasMore: parsed.hasMore === true };
       listCache = { jobs, ts: Date.now() };
+      listFailed = false;
       return jobs;
     } catch (err) {
-      console.error('[openclaw-automations] cron list failed:', err instanceof Error ? err.message : err);
+      listFailed = true;
+      console.error('[openclaw-automations] automations list failed:', err instanceof Error ? err.message : err);
       return listCache?.jobs ?? null;
     } finally {
       listInflight = null;
@@ -111,11 +117,18 @@ export async function listAutomations(): Promise<AutomationJob[] | null> {
   return listInflight;
 }
 
+/** Read-only status metadata; old listAutomations callers retain their return shape. */
+export async function listAutomationsSnapshot() {
+  const jobs = await listAutomations();
+  return { jobs, ...(listMeta ?? {}), freshness: jobs === null ? 'error' as const : listFailed ? 'stale' as const : 'fresh' as const,
+    observedAt: listCache ? new Date(listCache.ts).toISOString() : null };
+}
+
 /** 한 자동화의 최근 실행 이력 (최신순). 실패 시 null. */
 export async function listAutomationRuns(jobId: string, limit = 10): Promise<AutomationRun[] | null> {
   if (!/^[A-Za-z0-9-]{1,80}$/.test(jobId)) return null;
   try {
-    const out = await runCli(['cron', 'runs', '--id', jobId, '--limit', String(limit), '--sort', 'desc']);
+    const out = await runCli(['automations', 'runs', '--id', jobId, '--limit', String(limit), '--sort', 'desc']);
     const parsed = JSON.parse(out) as { entries?: AutomationRun[] };
     return Array.isArray(parsed.entries) ? parsed.entries : [];
   } catch (err) {

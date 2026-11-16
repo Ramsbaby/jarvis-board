@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {load} from './test-support.mjs';
+const w=load('lib/company/world.ts');
+test('all staff hand the document directly to Jarvis, never across the desk',()=>{for(let i=0;i<13;i++){const d=w.deskPosition(i),from={x:d.x,z:d.z+1},jarvis={x:0,z:-8};const plan=w.staffReportRoute(from,jarvis);assert.ok(plan.length,'reachable handoff from seat '+i);assert.ok(w.canHandDocument(plan.at(-1),jarvis),'direct unobstructed document handoff '+i);assert.ok(Math.hypot(plan.at(-1).x-jarvis.x,plan.at(-1).z-jarvis.z)<=1.8);}});
+test('no remote or across-desk handoff, target follows the actual secretary',()=>{assert.equal(w.canHandDocument(w.RECEPTION,{x:0,z:-8}),false);for(const jarvis of [{x:4,z:10},{x:-4,z:0}]){const plan=w.staffReportRoute({x:11,z:1},jarvis);assert.ok(w.canHandDocument(plan.at(-1),jarvis));}});

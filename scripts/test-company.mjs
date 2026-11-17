@@ -102,3 +102,11 @@ test('internal non-notifying heartbeat remains readable without an automatic AI 
  const r={...report,taskId:'codex:heartbeat:turn',summary:'<heartbeat><decision>DONT_NOTIFY</decision><message>새로운 실행 결과 없음</message></heartbeat>',state:'blocked'};
  const s=attachReviews(file,{...snapshot,reports:[r]},now);assert.equal(s.reports[0].assessment.status,'source_ready');assert.equal(s.reviewQueue.queued,0);assert.equal(s.reports[0].review,'not_reviewed');
 });
+
+test('per-task owner sync uses an index instead of scanning every report for every task',()=>{
+ const file=path.join(dir,'owner-index.sqlite');const tasks=derive(Array.from({length:3},(_,i)=>job('idx-'+i,'ok')));
+ reconcileCompany(file,tasks,at);
+ const Database=createRequire(import.meta.url)('better-sqlite3');const db=new Database(file,{readonly:true});
+ try{const plan=db.prepare("EXPLAIN QUERY PLAN UPDATE office_reports SET data=json_set(data, '$.ownerId', ?) WHERE json_extract(data, '$.taskId')=? AND json_extract(data, '$.ownerId')<>?").all('a','b','a').map(r=>r.detail).join(' ');
+  assert.match(plan,/USING INDEX office_reports_task/,plan);}finally{db.close();}
+});

@@ -16,7 +16,9 @@ export function reconcileCompany(path: string, current: CompanyTask[], now: stri
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS office_tasks(id TEXT PRIMARY KEY, data TEXT NOT NULL, last_seen TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS office_reports(id TEXT PRIMARY KEY, data TEXT NOT NULL, received_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS office_issues(id TEXT PRIMARY KEY, data TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS office_issues(id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      -- 아래 업무별 보고 갱신은 작업마다 보고 전체를 훑었다(작업 806 × 보고 1만 건 ≈ 4초, 그동안 서버 전체 정지). 같은 식의 색인으로 바로 찾는다.
+      CREATE INDEX IF NOT EXISTS office_reports_task ON office_reports(json_extract(data, '$.taskId'));`);
     db.transaction(() => {
       for (const t of current) {
         const previous = db.prepare('SELECT data FROM office_tasks WHERE id=?').get(t.id) as { data: string } | undefined;
